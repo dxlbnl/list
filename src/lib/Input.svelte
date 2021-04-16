@@ -12,3 +12,13 @@
 	}}>
 		<input bind:value={input} />
 	</form>
+
+	<style>
+		form {
+			display: flex;
+		}
+		input {
+			width: 100%;
+			margin: 1rem;
+		}
+	</style>

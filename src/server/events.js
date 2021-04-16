@@ -1,16 +1,16 @@
+const store = require('./store')
 
 let clients = [];
-let state = {
-  clients: clients.length,
-  items: []
-};
 
-function updateState() {
-  state.clients = clients.length
-  updateAll()
+function getState() {
+  return {
+    ...store.get(),
+    clients: clients.length
+  }
 }
+
 function updateAll() {
-  clients.forEach(client => client.response.write(`data: ${JSON.stringify(state)}\n\n`))
+  clients.forEach(client => client.response.write(`data: ${JSON.stringify(getState())}\n\n`))
 }
 
 function stateHandler(request, response) {
@@ -29,43 +29,40 @@ function stateHandler(request, response) {
   };
   
   clients.push(newClient);
-  updateState()
+  updateAll()
 
-  response.write(`data: ${JSON.stringify(state)}\n\n`);
+  response.write(`data: ${JSON.stringify(getState())}\n\n`);
   request.on('close', () => {
     console.log(`${clientId} Connection closed`);
     clients = clients.filter(client => client.id !== clientId);
-    updateState()
+    updateAll()
   });
 }
 
 function addItem(request, response) {
   const item = request.body;
-  console.log("Adding", item)
 
-  if (state.items.find(({ id }) => id === item.id)) return
-  
-  state.items.push(item)
+  store.add(item)
+
   updateAll()
   response.send()
 }
 function updateItem(request, response) {
   const item = request.body;
-  const index = state.items.findIndex(({ id }) => id === item.id)
-  state.items[index] = item
+  store.update(item)
   updateAll()
   response.send()
 }
 function removeItem(request, response) {
   const item = request.body;
-  state.items = state.items.filter(({ id }) => item.id !== id )
+  store.remove(item)
   updateAll()
   response.send()
 }
 
 module.exports = {
   stateHandler,
-addItem,
-updateItem,
-removeItem
+  addItem,
+  updateItem,
+  removeItem
 }

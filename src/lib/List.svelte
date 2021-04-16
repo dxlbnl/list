@@ -68,7 +68,6 @@
     text-align: left;
     list-style: none;;
     margin: 0;
-    padding: 1em;
-    
+    padding: 0;
   }
 </style>

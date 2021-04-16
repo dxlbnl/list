@@ -19,8 +19,6 @@
 <main>
 	<h1>List</h1>
 
-	<!-- <pre style='text-align: left;'>{JSON.stringify($state, null, 2)}</pre> -->
-
 	<Input
 		on:add={
 			({ detail }) => add({
