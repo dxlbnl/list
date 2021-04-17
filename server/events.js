@@ -1,4 +1,4 @@
-const store = require('./store')
+import store from './store.js'
 
 let clients = [];
 
@@ -13,7 +13,7 @@ function updateAll() {
   clients.forEach(client => client.response.write(`data: ${JSON.stringify(getState())}\n\n`))
 }
 
-function stateHandler(request, response) {
+export function stateHandler(request, response) {
   const headers = {
     'Content-Type': 'text/event-stream',
     'Connection': 'keep-alive',
@@ -39,7 +39,7 @@ function stateHandler(request, response) {
   });
 }
 
-function addItem(request, response) {
+export function addItem(request, response) {
   const item = request.body;
 
   store.add(item)
@@ -47,22 +47,15 @@ function addItem(request, response) {
   updateAll()
   response.send()
 }
-function updateItem(request, response) {
+export function updateItem(request, response) {
   const item = request.body;
   store.update(item)
   updateAll()
   response.send()
 }
-function removeItem(request, response) {
+export function removeItem(request, response) {
   const item = request.body;
   store.remove(item)
   updateAll()
   response.send()
-}
-
-module.exports = {
-  stateHandler,
-  addItem,
-  updateItem,
-  removeItem
 }

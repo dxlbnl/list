@@ -4,14 +4,15 @@
 	"scripts": {
 		"dev": "npm-run-all -p dev:server dev:svelte",
 		"dev:svelte": "svelte-kit dev",
-		"dev:server": "node src/server",
+		"dev:server": "NODE_ENV=dev node server",
 		"build": "svelte-kit build",
 		"start": "svelte-kit start",
 		"lint": "prettier --check . && eslint --ignore-path .gitignore .",
 		"format": "prettier --write ."
 	},
+	"type": "module",
 	"devDependencies": {
-		"@sveltejs/adapter-node": "next",
+		"@sveltejs/adapter-static": "1.0.0-next.4",
 		"@sveltejs/kit": "^1.0.0-next.71",
 		"@typescript-eslint/eslint-plugin": "^4.19.0",
 		"@typescript-eslint/parser": "^4.19.0",

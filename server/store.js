@@ -1,4 +1,4 @@
-const fs = require('fs');
+import fs from 'fs';
 
 
 // Load state from fs
@@ -59,4 +59,4 @@ class Store {
 
 }
 
-module.exports = new Store()
+export default new Store()
