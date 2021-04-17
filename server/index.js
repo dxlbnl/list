@@ -20,8 +20,7 @@ app.use(bodyParser.urlencoded({extended: false}));
 app.use(morgan('dev'))
 
 // Configuration
-const PORT = 4000;
-const HOST = "localhost";
+const PORT = process.env.NODE_ENV === 'dev' ? 4000 : 80;
 const API_SERVICE_URL = "http://localhost:3000";
 
 app.post('/item', addItem);

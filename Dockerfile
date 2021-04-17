@@ -5,5 +5,8 @@ ADD server /app/
 ADD build /app/static
 
 WORKDIR /app
+EXPOSE 80
 
 RUN npm install
+
+CMD node .
