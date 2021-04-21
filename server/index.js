@@ -3,7 +3,6 @@ import bodyParser from 'body-parser'
 import cors from 'cors'
 import morgan from 'morgan'
 import { createProxyMiddleware } from 'http-proxy-middleware'
-import serveStatic from 'serve-static'
 
 import {
   createList,
@@ -37,7 +36,8 @@ if (process.env.NODE_ENV === 'dev') {
     target: API_SERVICE_URL
   }))
 } else {
-  app.use(serveStatic('/app/static'))
+  app.use(express.static('/app/static'))
+  app.get('*', (request, response) => response.sendFile('/app/static/list/index.html'));
 }
 
 app.listen(PORT, () => {
