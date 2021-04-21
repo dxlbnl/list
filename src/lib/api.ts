@@ -16,8 +16,8 @@ export type Item = {
   rank: number
 }
 
-const callItem = (item: Item, method: string) : Promise<Response> =>
-  fetch('/item', {
+const callItem = (id: string, item: Item, method: string) : Promise<Response> =>
+  fetch(`/${id}/item`, {
     method,
     headers: {
       'Content-Type': 'application/json'
@@ -25,11 +25,11 @@ const callItem = (item: Item, method: string) : Promise<Response> =>
     body: JSON.stringify(item)
   })
 
-export const update = (item: Item) : Promise<Response>  =>
-  callItem(item, 'PUT')
+export const update = (id: string, item: Item) : Promise<Response>  =>
+  callItem(id, item, 'PUT')
 
-export const add = (item: Item) : Promise<Response>  =>
-  callItem(item, 'POST')
+export const add = (id: string, item: Item) : Promise<Response>  =>
+  callItem(id, item, 'POST')
 
-export const remove = (item: Item) : Promise<Response>  =>
-  callItem(item, 'DELETE')
+export const remove = (id: string, item: Item) : Promise<Response>  =>
+  callItem(id, item, 'DELETE')

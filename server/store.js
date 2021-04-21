@@ -3,20 +3,23 @@ import fs from 'fs';
 
 // Load state from fs
 
-class Store {
-  constructor(path = 'state.json') {
+export class Store {
+  constructor(path = 'data/state.json', { name }) {
     this.path = path
 
     if (fs.existsSync(path)) {
-      const { items } = JSON.parse(fs.readFileSync(path, { encoding: 'utf-8'}))
+      const { items, name } = JSON.parse(fs.readFileSync(path, { encoding: 'utf-8'}))
       this.items = items
+      this.name = name
     } else {
       this.items = []
+      this.name = name
     }
   }
   get() {
     return {
-      items: this.items
+      items: this.items,
+      name: this.name
     }
   }
   add(item) {
@@ -46,7 +49,8 @@ class Store {
         if (!this.$$writing) {
           this.$$writing = true
           fs.writeFile(this.path, JSON.stringify({
-            items: this.items
+            items: this.items,
+            name: this.name
           }), () => {
             this.$$writing = false
           })
@@ -56,7 +60,4 @@ class Store {
       }, 10)
     }
   }
-
 }
-
-export default new Store()

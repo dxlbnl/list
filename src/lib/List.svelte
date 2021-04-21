@@ -1,4 +1,5 @@
 <script>
+	import { page } from '$app/stores';
   import Item from './Item.svelte'
   import { update } from '$lib/api'
   
@@ -40,7 +41,7 @@
     }
 
     if (type === 'finalize') {
-      update(item)
+      update($page.params.id, item)
     }
   }
 </script>
@@ -54,7 +55,7 @@
     <li animate:flip={{duration: flipDurationMs}}>
       <Item
         on:remove {...item}
-        on:change={() => update(item)}
+        on:change={() => update($page.params.id, item)}
         bind:done={item.done}
       />
     </li>

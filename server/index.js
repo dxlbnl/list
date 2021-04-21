@@ -6,6 +6,7 @@ import { createProxyMiddleware } from 'http-proxy-middleware'
 import serveStatic from 'serve-static'
 
 import {
+  createList,
   stateHandler, 
   addItem,
   updateItem,
@@ -23,11 +24,13 @@ app.use(morgan('dev'))
 const PORT = process.env.NODE_ENV === 'dev' ? 4000 : 80;
 const API_SERVICE_URL = "http://localhost:3000";
 
-app.post('/item', addItem);
-app.delete('/item', removeItem);
-app.put('/item', updateItem);
+app.post('/create', createList)
 
-app.get('/state', stateHandler);
+app.post('/:id/item', addItem);
+app.delete('/:id/item', removeItem);
+app.put('/:id/item', updateItem);
+
+app.get('/:id/state', stateHandler);
 
 if (process.env.NODE_ENV === 'dev') {
   app.use('/', createProxyMiddleware({

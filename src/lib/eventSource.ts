@@ -11,5 +11,9 @@ export const source = (
       let value = initial
       const events = new window.EventSource(uri)
       events.onmessage = ({ data }) => set(value = reduce(value, JSON.parse(data)))
+      events.onerror = err => console.log('error in events', err)
+
+      return () => events.close()
     }
+
   })
