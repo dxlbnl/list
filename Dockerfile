@@ -8,5 +8,6 @@ WORKDIR /app
 EXPOSE 80
 
 RUN npm install
+VOLUME [ "/app/data" ]
 
 CMD node .
