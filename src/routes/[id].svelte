@@ -25,33 +25,19 @@
 	}
 </script>
 
-<main>
-	<h1>{$state?.name || $page.params.id.replace(/-/g, ' ')}</h1>
-	<Input
-		on:add={
-			({ detail }) => add($page.params.id, {
-				id: detail,
-				category: pickCategory(),
-				done: false,
-				rank: $state.items.length
-			})
-		}
-	/>
-	{#if $state}
-		<List items={$state.items}
-			on:remove={({ detail }) => removeItem(detail)}
-		/>
-	{/if}
-</main>
-
-<style>
-	main {
-		height: 100vh;
-		text-align: center;
-		margin: 0 auto;
-		max-width: 30rem;
-
-		display: flex;
-		flex-direction: column;
+<h1>{$state?.name || $page.params.id.replace(/-/g, ' ')}</h1>
+<Input
+	on:add={
+		({ detail }) => add($page.params.id, {
+			id: detail,
+			category: pickCategory(),
+			done: false,
+			rank: $state.items.length
+		})
 	}
-</style>
+/>
+{#if $state}
+	<List items={$state.items}
+		on:remove={({ detail }) => removeItem(detail)}
+	/>
+{/if}
