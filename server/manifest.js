@@ -20,11 +20,23 @@ const baseManifest = {
 }
 
 export function manifest(request, response) {
-  console.log("req:", request.headers)
+  const { referer } = request.headers
+  if (!referer) {
+    let [, id] = new URL(referer).pathname.match(/^\/([a-zA-Z0-9.+_-]*)/)
 
-  response.writeHead(200, '', {
-    'Content-Type': 'application/json'
-  })
-  response.write(JSON.stringify(baseManifest))
-  response.send()
+    response.writeHead(200, '', {
+      'Content-Type': 'application/json'
+    })
+    response.write(JSON.stringify({
+      ...baseManifest,
+      start_url: `/${id}`
+    }))
+    response.send()
+  } else {
+      response.writeHead(200, '', {
+        'Content-Type': 'application/json'
+      })
+      response.write(JSON.stringify(baseManifest))
+      response.send()
+  }
 }
