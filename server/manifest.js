@@ -20,7 +20,7 @@ const baseManifest = {
 }
 
 export function manifest(request, response) {
-  console.log("req:", request.headers.Referer)
+  console.log("req:", request.headers)
 
   response.writeHead(200, '', {
     'Content-Type': 'application/json'
