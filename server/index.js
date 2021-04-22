@@ -11,6 +11,7 @@ import {
   updateItem,
   removeItem
 } from './events.js'
+import { manifest } from './manifest.js'
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.delete('/:id/item', removeItem);
 app.put('/:id/item', updateItem);
 
 app.get('/:id/state', stateHandler);
+app.get('/manifest.json', manifest);
 
 if (process.env.NODE_ENV === 'dev') {
   app.use('/', createProxyMiddleware({

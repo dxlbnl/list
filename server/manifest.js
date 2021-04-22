@@ -1,4 +1,4 @@
-{
+const baseManifest = {
 	"background_color": "#ffffff",
 	"theme_color": "#333333",
 	"name": "Synching list",
@@ -17,4 +17,14 @@
 			"type": "image/png"
 		}
 	]
+}
+
+export function manifest(request, response) {
+  console.log("req:", request.headers.Referer)
+
+  response.writeHead(200, '', {
+    'Content-Type': 'application/json'
+  })
+  response.write(JSON.stringify(baseManifest))
+  response.send()
 }
