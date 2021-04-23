@@ -1,5 +1,6 @@
 import { browser } from '$app/env';
 import { readable } from 'svelte/store';
+import { goto } from '$app/navigation';
 
 export const source = (
   uri:string,
@@ -11,7 +12,7 @@ export const source = (
       let value = initial
       const events = new window.EventSource(uri)
       events.onmessage = ({ data }) => set(value = reduce(value, JSON.parse(data)))
-      events.onerror = err => console.log('error in events', err)
+      events.onerror = err => goto('/')
 
       return () => events.close()
     }

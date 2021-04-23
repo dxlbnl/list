@@ -4,6 +4,8 @@
 
 <script lang="ts">
 	import { page } from '$app/stores';
+
+	import Card from '$lib/Card.svelte'
 	import List from '$lib/List.svelte';
 	import Input from '$lib/Input.svelte';
 	import { add, remove, Category } from '$lib/api';
@@ -25,19 +27,21 @@
 	}
 </script>
 
-<h1>{$state?.name || $page.params.id.replace(/-/g, ' ')}</h1>
-<Input
-	on:add={
-		({ detail }) => add($page.params.id, {
-			id: detail,
-			category: pickCategory(),
-			done: false,
-			rank: $state.items.length
-		})
-	}
-/>
-{#if $state}
-	<List items={$state.items}
-		on:remove={({ detail }) => removeItem(detail)}
+<Card title={$state?.name || $page.params.id.replace(/-/g, ' ')}>
+	<Input
+		on:add={
+			({ detail }) => add($page.params.id, {
+				id: detail,
+				category: pickCategory(),
+				done: false,
+				rank: $state.items.length
+			})
+		}
 	/>
-{/if}
+	{#if $state}
+		<List
+			items={$state.items}
+			on:remove={({ detail }) => removeItem(detail)}
+		/>
+	{/if}
+</Card>

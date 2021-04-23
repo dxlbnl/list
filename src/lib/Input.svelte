@@ -10,15 +10,14 @@
     dispatch('add', input)
 		input = ''
 	}}>
-		<input bind:value={input} />
+		<input bind:value={input} placeholder='Add an item' />
 	</form>
 
 	<style>
 		form {
-			display: flex;
+			@apply flex;
 		}
 		input {
-			width: 100%;
-			margin: 1rem;
+			@apply w-full pl-3 pr-10 py-2 border-2 border-gray-200 hover:border-gray-300 focus:outline-none focus:border-blue-500 transition-colors;
 		}
 	</style>

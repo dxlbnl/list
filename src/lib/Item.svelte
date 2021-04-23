@@ -1,5 +1,6 @@
 <script lang='ts'>
   import type { Category } from '$lib/api'
+  import Checkbox from '$lib/Checkbox.svelte'
 	import { createEventDispatcher } from 'svelte';
 
   export let category:Category
@@ -9,49 +10,34 @@
   const dispatch = createEventDispatcher();
 </script>
 
-<section class:done class={category}  >
-  <input
-    type='checkbox'
-    bind:checked={done}
-    on:change
-  />
-
-  <span>{id}</span>
+<section class:done class={category}>
+  <Checkbox bind:checked={done} on:change label={id}/>
 
   <button on:click={() => dispatch('remove', id)}>X</button>
 </section>
 
 <style>
   section {
-    user-select: none;
-
-    cursor: grab;
-    background: gray;
-    padding: 0.4rem;
-    margin: 0.6rem;
-    font-size: 1rem
-    ;
-    display: flex;
-    justify-content: space-between;
+    @apply flex bg-gray-50 p-2;
+  }
+  section span {
+    @apply flex-auto;
   }
   section.done {
-    opacity: 0.6;
+    @apply text-opacity-50;
   }
-  section.done span {
-    text-decoration: brown line-through 5px;
+  section.done :global(label) {
+    @apply line-through;
   }
   button {
-    background: #ffffff70;
-    margin: -.6rem;
-    border: 0;
-    padding-right: 0.7rem;
+    @apply bg-red-100 px-4 py-2 -m-2  text-lg font-black tracking-wider text-red-600 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2;
   }
 
-  section.snacks { background: red;}
-  section.groente { background: green;}
-  section.houdbaar { background: yellow;}
-  section.zuivel { background: lightyellow;}
-  section.brood { background: burlywood;}
-  section.ontbijt { background: orange;}
-  section.drank { background: purple;}
+  section.snacks { @apply bg-red-300; }
+  section.groente { @apply bg-green-300; }
+  section.houdbaar { @apply bg-indigo-300; }
+  section.zuivel { @apply bg-yellow-300;}
+  section.brood { @apply bg-blue-300;}
+  section.ontbijt { @apply bg-pink-300;}
+  section.drank { @apply bg-purple-300;}
 </style>

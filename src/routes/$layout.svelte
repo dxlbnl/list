@@ -1,6 +1,8 @@
-<script>
-	import '../app.css';
+<script lang="ts">
+  import TailwindCss from '$lib/TailwindCss.svelte';
 </script>
+
+<TailwindCss />
 
 <main>
 	<slot />
@@ -8,12 +10,13 @@
 
 <style>
 	main {
-		height: 100vh;
-		text-align: center;
-		margin: 0 auto;
-		max-width: 30rem;
+		@apply min-h-screen;
+		@apply min-w-full;
+		@apply flex;
+		@apply items-center;
+		@apply justify-center;
+		@apply bg-yellow-100;
 
-		display: flex;
-		flex-direction: column;
+		@apply font-sans;
 	}
 </style>

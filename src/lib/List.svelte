@@ -46,29 +46,27 @@
   }
 </script>
 
-<ul
-  use:dndzone={{ items: localItems, flipDurationMs }}
-  on:consider={sortItems}
-  on:finalize={sortItems}
->
-  {#each localItems as item(item.id)}
+  <ul
+    use:dndzone={{ items: localItems, flipDurationMs }}
+    on:consider={sortItems}
+    on:finalize={sortItems}
+    >
+    {#each localItems as item(item.id)}
     <li animate:flip={{duration: flipDurationMs}}>
       <Item
-        on:remove {...item}
-        on:change={() => update($page.params.id, item)}
-        bind:done={item.done}
+      on:remove {...item}
+      on:change={() => update($page.params.id, item)}
+      bind:done={item.done}
       />
     </li>
-  {/each}
-</ul>
+    {/each}
+  </ul>
 
 <style>
   ul {
-    flex: 1;
-    
-    text-align: left;
-    list-style: none;;
-    margin: 0;
-    padding: 0;
+    @apply transition shadow-xl divide-y divide-gray-300 flex flex-col;
+  }
+  ul > li {
+    @apply hover:bg-gray-50 cursor-pointer;
   }
 </style>
