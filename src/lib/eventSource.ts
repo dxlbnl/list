@@ -12,7 +12,10 @@ export const source = (
       let value = initial
       const events = new window.EventSource(uri)
       events.onmessage = ({ data }) => set(value = reduce(value, JSON.parse(data)))
-      events.onerror = err => goto('/')
+      events.onerror = err => {
+        console.log(err)
+        // goto('/')
+      }
 
       return () => events.close()
     }
