@@ -10,11 +10,8 @@
 
 <style>
 	main {
-		@apply min-h-screen;
-		@apply min-w-full;
-		@apply flex;
-		@apply items-center;
-		@apply justify-center;
+		@apply p-4 min-h-screen min-w-full;
+		@apply flex items-start justify-center;
 		@apply bg-yellow-100;
 
 		@apply font-sans;

@@ -19,9 +19,10 @@
   }
 
   h1 {
-    @apply py-6 px-14 bg-yellow-400 rounded-tl-2xl rounded-tr-2xl text-center space-y-8;
+    @apply py-6 px-14;
+    @apply bg-yellow-400 rounded-tl-2xl rounded-tr-2xl text-center space-y-8;
 
-    @apply text-3xl text-gray-700;
+    @apply text-3xl font-semibold text-gray-700;
   }
 
   content > p {
