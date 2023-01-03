@@ -3,7 +3,7 @@
   export let description : string | null = null
 </script>
 
-<content>
+<content class="flex-1">
   <h1>{title}</h1>
   
   {#if description}
@@ -14,7 +14,7 @@
 </content>
 
 <style>
-  /* content {
+  content {
     @apply flex flex-col shadow-xl;
   }
 
@@ -27,5 +27,5 @@
 
   content > p {
     @apply m-2;
-  } */
+  }
 </style>

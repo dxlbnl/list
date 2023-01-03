@@ -50,9 +50,13 @@
     use:dndzone={{ items: localItems, flipDurationMs }}
     on:consider={sortItems}
     on:finalize={sortItems}
-    >
+    class='transition shadow-xl divide-y divide-gray-300 flex flex-col'
+  >
     {#each localItems as item(item.id)}
-    <li animate:flip={{duration: flipDurationMs}}>
+    <li
+      class='hover:bg-gray-50 cursor-pointer'
+      animate:flip={{duration: flipDurationMs}}
+    >
       <Item
       on:remove {...item}
       on:change={() => update($page.params.id, item)}
@@ -61,12 +65,3 @@
     </li>
     {/each}
   </ul>
-
-<style>
-  /* ul {
-    @apply transition shadow-xl divide-y divide-gray-300 flex flex-col;
-  }
-  ul > li {
-    @apply hover:bg-gray-50 cursor-pointer;
-  } */
-</style>
