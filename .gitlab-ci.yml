@@ -53,4 +53,4 @@ deploy:production:
     name: production
     url: https://list.dxlb.nl
   only:
-    - master
+    - main
