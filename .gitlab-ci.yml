@@ -9,16 +9,21 @@ build:svelte:
   stage: build:svelte
   image: node:alpine
   before_script:
-    - yarn install --pure-lockfile
+    - curl -f https://get.pnpm.io/v6.16.js | node - add --global pnpm@7
+    - pnpm config set store-dir .pnpm-store
   script:
-    - yarn build
+    - pnpm install # install dependencies
+    - pnpm build
   artifacts:
     paths:
     - build
     expire_in: 1 week
   cache:
+    key:
+      files:
+        - pnpm-lock.yaml
     paths:
-    - node_modules/
+      - .pnpm-store
     
 build:master:
   stage: build:image

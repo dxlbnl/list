@@ -1,13 +1,14 @@
-FROM node:15.14-alpine3.13
-
-
-ADD server /app/
-ADD build /app/static
+FROM node:current-alpine
 
 WORKDIR /app
+
+ADD package.json /app
+RUN npm install --omit=dev
+
+ADD build /app
+
 EXPOSE 80
 
-RUN npm install
 VOLUME [ "/app/data" ]
 
 CMD node .

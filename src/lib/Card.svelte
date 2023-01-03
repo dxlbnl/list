@@ -15,7 +15,7 @@
 
 <style>
   content {
-    @apply flex flex-col shadow-xl;
+    @apply flex flex-col shadow-xl max-w-md;
   }
 
   h1 {

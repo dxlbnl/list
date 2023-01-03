@@ -3,7 +3,7 @@
 </script>
 
 
-<main class='p-4 max-sm:pr-16 min-h-screen min-w-full text-sm'>
+<main class='p-4 max-sm:pr-16 min-h-screen min-w-full'>
 	<slot />
 </main>
 

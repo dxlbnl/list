@@ -10,7 +10,6 @@ export const GET: RequestHandler = ({ params }) => {
   const id = params.id;
   
   const state = loadState(id)
-  console.log("Hi", id, state)
   if (!state) {
     // Check if store exists or redirect to /
     return new Response(null, redirect(302, '/'))
@@ -25,7 +24,6 @@ export const GET: RequestHandler = ({ params }) => {
     start(controller) {
       console.log("start")
       this.listener = data => {
-        console.log('Got data to send', data)
         controller.enqueue(`data: ${JSON.stringify(data)}\n\n`)
       }
       state.emitter.on('state', this.listener)

@@ -10,10 +10,6 @@ const Categories = <const> [
   'ontbijt',
   'drank',
 ]
-// {"items":[
-  // {"id":"inlegkruisjes","category":"zuivel","done":false,"rank":5}
-  // {"id":"Salmiak en anijs drop","category":"brood","done":false,"rank":3.4375}]
-  // "name":"Boodschappen Robin & Alex"}
 
 type Item = {
   id: string;
@@ -117,8 +113,4 @@ export function updateAll(id: string) {
   if (!state) return
 
   state.emitter.emit('state', state.store);
-  // stateMap.get(id)
-  //   ?.clients.forEach(client =>
-  //     client.response.write(`data: ${JSON.stringify(getState(id))}\n\n`)
-  //   )
 }

@@ -1,6 +1,6 @@
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getRandomName } from 'docker-names'
+import names from 'docker-names'
 import { stateMap, createState } from '$lib/state.server'
 
 export const POST = async ({ request }) => {
@@ -16,7 +16,7 @@ export const POST = async ({ request }) => {
       return error(400,  'Invalid name')
     }
   } else {
-    for (id=getRandomName(), i=0; stateMap.has(id); i++, id=getRandomName()) {
+    for (id=names.getRandomName(), i=0; stateMap.has(id); i++, id=names.getRandomName()) {
       if (i > 20) {
         console.error("Too many tries generating id")
         return error(500, "Too many tries generating id");
