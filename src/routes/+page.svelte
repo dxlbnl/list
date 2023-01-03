@@ -4,7 +4,7 @@
   let name
 
   const create = async () => {
-    const response = await fetch('/create', {
+    const response = await fetch('/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -13,8 +13,10 @@
         name
       })
     })
-    const { id } = await response.json()
-    goto(`/${id}`)
+    if (response.ok) {
+      const { id } = await response.json()
+      goto(`/${id}`)
+    }
   }
 </script>
 
@@ -29,7 +31,7 @@
 </Card>
 
 <style>
-  form {
+  /* form {
     @apply m-2;
   }
   form > section {
@@ -44,5 +46,5 @@
 
   form label {
     @apply block uppercase tracking-wide text-gray-700 text-xs font-bold mb-2;
-  }
+  } */
 </style>

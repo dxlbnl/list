@@ -17,7 +17,7 @@
 </section>
 
 <style>
-  section {
+  /* section {
     @apply flex bg-gray-50 p-2;
   }
   section span {
@@ -39,5 +39,5 @@
   section.zuivel { @apply bg-yellow-300;}
   section.brood { @apply bg-blue-300;}
   section.ontbijt { @apply bg-pink-300;}
-  section.drank { @apply bg-purple-300;}
+  section.drank { @apply bg-purple-300;} */
 </style>

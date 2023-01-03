@@ -15,7 +15,7 @@
 
 
 <style>
-  .checkbox {
+  /* .checkbox {
     @apply select-none container block relative cursor-pointer text-xl pl-8;
   }
   .checkbox input {
@@ -23,7 +23,7 @@
   }
   .checkbox span {
     @apply h-6 w-6 absolute top-0 left-0 bg-gray-400;
-  }
+  } */
   
   .checkbox:hover input ~ .checkmark {
     background-color: #a0aec0;

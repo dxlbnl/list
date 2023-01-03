@@ -17,7 +17,7 @@ export type Item = {
 }
 
 const callItem = (id: string, item: Item, method: string) : Promise<Response> =>
-  fetch(`/${id}/item`, {
+  fetch(`${id}/state`, {
     method,
     headers: {
       'Content-Type': 'application/json'

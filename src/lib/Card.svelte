@@ -1,6 +1,6 @@
 <script lang='ts'>
   export let title : string
-  export let description : string?
+  export let description : string | null = null
 </script>
 
 <content>
@@ -14,7 +14,7 @@
 </content>
 
 <style>
-  content {
+  /* content {
     @apply flex flex-col shadow-xl;
   }
 
@@ -27,5 +27,5 @@
 
   content > p {
     @apply m-2;
-  }
+  } */
 </style>

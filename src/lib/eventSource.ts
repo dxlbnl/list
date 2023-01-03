@@ -1,15 +1,16 @@
-import { browser } from '$app/env';
+import { browser } from '$app/environment';
 import { readable } from 'svelte/store';
 import { goto } from '$app/navigation';
+import type { Readable } from 'svelte/store';
 
-export const source = (
+export function source<T>(
   uri:string,
-  initial = null,
-  reduce = (acc, value) => value
-) : Readable =>
-  readable(initial, set => {
+  initial = undefined,
+reduce = (acc: T|undefined, value: T): T => value
+) : Readable<T> {
+  return readable<T>(initial, set => {
     if (browser) {
-      let value = initial
+      let value: T|undefined = initial
       const events = new window.EventSource(uri)
       events.onmessage = ({ data }) => set(value = reduce(value, JSON.parse(data)))
       events.onerror = err => {
@@ -21,3 +22,4 @@ export const source = (
     }
 
   })
+}

@@ -1,7 +1,3 @@
-<script context="module">
-	export const ssr = false;
-</script>
-
 <script lang="ts">
 	import { page } from '$app/stores';
 
@@ -17,7 +13,7 @@
 		options[Math.floor(Math.random() * options.length)]
 	)
 
-	function removeItem(rid) {
+	function removeItem(rid: string) {
 		const item = $state.items.find(({ id }) => rid === id )
 		remove($page.params.id, item)
 	}

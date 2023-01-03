@@ -63,10 +63,10 @@
   </ul>
 
 <style>
-  ul {
+  /* ul {
     @apply transition shadow-xl divide-y divide-gray-300 flex flex-col;
   }
   ul > li {
     @apply hover:bg-gray-50 cursor-pointer;
-  }
+  } */
 </style>
