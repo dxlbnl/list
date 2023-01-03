@@ -7,7 +7,7 @@ stages:
 
 build:svelte:
   stage: build:svelte
-  image: node:alpine
+  image: node:14.16.0-buster
   before_script:
     - curl -f https://get.pnpm.io/v6.16.js | node - add --global pnpm@7
     - pnpm config set store-dir .pnpm-store
@@ -25,7 +25,7 @@ build:svelte:
     paths:
       - .pnpm-store
     
-build:master:
+build:main:
   stage: build:image
   image:
     name: gcr.io/kaniko-project/executor:debug
@@ -36,7 +36,7 @@ build:master:
   dependencies:
     - build:svelte
   only:
-    - master
+    - main
 
 
 deploy:production:
