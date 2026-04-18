@@ -3,7 +3,7 @@
 	import { syncManager } from "$lib/client/sync.svelte";
 	import { fly } from "svelte/transition";
 	import Dialog from "./Dialog.svelte";
-	import { QRCode } from "qrcode";
+	import QRCode from "qrcode";
 	import { page } from "$app/state";
 	import { deleteList } from "$lib/client/actions";
 	import { goto } from "$app/navigation";

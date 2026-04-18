@@ -25,7 +25,7 @@
 		</BitsDialog.Trigger>
 	{/if}
 	
-	<BitsDialog.Portal disabled={true}>
+	<BitsDialog.Portal>
 		<BitsDialog.Overlay class="dialog-overlay" forceMount>
 			{#snippet child({ props, open })}
 				{#if open}
