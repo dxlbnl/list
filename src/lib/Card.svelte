@@ -13,7 +13,7 @@
   <slot />
 </content>
 
-<style>
+<style lang="postcss">
   content {
     @apply flex flex-col shadow-xl max-w-md;
   }

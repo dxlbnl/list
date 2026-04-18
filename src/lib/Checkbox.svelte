@@ -3,7 +3,7 @@
   export let checked: boolean
 </script>
 
-<label class="select-none container block relative cursor-pointer text-lg pl-8 break-all">
+<label>
   {label}
   <input
     type='checkbox'
@@ -11,11 +11,17 @@
     on:change
     class="absolute opacity-0 left-0 top-0 cursor-pointer"
   />
-  <span class='h-6 w-6 absolute top-0 left-0 bg-gray-400'></span>
+  <span></span>
 </label>
 
 
-<style>
+<style lang="postcss">
+  label {
+    @apply select-none container block relative cursor-pointer text-lg pl-8 break-all;
+  }
+  span {
+    @apply h-6 w-6 absolute top-0 left-0 bg-gray-400;
+  }
   label:hover input ~ span {
     background-color: #a0aec0;
   }
