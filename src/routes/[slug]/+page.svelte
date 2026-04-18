@@ -1,10 +1,12 @@
 <script lang="ts">
-	import { addItem as addItemAction, deleteList } from "$lib/client/actions";
+	import { addItem as addItemAction, deleteList, updateItem, deleteItem as deleteItemAction } from "$lib/client/actions";
 	import { db as dexieDb } from "$lib/client/db";
 	import { liveQuery } from "dexie";
 	import { goto } from "$app/navigation";
 	import Dialog from "$lib/components/ui/Dialog.svelte";
 	import Checkbox from "$lib/components/ui/Checkbox.svelte";
+	import { syncManager } from "$lib/client/sync.svelte";
+	import { onMount } from "svelte";
 
 	let { data } = $props();
 
@@ -29,31 +31,11 @@
 	}
 
 	async function toggleDone(item: any) {
-		await dexieDb.items.update(item.id, {
-			done: !item.done,
-			updatedAt: new Date(),
-		});
-
-		await dexieDb.syncQueue.add({
-			type: "UPDATE",
-			entity: "item",
-			entityId: item.id,
-			data: { done: !item.done, updatedAt: new Date() },
-			timestamp: Date.now(),
-		});
+		await updateItem(item.id, { done: !item.done });
 	}
 
 	async function deleteItem(item: any) {
-		const deletedAt = new Date();
-		await dexieDb.items.update(item.id, { deletedAt });
-
-		await dexieDb.syncQueue.add({
-			type: "UPDATE",
-			entity: "item",
-			entityId: item.id,
-			data: { deletedAt },
-			timestamp: Date.now(),
-		});
+		await deleteItemAction(item.id);
 	}
 
 	let confirmDeleteName = $state("");
@@ -64,6 +46,13 @@
 			goto("/");
 		}
 	}
+
+	onMount(() => {
+		if (data.listId) {
+			syncManager.subscribeToList(data.listId);
+			return () => syncManager.unsubscribeFromList(data.listId);
+		}
+	});
 </script>
 
 <main class="container">

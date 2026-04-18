@@ -1,5 +1,6 @@
 import { db } from '$lib/client/db';
 import { slugify, isReservedSlug } from '$lib/utils';
+import { syncManager } from './sync.svelte';
 
 export async function createList(name: string, userId: string) {
 	const id = crypto.randomUUID();
@@ -31,6 +32,7 @@ export async function createList(name: string, userId: string) {
 		timestamp: Date.now()
 	});
 
+	syncManager.forceSync();
 	return id;
 }
 
@@ -58,7 +60,37 @@ export async function addItem(listId: string, name: string) {
 		timestamp: Date.now()
 	});
 
+	syncManager.forceSync();
 	return id;
+}
+
+export async function updateItem(itemId: string, data: any) {
+	await db.items.update(itemId, { ...data, updatedAt: new Date() });
+
+	await db.syncQueue.add({
+		type: 'UPDATE',
+		entity: 'item',
+		entityId: itemId,
+		data: { ...data, updatedAt: new Date() },
+		timestamp: Date.now()
+	});
+
+	syncManager.forceSync();
+}
+
+export async function deleteItem(itemId: string) {
+	const deletedAt = new Date();
+	await db.items.update(itemId, { deletedAt });
+
+	await db.syncQueue.add({
+		type: 'UPDATE',
+		entity: 'item',
+		entityId: itemId,
+		data: { deletedAt },
+		timestamp: Date.now()
+	});
+
+	syncManager.forceSync();
 }
 
 export async function deleteList(listId: string) {
@@ -73,4 +105,6 @@ export async function deleteList(listId: string) {
 		data: {},
 		timestamp: Date.now()
 	});
+
+	syncManager.forceSync();
 }
