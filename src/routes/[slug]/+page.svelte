@@ -12,6 +12,8 @@
 	import Checkbox from "$lib/components/ui/Checkbox.svelte";
 	import { syncManager } from "$lib/client/sync.svelte";
 	import { onMount } from "svelte";
+	import { DropdownMenu } from "bits-ui";
+	import { menuState } from "$lib/client/menu.svelte";
 
 	let { data } = $props();
 
@@ -43,18 +45,27 @@
 		await deleteItemAction(item.id);
 	}
 
+	let isDeleteDialogOpen = $state(false);
 	let confirmDeleteName = $state("");
+
 	async function handleDeleteList() {
 		const currentList = await dexieDb.lists.get(data.listId);
 		if (confirmDeleteName === currentList?.name) {
 			await deleteList(data.listId);
+			isDeleteDialogOpen = false;
 			goto("/");
 		}
 	}
 
+
 	onMount(() => {
 		syncManager.subscribeToList(data.listId);
 		return () => syncManager.unsubscribeFromList(data.listId);
+	});
+
+	$effect(() => {
+		menuState.setContextualSnippet(deleteMenuItem);
+		return () => menuState.setContextualSnippet(null);
 	});
 </script>
 
@@ -103,38 +114,62 @@
 	{/if}
 </section>
 
-<section class="danger-zone">
-	<Dialog
-		title="Delete List"
-		description="This action cannot be undone. To confirm, please type the name of the list: {$list?.name}"
+{#snippet deleteMenuItem()}
+	<DropdownMenu.Item
+		class="menu-item danger"
+		onSelect={() => (isDeleteDialogOpen = true)}
 	>
-		{#snippet trigger()}
-			<span class="btn-danger-outline transition-all">Delete List</span>
-		{/snippet}
+		<div class="icon-container">
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				width="16"
+				height="16"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				><path d="M3 6h18" /><path
+					d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"
+				/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line
+					x1="10"
+					x2="10"
+					y1="11"
+					y2="17"
+				/><line x1="14" x2="14" y1="11" y2="17" /></svg
+			>
+		</div>
+		<span>Delete List</span>
+	</DropdownMenu.Item>
+{/snippet}
 
-		<div class="dialog-body">
+<Dialog
+	bind:open={isDeleteDialogOpen}
+	title="Delete List"
+	description="This action cannot be undone. To confirm, please type the name of the list: {$list?.name}"
+>
+	<div class="qr-wrapper">
+		<div class="input-group">
+			<div class="input-prefix">&gt;</div>
 			<input
 				type="text"
-				placeholder="Confirm list name..."
+				placeholder="CONFIRM_LIST_NAME"
 				bind:value={confirmDeleteName}
-				class="dialog-input"
+				onkeydown={(e) => e.key === "Enter" && handleDeleteList()}
 			/>
-			<div class="dialog-actions">
-				<button
-					class="btn-ghost"
-					onclick={() => (confirmDeleteName = "")}>Cancel</button
-				>
-				<button
-					class="btn-danger"
-					onclick={handleDeleteList}
-					disabled={confirmDeleteName !== $list?.name}
-				>
-					Delete Permanently
-				</button>
-			</div>
+			<button
+				class="input-action-btn danger"
+				onclick={handleDeleteList}
+				disabled={confirmDeleteName !== $list?.name}
+			>
+				DELETE
+			</button>
 		</div>
-	</Dialog>
-</section>
+		<div class="qr-footer small muted mono">DANGER_ZONE_V1</div>
+	</div>
+</Dialog>
+
 
 <style>
 	.list-controls {

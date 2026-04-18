@@ -3,13 +3,30 @@
 	import { syncManager } from "$lib/client/sync.svelte";
 	import { fly } from "svelte/transition";
 	import Dialog from "./Dialog.svelte";
-	import QRCode from "qrcode";
+	import { QRCode } from "qrcode";
+	import { page } from "$app/state";
+	import { deleteList } from "$lib/client/actions";
+	import { goto } from "$app/navigation";
+	import { menuState } from "$lib/client/menu.svelte";
 
 	let { user } = $props();
 
 	let qrCodeDataUrl = $state("");
 	let isSyncDialogOpen = $state(false);
+	let isDeleteDialogOpen = $state(false);
 	let isLoadingQr = $state(false);
+	let confirmDeleteName = $state("");
+
+	const currentList = $derived(page.data.initialList);
+
+	async function handleDeleteList() {
+		if (confirmDeleteName === currentList?.name) {
+			await deleteList(currentList.id);
+			isDeleteDialogOpen = false;
+			confirmDeleteName = "";
+			goto("/");
+		}
+	}
 
 	async function handleSyncDevice() {
 		isLoadingQr = true;
@@ -111,6 +128,13 @@
 								{...props}
 								transition:fly={{ y: 8, duration: 200 }}
 							>
+								<div class="menu-status-header">
+									<div class="status-dot" style:background={statusColor} class:pulse={syncManager.isSyncing}></div>
+									<span class="tiny muted mono uppercase tracking-widest">{statusText}</span>
+								</div>
+
+								<DropdownMenu.Separator class="separator" />
+
 								<DropdownMenu.Group>
 									<DropdownMenu.Item
 										class="menu-item"
@@ -171,10 +195,12 @@
 									</DropdownMenu.Item>
 								</DropdownMenu.Group>
 
-								<div class="menu-footer">
-									<div class="status-dot" style:background={statusColor} class:pulse={syncManager.isSyncing}></div>
-									<span class="tiny muted mono uppercase tracking-widest">{statusText}</span>
-								</div>
+								{#if menuState.contextualSnippet}
+									<DropdownMenu.Separator class="separator" />
+									<DropdownMenu.Group>
+										{@render menuState.contextualSnippet()}
+									</DropdownMenu.Group>
+								{/if}
 							</div>
 						</div>
 					{/if}
@@ -207,6 +233,32 @@
 				{/if}
 			</div>
 			<div class="qr-footer small muted mono">MIRROR_PROTOCOL_V1</div>
+		</div>
+	</Dialog>
+
+	<Dialog
+		bind:open={isDeleteDialogOpen}
+		title="Delete List"
+		description="This action cannot be undone. To confirm, please type the name of the list: {currentList?.name}"
+	>
+		<div class="qr-wrapper">
+			<div class="input-group">
+				<div class="input-prefix">&gt;</div>
+				<input
+					type="text"
+					placeholder="CONFIRM_LIST_NAME"
+					bind:value={confirmDeleteName}
+					onkeydown={(e) => e.key === "Enter" && handleDeleteList()}
+				/>
+				<button
+					class="input-action-btn danger"
+					onclick={handleDeleteList}
+					disabled={confirmDeleteName !== currentList?.name}
+				>
+					DELETE
+				</button>
+			</div>
+			<div class="qr-footer small muted mono">DANGER_ZONE_V1</div>
 		</div>
 	</Dialog>
 </div>
@@ -411,13 +463,11 @@
 				opacity: 0.7;
 			}
 
-			.menu-footer {
+			.menu-status-header {
 				display: flex;
 				align-items: center;
 				gap: var(--space-2);
 				padding: var(--space-2) var(--space-3);
-				margin-top: var(--space-1);
-				border-top: 1px solid var(--border);
 				opacity: 0.8;
 			}
 
