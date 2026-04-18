@@ -75,31 +75,21 @@ body {
 	overflow-x: hidden;
 }
 
-img,
-picture,
-svg,
-video {
+img, picture, svg, video {
 	display: block;
 	max-width: 100%;
 }
 
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
+h1, h2, h3, h4, h5, h6 {
 	color: var(--fg-0);
 	font-weight: 600;
 	letter-spacing: -0.02em;
 	text-wrap: balance;
-
 }
 
 p {
 	max-width: 75ch;
 	text-wrap: pretty;
-	/* Prevents orphans on lines */
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -126,19 +116,45 @@ input {
 }
 
 /* Utilities */
-.mono {
-	font-family: var(--font-mono);
-}
+.mono { font-family: var(--font-mono); }
+.muted { color: var(--fg-2); }
+.small { font-size: 0.875rem; }
 
-.muted {
-	color: var(--fg-2);
-}
-
-.small {
-	font-size: 0.875rem;
-}
-
-/* Transitions */
 .transition-all {
 	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Shared Components */
+.btn-primary {
+	background: var(--fg-0);
+	color: var(--bg-0);
+	padding: var(--space-2) var(--space-6);
+	border-radius: var(--radius-md);
+	font-weight: 500;
+	transition: all 0.2s;
+
+	&:hover:not(:disabled) {
+		background: var(--fg-1);
+		transform: scale(1.02);
+	}
+
+	&:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+}
+
+.input-group {
+	display: flex;
+	gap: var(--space-2);
+	background: var(--bg-1);
+	padding: var(--space-2);
+	border-radius: var(--radius-lg);
+	border: 1px solid var(--border);
+	box-shadow: var(--shadow-sm);
+
+	input {
+		flex: 1;
+		padding: var(--space-2) var(--space-4);
+	}
 }

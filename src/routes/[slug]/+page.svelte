@@ -48,38 +48,30 @@
 	}
 
 	onMount(() => {
-		if (data.listId) {
-			syncManager.subscribeToList(data.listId);
-			return () => syncManager.unsubscribeFromList(data.listId);
-		}
+		syncManager.subscribeToList(data.listId);
+		return () => syncManager.unsubscribeFromList(data.listId);
 	});
 </script>
 
-<main class="container">
-	<header>
-		<a href="/" class="back-link muted small">← Back</a>
-		<h1>{$list?.name ?? "Loading..."}</h1>
-	</header>
+<div class="list-controls">
+	<div class="input-group">
+		<input
+			type="text"
+			placeholder="Add item..."
+			bind:value={newItemName}
+			onkeydown={(e) => e.key === "Enter" && handleAddItem()}
+		/>
+		<button
+			class="btn-primary"
+			onclick={handleAddItem}
+			disabled={!newItemName.trim()}
+		>
+			Add
+		</button>
+	</div>
+</div>
 
-	<section class="add-item">
-		<div class="input-group">
-			<input
-				type="text"
-				placeholder="Add item..."
-				bind:value={newItemName}
-				onkeydown={(e) => e.key === "Enter" && handleAddItem()}
-			/>
-			<button
-				class="btn-add"
-				onclick={handleAddItem}
-				disabled={!newItemName.trim()}
-			>
-				+
-			</button>
-		</div>
-	</section>
-
-	<section class="items-list">
+<section class="items-section">
 		{#if $items && $items.length > 0}
 			<ul class="item-stack">
 				{#each $items as item (item.id)}
@@ -134,20 +126,19 @@
 			</div>
 		</Dialog>
 	</section>
-</main>
 
 <style>
+	.list-controls {
+		margin-bottom: var(--space-8);
+	}
+
+	.empty-state {
+		text-align: center;
+		padding: var(--space-8) 0;
+		color: var(--fg-3);
+	}
+
 	:global {
-		.back-link {
-			text-decoration: none;
-			display: block;
-			margin-bottom: var(--space-2);
-		}
-
-		.add-item {
-			margin-bottom: var(--space-6);
-		}
-
 		.item-stack {
 			list-style: none;
 			display: flex;

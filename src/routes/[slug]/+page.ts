@@ -30,6 +30,7 @@ export const load: PageLoad = async ({ params, parent }) => {
 
 	return {
 		listId: list?.id,
-		initialList: list
+		initialList: list,
+		title: list?.name || 'Loading...'
 	};
 };

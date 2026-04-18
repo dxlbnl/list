@@ -1,7 +1,5 @@
 import { EventEmitter } from 'events';
 
-import { EventEmitter } from 'events';
-
 class SyncHub extends EventEmitter {
 	constructor() {
 		super();
