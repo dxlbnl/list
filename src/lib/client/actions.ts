@@ -1,13 +1,13 @@
 import { db } from '$lib/client/db';
-import { slugify } from '$lib/utils';
+import { slugify, isReservedSlug } from '$lib/utils';
 
 export async function createList(name: string, userId: string) {
 	const id = crypto.randomUUID();
 	let slug = slugify(name) || 'untitled';
 
-	// Check for collisions in local DB
+	// Check for collisions in local DB or reserved slugs
 	const existing = await db.lists.where('slug').equals(slug).first();
-	if (existing) {
+	if (existing || isReservedSlug(slug)) {
 		slug = `${slug}-${Math.random().toString(36).slice(2, 6)}`;
 	}
 
@@ -59,4 +59,18 @@ export async function addItem(listId: string, name: string) {
 	});
 
 	return id;
+}
+
+export async function deleteList(listId: string) {
+	await db.lists.delete(listId);
+	// Also delete all items associated with this list locally
+	await db.items.where('listId').equals(listId).delete();
+
+	await db.syncQueue.add({
+		type: 'DELETE',
+		entity: 'list',
+		entityId: listId,
+		data: {},
+		timestamp: Date.now()
+	});
 }

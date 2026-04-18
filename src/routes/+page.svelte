@@ -39,7 +39,7 @@
 		{#if $lists && $lists.length > 0}
 			<div class="list-grid">
 				{#each $lists as list}
-					<a href="/list/{list.slug}" class="list-card transition-all">
+					<a href="/{list.slug}" class="list-card transition-all">
 						<h3>{list.name}</h3>
 						<span class="muted small mono"
 							>{list.slug}</span

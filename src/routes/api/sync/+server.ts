@@ -46,6 +46,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 							.set({ name: op.data.name })
 							.where(eq(lists.id, op.entityId));
 					}
+				} else if (op.type === 'DELETE') {
+					// Verify access
+					const access = await db
+						.select()
+						.from(listUsers)
+						.where(and(eq(listUsers.listId, op.entityId), eq(listUsers.userId, user.id)));
+					
+					if (access.length > 0) {
+						// Delete items first (Postgres will handle FKs if configured, but let's be explicit)
+						await db.delete(items).where(eq(items.listId, op.entityId));
+						// Delete list access records
+						await db.delete(listUsers).where(eq(listUsers.listId, op.entityId));
+						// Delete the list
+						await db.delete(lists).where(eq(lists.id, op.entityId));
+					}
 				}
 			} else if (op.entity === 'item') {
 				if (op.type === 'INSERT') {

@@ -1,7 +1,10 @@
 <script lang="ts">
-	import { addItem as addItemAction } from "$lib/client/actions";
+	import { addItem as addItemAction, deleteList } from "$lib/client/actions";
 	import { db as dexieDb } from "$lib/client/db";
 	import { liveQuery } from "dexie";
+	import { goto } from "$app/navigation";
+	import Dialog from "$lib/components/ui/Dialog.svelte";
+	import Checkbox from "$lib/components/ui/Checkbox.svelte";
 
 	let { data } = $props();
 
@@ -52,6 +55,15 @@
 			timestamp: Date.now(),
 		});
 	}
+
+	let confirmDeleteName = $state("");
+	async function handleDeleteList() {
+		const currentList = await dexieDb.lists.get(data.listId);
+		if (confirmDeleteName === currentList?.name) {
+			await deleteList(data.listId);
+			goto("/");
+		}
+	}
 </script>
 
 <main class="container">
@@ -83,14 +95,10 @@
 			<ul class="item-stack">
 				{#each $items as item (item.id)}
 					<li class="item-row transition-all" class:done={item.done}>
-						<button
-							class="check-box"
-							onclick={() => toggleDone(item)}
-						>
-							{#if item.done}
-								<span class="icon-done">✓</span>
-							{/if}
-						</button>
+						<Checkbox 
+							checked={item.done} 
+							onCheckedChange={() => toggleDone(item)} 
+						/>
 						<span class="item-name">{item.name}</span>
 						<button
 							class="btn-delete muted"
@@ -106,6 +114,36 @@
 				<p>List is empty.</p>
 			</div>
 		{/if}
+	</section>
+
+	<section class="danger-zone">
+		<Dialog 
+			title="Delete List" 
+			description="This action cannot be undone. To confirm, please type the name of the list: {$list?.name}"
+		>
+			{#snippet trigger()}
+				<span class="btn-danger-outline transition-all">Delete List</span>
+			{/snippet}
+
+			<div class="dialog-body">
+				<input 
+					type="text" 
+					placeholder="Confirm list name..." 
+					bind:value={confirmDeleteName}
+					class="dialog-input"
+				/>
+				<div class="dialog-actions">
+					<button class="btn-ghost" onclick={() => (confirmDeleteName = "")}>Cancel</button>
+					<button 
+						class="btn-danger" 
+						onclick={handleDeleteList} 
+						disabled={confirmDeleteName !== $list?.name}
+					>
+						Delete Permanently
+					</button>
+				</div>
+			</div>
+		</Dialog>
 	</section>
 </main>
 
@@ -196,6 +234,80 @@
 			display: flex;
 			align-items: center;
 			justify-content: center;
+		}
+
+		.danger-zone {
+			margin-top: var(--space-8);
+			padding-top: var(--space-8);
+			border-top: 1px solid var(--border);
+			display: flex;
+			flex-direction: column;
+			gap: var(--space-4);
+		}
+
+		.btn-danger-outline {
+			border: 1px solid var(--danger);
+			color: var(--danger);
+			padding: var(--space-2) var(--space-6);
+			border-radius: var(--radius-md);
+			font-weight: 500;
+			transition: all 0.2s;
+			cursor: pointer;
+		}
+
+		.btn-danger-outline:hover {
+			background: var(--danger);
+			color: white;
+		}
+
+		.btn-danger {
+			background: var(--danger);
+			color: white;
+			padding: var(--space-2) var(--space-6);
+			border-radius: var(--radius-md);
+			font-weight: 500;
+			transition: all 0.2s;
+		}
+
+		.btn-danger:hover:not(:disabled) {
+			opacity: 0.9;
+			transform: scale(1.02);
+		}
+
+		.btn-danger:disabled {
+			opacity: 0.3;
+			cursor: not-allowed;
+		}
+
+		.btn-ghost {
+			padding: var(--space-2) var(--space-6);
+			border-radius: var(--radius-md);
+			color: var(--fg-2);
+			transition: all 0.2s;
+		}
+
+		.btn-ghost:hover {
+			background: var(--bg-2);
+			color: var(--fg-0);
+		}
+
+		.dialog-input {
+			background: var(--bg-2);
+			border: 1px solid var(--border);
+			padding: var(--space-3) var(--space-4);
+			border-radius: var(--radius-md);
+			color: var(--fg-1);
+			width: 100%;
+		}
+
+		.dialog-input:focus {
+			border-color: var(--accent);
+		}
+
+		.dialog-actions {
+			display: flex;
+			justify-content: flex-end;
+			gap: var(--space-3);
 		}
 	}
 </style>
