@@ -10,14 +10,30 @@ class SyncManager {
 	constructor() {
 		// Start sync loop
 		if (typeof window !== 'undefined') {
+			this.isOnline = navigator.onLine;
+
+			window.addEventListener('online', () => {
+				this.isOnline = true;
+				console.log('Network online: triggering sync...');
+				this.connectSSE();
+				this.processQueue();
+				this.reconcileAllLists();
+			});
+
+			window.addEventListener('offline', () => {
+				this.isOnline = false;
+				console.log('Network offline');
+			});
+
 			this.startLoop();
 			this.connectSSE();
 		}
 	}
 
 	connectSSE() {
-		if (this.eventSource) return;
-
+		if (this.eventSource && this.eventSource.readyState !== 2) return;
+		
+		if (this.eventSource) this.eventSource.close();
 		this.eventSource = new EventSource('/api/sync');
 		
 		this.eventSource.onopen = () => {
@@ -79,13 +95,17 @@ class SyncManager {
 	}
 
 	async processQueue() {
-		const ops = await db.syncQueue.toArray();
-		if (ops.length === 0) return;
+		if (!this.isOnline) return;
+
+		// Check if we have work to do before setting state
+		const count = await db.syncQueue.count();
+		if (count === 0) return;
 
 		this.isSyncing = true;
 		this.lastSyncError = null;
 
 		try {
+			const ops = await db.syncQueue.toArray();
 			const response = await fetch('/api/sync', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -175,6 +195,8 @@ class SyncManager {
 	}
 
 	async reconcileAllLists() {
+		if (!this.isOnline) return;
+		this.isSyncing = true;
 		try {
 			const response = await fetch('/api/lists');
 			if (!response.ok) return;
@@ -205,6 +227,8 @@ class SyncManager {
 			}
 		} catch (e) {
 			console.error('Reconcile all lists error:', e);
+		} finally {
+			this.isSyncing = false;
 		}
 	}
 
