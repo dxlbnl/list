@@ -37,10 +37,10 @@ export class ListDatabase extends Dexie {
 
 	constructor() {
 		super('ListAppDB');
-		this.version(1).stores({
+		this.version(2).stores({
 			lists: 'id, slug, createdBy, [createdBy+slug], createdAt',
 			items: 'id, listId, name, groupName, rank, done, deletedAt, updatedAt',
-			syncQueue: '++id, entityId, timestamp'
+			syncQueue: '++id, entityId, entity, timestamp'
 		});
 	}
 }

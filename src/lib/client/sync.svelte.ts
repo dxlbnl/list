@@ -32,10 +32,7 @@ class SyncManager {
 		};
 
 		this.eventSource.onerror = (e) => {
-			console.error('SSE error, reconnecting...', e);
-			this.eventSource?.close();
-			this.eventSource = null;
-			setTimeout(() => this.connectSSE(), 5000);
+			console.error('SSE connection lost. Browser will retry automatically.', e);
 		};
 	}
 

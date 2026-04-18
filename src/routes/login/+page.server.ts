@@ -1,5 +1,6 @@
 import { db } from '$lib/server/db';
 import { magicLinks } from '$lib/server/db/schema';
+import { nanoid } from '$lib/utils';
 import { fail } from '@sveltejs/kit';
 import type { Actions } from './$types';
 
@@ -13,7 +14,7 @@ export const actions: Actions = {
 		}
 
 		// Generate token
-		const token = crypto.randomUUID();
+		const token = nanoid();
 		const expiresAt = new Date(Date.now() + 1000 * 60 * 15); // 15 minutes
 
 		// The current user (anonymous session) that will be merged into the email account

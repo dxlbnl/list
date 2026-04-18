@@ -15,3 +15,5 @@ export const RESERVED_SLUGS = ['login', 'settings', 'api', 'confirm', 'list', 'f
 export function isReservedSlug(slug: string): boolean {
 	return RESERVED_SLUGS.includes(slug.toLowerCase());
 }
+
+export { nanoid } from 'nanoid';

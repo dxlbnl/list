@@ -25,9 +25,11 @@ export async function getSession(event: RequestEvent) {
 	return { session, user };
 }
 
+import { nanoid } from '$lib/utils';
+
 export async function createAnonymousSession(event: RequestEvent) {
-	const userId = crypto.randomUUID();
-	const sessionId = crypto.randomUUID();
+	const userId = nanoid();
+	const sessionId = nanoid();
 	// True permanence for persistent cookie
 	const farFuture = new Date('9999-12-31');
 

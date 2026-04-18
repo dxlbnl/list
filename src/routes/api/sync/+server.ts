@@ -22,19 +22,28 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		try {
 			if (op.entity === 'list') {
 				if (op.type === 'INSERT') {
-					await db.insert(lists).values({
-						id: op.entityId,
-						slug: op.data.slug,
-						name: op.data.name,
-						createdBy: user.id,
-						createdAt: new Date(op.data.createdAt)
-					});
+					await db
+						.insert(lists)
+						.values({
+							id: op.entityId,
+							slug: op.data.slug,
+							name: op.data.name,
+							createdBy: user.id,
+							createdAt: new Date(op.data.createdAt)
+						})
+						.onConflictDoUpdate({
+							target: lists.id,
+							set: { name: op.data.name }
+						});
 					
 					// Grant access to the creator
-					await db.insert(listUsers).values({
-						listId: op.entityId,
-						userId: user.id
-					});
+					await db
+						.insert(listUsers)
+						.values({
+							listId: op.entityId,
+							userId: user.id
+						})
+						.onConflictDoNothing();
 				} else if (op.type === 'UPDATE') {
 					// Verify access
 					const access = await db
@@ -73,16 +82,29 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 						.where(and(eq(listUsers.listId, op.data.listId), eq(listUsers.userId, user.id)));
 					
 					if (access.length > 0) {
-						await db.insert(items).values({
-							id: op.entityId,
-							listId: op.data.listId,
-							name: op.data.name,
-							groupName: op.data.groupName,
-							rank: op.data.rank,
-							done: op.data.done,
-							deletedAt: op.data.deletedAt ? new Date(op.data.deletedAt) : null,
-							updatedAt: new Date(op.data.updatedAt)
-						});
+						await db
+							.insert(items)
+							.values({
+								id: op.entityId,
+								listId: op.data.listId,
+								name: op.data.name,
+								groupName: op.data.groupName,
+								rank: op.data.rank,
+								done: op.data.done,
+								deletedAt: op.data.deletedAt ? new Date(op.data.deletedAt) : null,
+								updatedAt: new Date(op.data.updatedAt)
+							})
+							.onConflictDoUpdate({
+								target: items.id,
+								set: {
+									name: op.data.name,
+									groupName: op.data.groupName,
+									rank: op.data.rank,
+									done: op.data.done,
+									deletedAt: op.data.deletedAt ? new Date(op.data.deletedAt) : null,
+									updatedAt: new Date(op.data.updatedAt)
+								}
+							});
 					}
 				} else if (op.type === 'UPDATE') {
 					// Get current item to find its listId
@@ -142,34 +164,58 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 };
 
 export const GET: RequestHandler = async ({ locals }) => {
+	console.log('SSE GET request received');
 	const user = locals.user;
-	if (!user) throw error(401, 'Unauthorized');
+	if (!user) {
+		console.log('SSE GET: Unauthorized');
+		throw error(401, 'Unauthorized');
+	}
+
+	const encoder = new TextEncoder();
 
 	const stream = new ReadableStream({
 		start(controller) {
+			console.log(`SSE stream starting for user: ${user.id}`);
+			
 			const onUpdate = (listId: string) => {
-				// We could check if user has access to this listId here
-				// but for now let's just send the event and let the client decide
-				// or the client only subscribes to its own lists.
-				controller.enqueue(`data: ${JSON.stringify({ type: 'update', listId })}\n\n`);
+				try {
+					controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'update', listId })}\n\n`));
+				} catch (e) {
+					console.log('SSE: Failed to enqueue message, closing...');
+					syncHub.off('update', onUpdate);
+				}
 			};
 
 			syncHub.on('update', onUpdate);
+			
+			// Initial connection message
+			controller.enqueue(encoder.encode(': connected\n\n'));
+
+			const interval = setInterval(() => {
+				try {
+					controller.enqueue(encoder.encode(': ping\n\n'));
+				} catch (e) {
+					clearInterval(interval);
+					syncHub.off('update', onUpdate);
+				}
+			}, 30000);
 
 			return () => {
+				console.log('SSE stream cleaning up');
+				clearInterval(interval);
 				syncHub.off('update', onUpdate);
 			};
 		},
 		cancel() {
-			// Cleanup if needed
+			console.log('SSE stream cancelled by client');
 		}
 	});
 
 	return new Response(stream, {
 		headers: {
 			'Content-Type': 'text/event-stream',
-			'Cache-Control': 'no-cache',
-			'Connection': 'keep-alive'
+			'Cache-Control': 'no-cache, no-transform',
+			'X-Accel-Buffering': 'no'
 		}
 	});
 };

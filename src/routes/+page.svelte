@@ -2,6 +2,8 @@
 	import { createList } from "$lib/client/actions";
 	import { db } from "$lib/client/db";
 	import { liveQuery } from "dexie";
+	import Dialog from "$lib/components/ui/Dialog.svelte";
+	import QRCode from "qrcode";
 
 	let { data } = $props();
 
@@ -15,12 +17,61 @@
 		await createList(newListName, data.user.id);
 		newListName = "";
 	}
+
+	let qrCodeDataUrl = $state("");
+	let isSyncDialogOpen = $state(false);
+	let isLoadingQr = $state(false);
+
+	async function handleSyncDevice() {
+		isLoadingQr = true;
+		try {
+			const res = await fetch("/api/auth/clone", { method: "POST" });
+			const { url } = await res.json();
+			qrCodeDataUrl = await QRCode.toDataURL(url, {
+				width: 300,
+				margin: 2,
+				color: {
+					dark: "#ffffff",
+					light: "#00000000",
+				},
+			});
+		} catch (e) {
+			console.error("Failed to generate sync QR:", e);
+		} finally {
+			isLoadingQr = false;
+		}
+	}
+
+	$effect(() => {
+		if (isSyncDialogOpen) {
+			handleSyncDevice();
+		}
+	});
 </script>
 
 <main class="container">
 	<header>
 		<h1>Lists</h1>
 		<div class="header-actions">
+			<Dialog 
+				bind:open={isSyncDialogOpen}
+				title="Sync to Device" 
+				description="Scan this QR code with another device to mirror this session. This link expires in 10 minutes."
+			>
+				{#snippet trigger()}
+					<button class="btn-settings muted">Sync Device</button>
+				{/snippet}
+
+				<div class="qr-container">
+					{#if isLoadingQr}
+						<div class="qr-placeholder mono small muted">Generating...</div>
+					{:else if qrCodeDataUrl}
+						<img src={qrCodeDataUrl} alt="Sync QR Code" class="qr-image" />
+					{:else}
+						<div class="qr-placeholder mono small danger">Error loading QR</div>
+					{/if}
+				</div>
+			</Dialog>
 			<a href="/settings" class="btn-settings muted">Settings</a>
 			{#if data.user}
 				<div class="user-badge mono small muted">
@@ -193,6 +244,29 @@
 		.btn-primary:disabled {
 			opacity: 0.5;
 			cursor: not-allowed;
+		}
+
+		.qr-container {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			min-height: 200px;
+			background: var(--bg-0);
+			border-radius: var(--radius-md);
+			padding: var(--space-4);
+		}
+
+		.qr-image {
+			width: 100%;
+			max-width: 250px;
+			image-rendering: pixelated;
+		}
+
+		.qr-placeholder {
+			display: flex;
+			align-items: center;
+			justify-content: center;
 		}
 	}
 </style>

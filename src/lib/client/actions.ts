@@ -1,9 +1,9 @@
 import { db } from '$lib/client/db';
-import { slugify, isReservedSlug } from '$lib/utils';
+import { slugify, isReservedSlug, nanoid } from '$lib/utils';
 import { syncManager } from './sync.svelte';
 
 export async function createList(name: string, userId: string) {
-	const id = crypto.randomUUID();
+	const id = nanoid();
 	let slug = slugify(name) || 'untitled';
 
 	// Check for collisions in local DB or reserved slugs
@@ -37,7 +37,7 @@ export async function createList(name: string, userId: string) {
 }
 
 export async function addItem(listId: string, name: string) {
-	const id = crypto.randomUUID();
+	const id = nanoid();
 	const newItem = {
 		id,
 		listId,
