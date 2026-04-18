@@ -1,7 +1,66 @@
-import { pgTable, serial, integer, text } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, doublePrecision, primaryKey, unique } from 'drizzle-orm/pg-core';
 
-export const task = pgTable('task', {
-	id: serial('id').primaryKey(),
-	title: text('title').notNull(),
-	priority: integer('priority').notNull().default(1)
+export const users = pgTable('users', {
+	id: text('id').primaryKey(),
+	email: text('email').unique(),
+	email_verified: boolean('email_verified').notNull().default(false),
+	createdAt: timestamp('created_at').notNull().defaultNow()
+});
+
+export const sessions = pgTable('sessions', {
+	id: text('id').primaryKey(),
+	userId: text('user_id')
+		.notNull()
+		.references(() => users.id)
+});
+
+export const magicLinks = pgTable('magic_links', {
+	token: text('token').primaryKey(),
+	email: text('email'), // Nullable for session cloning
+	userIdToMerge: text('user_id_to_merge').references(() => users.id),
+	expiresAt: timestamp('expires_at').notNull()
+});
+
+export const lists = pgTable(
+	'lists',
+	{
+		id: text('id').primaryKey(),
+		slug: text('slug').notNull(),
+		name: text('name').notNull(),
+		createdBy: text('created_by')
+			.notNull()
+			.references(() => users.id),
+		createdAt: timestamp('created_at').notNull().defaultNow()
+	},
+	(t) => ({
+		unq: unique().on(t.createdBy, t.slug)
+	})
+);
+
+export const listUsers = pgTable(
+	'list_users',
+	{
+		listId: text('list_id')
+			.notNull()
+			.references(() => lists.id),
+		userId: text('user_id')
+			.notNull()
+			.references(() => users.id)
+	},
+	(t) => ({
+		pk: primaryKey({ columns: [t.listId, t.userId] })
+	})
+);
+
+export const items = pgTable('items', {
+	id: text('id').primaryKey(),
+	listId: text('list_id')
+		.notNull()
+		.references(() => lists.id),
+	name: text('name').notNull(),
+	groupName: text('group_name'),
+	rank: doublePrecision('rank').notNull(),
+	done: boolean('done').notNull().default(false),
+	deletedAt: timestamp('deleted_at'),
+	updatedAt: timestamp('updated_at').notNull().defaultNow()
 });
