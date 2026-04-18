@@ -2,6 +2,8 @@ import { db } from '$lib/client/db';
 import type { PageLoad } from './$types';
 import { error } from '@sveltejs/kit';
 
+export const ssr = false;
+
 export const load: PageLoad = async ({ params, parent }) => {
 	const { user } = await parent();
 	

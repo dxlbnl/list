@@ -4,8 +4,17 @@
 	import { liveQuery } from "dexie";
 	import Dialog from "$lib/components/ui/Dialog.svelte";
 	import QRCode from "qrcode";
+	import { syncManager } from "$lib/client/sync.svelte";
+	import { onMount } from "svelte";
+	import SyncStatus from "$lib/components/ui/SyncStatus.svelte";
 
 	let { data } = $props();
+
+	onMount(() => {
+		if (data.user) {
+			syncManager.reconcileAllLists();
+		}
+	});
 
 	// Live query for lists
 	const lists = liveQuery(() => db.lists.toArray());
@@ -51,7 +60,10 @@
 
 <main class="container">
 	<header>
-		<h1>Lists</h1>
+		<div class="header-main">
+			<h1>Lists</h1>
+			<SyncStatus />
+		</div>
 		<div class="header-actions">
 			<Dialog 
 				bind:open={isSyncDialogOpen}
@@ -140,6 +152,12 @@
 			margin-bottom: var(--space-8);
 			border-bottom: 1px solid var(--border);
 			padding-bottom: var(--space-4);
+		}
+
+		.header-main {
+			display: flex;
+			align-items: center;
+			gap: var(--space-4);
 		}
 
 		.header-actions {

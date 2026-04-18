@@ -2,6 +2,7 @@ import { db } from '$lib/client/db';
 
 class SyncManager {
 	isSyncing = $state(false);
+	isOnline = $state(true);
 	lastSyncError = $state<string | null>(null);
 	private eventSource: EventSource | null = null;
 	private activeListIds = new Set<string>();
@@ -19,12 +20,30 @@ class SyncManager {
 
 		this.eventSource = new EventSource('/api/sync');
 		
-		this.eventSource.onmessage = (event) => {
+		this.eventSource.onopen = () => {
+			this.isOnline = true;
+		};
+
+		this.eventSource.onmessage = async (event) => {
+			this.isOnline = true;
 			try {
 				const data = JSON.parse(event.data);
-				if (data.type === 'update' && this.activeListIds.has(data.listId)) {
-					console.log(`List ${data.listId} updated on server, pulling...`);
-					this.pull(data.listId);
+				if (data.type === 'update' && data.listId) {
+					if (data.listId === 'global') {
+						console.log('Global refresh triggered');
+						this.reconcileAllLists();
+					} else if (data.deleted) {
+						console.log(`List ${data.listId} deleted, removing locally...`);
+						await db.lists.delete(data.listId);
+						await db.items.where('listId').equals(data.listId).delete();
+					} else if (data.list && data.items) {
+						console.log(`Instant update received for ${data.listId}`);
+						await this.pull(data.listId, { list: data.list, items: data.items });
+					} else if (this.activeListIds.has(data.listId)) {
+						await this.pull(data.listId);
+					} else {
+						this.reconcileAllLists();
+					}
 				}
 			} catch (e) {
 				console.error('SSE message error:', e);
@@ -32,6 +51,7 @@ class SyncManager {
 		};
 
 		this.eventSource.onerror = (e) => {
+			this.isOnline = false;
 			console.error('SSE connection lost. Browser will retry automatically.', e);
 		};
 	}
@@ -99,12 +119,20 @@ class SyncManager {
 		}
 	}
 
-	async pull(listId: string) {
+	async pull(listId: string, snapshot?: { list: any, items: any[] }) {
 		try {
-			const response = await fetch(`/api/lists/${listId}`);
-			if (!response.ok) return;
+			let list, items;
 
-			const { list, items } = await response.json();
+			if (snapshot) {
+				list = snapshot.list;
+				items = snapshot.items;
+			} else {
+				const response = await fetch(`/api/lists/${listId}`);
+				if (!response.ok) return;
+				const data = await response.json();
+				list = data.list;
+				items = data.items;
+			}
 
 			// Update list with reconciliation
 			const pendingListOps = await db.syncQueue.where('entity').equals('list').toArray();
@@ -143,6 +171,40 @@ class SyncManager {
 			}
 		} catch (e) {
 			console.error(`Pull error for list ${listId}:`, e);
+		}
+	}
+
+	async reconcileAllLists() {
+		try {
+			const response = await fetch('/api/lists');
+			if (!response.ok) return;
+
+			const { lists } = await response.json();
+			const pendingListOps = await db.syncQueue.where('entity').equals('list').toArray();
+			const pendingListIds = new Set(pendingListOps.map(op => op.entityId));
+
+			for (const list of lists) {
+				if (!pendingListIds.has(list.id)) {
+					await db.lists.put({
+						...list,
+						createdAt: new Date(list.createdAt)
+					});
+					// Also subscribe and pull items for each list
+					this.subscribeToList(list.id);
+				}
+			}
+
+			// Optional: Remove local lists that were deleted on server
+			const serverListIds = new Set(lists.map((l: any) => l.id));
+			const localLists = await db.lists.toArray();
+			for (const localList of localLists) {
+				if (!serverListIds.has(localList.id) && !pendingListIds.has(localList.id) && !localList.isLocalOnly) {
+					await db.lists.delete(localList.id);
+					await db.items.where('listId').equals(localList.id).delete();
+				}
+			}
+		} catch (e) {
+			console.error('Reconcile all lists error:', e);
 		}
 	}
 

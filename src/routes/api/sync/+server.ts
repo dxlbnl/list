@@ -134,19 +134,33 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 								.where(eq(items.id, op.entityId));
 						}
 					}
+				} else if (op.type === 'DELETE') {
+					// Verify ownership/access for list deletion
+					const list = await db.select().from(lists).where(and(eq(lists.id, op.entityId), eq(lists.createdBy, user.id)));
+					if (list.length > 0) {
+						await db.delete(lists).where(eq(lists.id, op.entityId));
+						// Cascade handles items/listUsers
+					}
 				}
+			}
+			
+			if (op.entity === 'item') {
+				// Existing item handling...
+				// (Assuming soft-deletes for items via UPDATE)
 			}
 			results.push({ id: op.id, status: 'success' });
 			
 			// Track which lists were updated
-			if (op.entity === 'list') updatedListIds.add(op.entityId);
+			if (op.entity === 'list') {
+				updatedListIds.add('global'); // Trigger global refresh for list changes
+				updatedListIds.add(op.entityId);
+			}
 			if (op.entity === 'item') {
 				if (op.type === 'INSERT') updatedListIds.add(op.data.listId);
 				else {
-					// For updates/deletes, we'd need the listId. 
-					// The POST handler already fetched currentItem for updates.
-					// Let's assume the client knows and we can broadcast.
-					// In a real app, you'd fetch the listId if not present.
+					// For updates/deletes, fetch listId if not in op.data
+					const item = await db.select().from(items).where(eq(items.id, op.entityId)).limit(1);
+					if (item[0]) updatedListIds.add(item[0].listId);
 				}
 			}
 		} catch (e) {
@@ -157,7 +171,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	// Broadcast updates
 	for (const listId of updatedListIds) {
-		syncHub.broadcast(listId);
+		if (listId === 'global') {
+			syncHub.broadcast('global');
+			continue;
+		}
+
+		// Fetch current state to push to clients
+		const [list] = await db.select().from(lists).where(eq(lists.id, listId));
+		if (list) {
+			const listItems = await db.select().from(items).where(eq(items.listId, listId));
+			syncHub.broadcast(listId, { 
+				list, 
+				items: listItems 
+			});
+		} else {
+			// List was likely deleted
+			syncHub.broadcast(listId, { deleted: true });
+		}
 	}
 
 	return json({ results });
@@ -177,9 +207,9 @@ export const GET: RequestHandler = async ({ locals }) => {
 		start(controller) {
 			console.log(`SSE stream starting for user: ${user.id}`);
 			
-			const onUpdate = (listId: string) => {
+			const onUpdate = (payload: any) => {
 				try {
-					controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'update', listId })}\n\n`));
+					controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'update', ...payload })}\n\n`));
 				} catch (e) {
 					console.log('SSE: Failed to enqueue message, closing...');
 					syncHub.off('update', onUpdate);
