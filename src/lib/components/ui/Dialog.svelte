@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Dialog as BitsDialog } from 'bits-ui';
+	import { fly, fade } from 'svelte/transition';
 	import type { Snippet } from 'svelte';
 
 	let { 
@@ -24,19 +25,33 @@
 		</BitsDialog.Trigger>
 	{/if}
 	
-	<BitsDialog.Portal>
-		<BitsDialog.Overlay class="dialog-overlay" />
-		<BitsDialog.Content class="dialog-content">
-			<BitsDialog.Title class="dialog-title">{title}</BitsDialog.Title>
-			{#if description}
-				<BitsDialog.Description class="muted small">
-					{description}
-				</BitsDialog.Description>
-			{/if}
-			
-			<div class="dialog-body">
-				{@render children()}
-			</div>
+	<BitsDialog.Portal disabled={true}>
+		<BitsDialog.Overlay class="dialog-overlay" forceMount>
+			{#snippet child({ props, open })}
+				{#if open}
+					<div {...props} transition:fade={{ duration: 200 }}></div>
+				{/if}
+			{/snippet}
+		</BitsDialog.Overlay>
+		<BitsDialog.Content class="dialog-content" forceMount>
+			{#snippet child({ wrapperProps, props, open })}
+				{#if open}
+					<div {...wrapperProps}>
+						<div {...props} transition:fly={{ y: 20, duration: 300 }}>
+							<BitsDialog.Title class="dialog-title">{title}</BitsDialog.Title>
+							{#if description}
+								<BitsDialog.Description class="muted small">
+									{description}
+								</BitsDialog.Description>
+							{/if}
+							
+							<div class="dialog-body">
+								{@render children()}
+							</div>
+						</div>
+					</div>
+				{/if}
+			{/snippet}
 		</BitsDialog.Content>
 	</BitsDialog.Portal>
 </BitsDialog.Root>

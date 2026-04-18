@@ -45,18 +45,19 @@
 
 <section class="create-section">
 	<div class="input-group">
+		<div class="input-prefix">&gt;</div>
 		<input
 			type="text"
-			placeholder="New list name..."
+			placeholder="CREATE NEW LIST"
 			bind:value={newListName}
 			onkeydown={(e) => e.key === "Enter" && handleCreate()}
 		/>
 		<button
-			class="btn-primary"
+			class="input-action-btn"
 			onclick={handleCreate}
 			disabled={!newListName.trim()}
 		>
-			Create
+			CREATE
 		</button>
 	</div>
 </section>
@@ -79,12 +80,35 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2);
+		position: relative;
+		overflow: hidden;
+	}
+
+	.list-card::after {
+		content: '';
+		position: absolute;
+		left: 0;
+		top: 0;
+		bottom: 0;
+		width: 2px;
+		background: var(--accent);
+		transform: scaleY(0);
+		transition: transform 0.2s;
 	}
 
 	.list-card:hover {
 		border-color: var(--border-hover);
 		background: var(--bg-2);
-		transform: translateY(-2px);
+		transform: translateX(4px);
+	}
+
+	.list-card:hover::after {
+		transform: scaleY(1);
+	}
+
+	.list-card h3 {
+		font-size: 1rem;
+		font-weight: 600;
 	}
 
 	.empty-state {
