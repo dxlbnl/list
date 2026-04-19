@@ -1,6 +1,6 @@
 import { db } from '$lib/server/db';
 import { lists, items, listUsers } from '$lib/server/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray, lt } from 'drizzle-orm';
 import { error, json } from '@sveltejs/kit';
 import { MESSAGES } from '$lib/constants/messages';
 import type { RequestHandler } from './$types';
@@ -25,103 +25,121 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const { operations, clientId } = validation.data;
 	syncLogger.info(`Processing ${operations.length} operations`, { userId: user.id, count: operations.length, clientId });
 
-	const results = [];
+	const results: { id: string | number; status: 'success' | 'error'; message?: string }[] = [];
 	const updatedListIds = new Set<string>();
-	const accessCache = new Set<string>(); // Cache listId access for this request
-
 	const deletedListMembers = new Map<string, string[]>();
 
-	for (const op of operations) {
-		try {
+	const results: { id: string | number; status: 'success' | 'error'; message?: string }[] = [];
+	const updatedListIds = new Set<string>();
+	const deletedListMembers = new Map<string, string[]>();
+
+	try {
+		// 1. PRE-FETCH DATA (Batched into 1 HTTP request)
+		const preFetchQueries: any[] = [
+			db.select({ listId: listUsers.listId }).from(listUsers).where(eq(listUsers.userId, user.id))
+		];
+
+		const itemIdsToFetch = operations
+			.filter(op => op.entity === 'item' && op.type === 'UPDATE' && !op.data.listId)
+			.map(op => op.entityId);
+		if (itemIdsToFetch.length > 0) {
+			preFetchQueries.push(db.select({ id: items.id, listId: items.listId }).from(items).where(inArray(items.id, itemIdsToFetch)));
+		}
+
+		const listsBeingDeleted = operations
+			.filter(op => op.entity === 'list' && op.type === 'DELETE')
+			.map(op => op.entityId);
+		if (listsBeingDeleted.length > 0) {
+			preFetchQueries.push(db.select({ listId: listUsers.listId, userId: listUsers.userId }).from(listUsers).where(inArray(listUsers.listId, listsBeingDeleted)));
+		}
+
+		const preFetchResults = await db.batch(preFetchQueries as [any, ...any[]]);
+		
+		const authorizedListIds = new Set((preFetchResults[0] as any[]).map(a => a.listId));
+		const itemIdToListId = new Map<string, string>();
+		if (itemIdsToFetch.length > 0) {
+			const fetchedItems = (preFetchResults[1] as any[]);
+			for (const item of fetchedItems) itemIdToListId.set(item.id, item.listId);
+		}
+		if (listsBeingDeleted.length > 0) {
+			const members = (preFetchResults[itemIdsToFetch.length > 0 ? 2 : 1] as any[]);
+			for (const m of members) {
+				if (!deletedListMembers.has(m.listId)) deletedListMembers.set(m.listId, []);
+				deletedListMembers.get(m.listId)!.push(m.userId);
+			}
+		}
+
+		// 2. OPERATIONS (Batched into 1 HTTP request)
+		const batchQueries: any[] = [];
+		const opStatusMapping: { opIndex: number; success: boolean; error?: string }[] = [];
+
+		for (let i = 0; i < operations.length; i++) {
+			const op = operations[i];
+			let queryAdded = false;
+
 			if (op.entity === 'list') {
 				if (op.type === 'INSERT') {
-					await db
-						.insert(lists)
-						.values({
+					batchQueries.push(
+						db.insert(lists).values({
 							id: op.entityId,
 							slug: op.data.slug,
 							name: op.data.name,
 							createdBy: user.id,
 							createdAt: new Date(op.data.createdAt)
-						})
-						.onConflictDoUpdate({
+						}).onConflictDoUpdate({
 							target: lists.id,
 							set: { name: op.data.name }
-						});
-					
-					// Grant access to the creator
-					await db
-						.insert(listUsers)
-						.values({
+						})
+					);
+					batchQueries.push(
+						db.insert(listUsers).values({
 							listId: op.entityId,
 							userId: user.id
-						})
-						.onConflictDoNothing();
+						}).onConflictDoNothing()
+					);
+					authorizedListIds.add(op.entityId);
+					updatedListIds.add('global');
+					updatedListIds.add(op.entityId);
+					queryAdded = true;
 				} else if (op.type === 'UPDATE') {
-					// Verify access (cached)
-					if (!accessCache.has(op.entityId)) {
-						const access = await db
-							.select()
-							.from(listUsers)
-							.where(and(eq(listUsers.listId, op.entityId), eq(listUsers.userId, user.id)));
-						if (access.length > 0) accessCache.add(op.entityId);
-					}
-					
-					if (accessCache.has(op.entityId)) {
-						await db
-							.update(lists)
-							.set({ name: op.data.name })
-							.where(eq(lists.id, op.entityId));
+					if (authorizedListIds.has(op.entityId)) {
+						batchQueries.push(
+							db.update(lists).set({ name: op.data.name }).where(eq(lists.id, op.entityId))
+						);
+						updatedListIds.add('global');
+						updatedListIds.add(op.entityId);
+						queryAdded = true;
+					} else {
+						opStatusMapping.push({ opIndex: i, success: false, error: 'Unauthorized access to list' });
 					}
 				} else if (op.type === 'DELETE') {
-					// Verify access
-					const access = await db
-						.select()
-						.from(listUsers)
-						.where(and(eq(listUsers.listId, op.entityId), eq(listUsers.userId, user.id)));
-					
-					if (access.length > 0) {
-						// CAPTURE MEMBERS BEFORE DELETION
-						const members = await db
-							.select({ userId: listUsers.userId })
-							.from(listUsers)
-							.where(eq(listUsers.listId, op.entityId));
-						
-						deletedListMembers.set(op.entityId, members.map(m => m.userId));
-
-						// Delete items first
-						await db.delete(items).where(eq(items.listId, op.entityId));
-						// Delete list access records
-						await db.delete(listUsers).where(eq(listUsers.listId, op.entityId));
-						// Delete the list
-						await db.delete(lists).where(eq(lists.id, op.entityId));
+					if (authorizedListIds.has(op.entityId)) {
+						batchQueries.push(db.delete(items).where(eq(items.listId, op.entityId)));
+						batchQueries.push(db.delete(listUsers).where(eq(listUsers.listId, op.entityId)));
+						batchQueries.push(db.delete(lists).where(eq(lists.id, op.entityId)));
+						updatedListIds.add('global');
+						updatedListIds.add(op.entityId);
+						queryAdded = true;
+					} else {
+						opStatusMapping.push({ opIndex: i, success: false, error: 'Unauthorized access to list' });
 					}
 				}
 			} else if (op.entity === 'item') {
-				if (op.type === 'INSERT') {
-					// Verify access (cached)
-					if (!accessCache.has(op.data.listId)) {
-						const access = await db
-							.select()
-							.from(listUsers)
-							.where(and(eq(listUsers.listId, op.data.listId), eq(listUsers.userId, user.id)));
-						if (access.length > 0) accessCache.add(op.data.listId);
-					}
-					
-					if (accessCache.has(op.data.listId)) {
-						await db
-							.insert(items)
-							.values({
+				const listId = op.data.listId || itemIdToListId.get(op.entityId);
+				if (listId && authorizedListIds.has(listId)) {
+					if (op.type === 'INSERT') {
+						const itemDate = new Date(op.data.updatedAt);
+						batchQueries.push(
+							db.insert(items).values({
 								id: op.entityId,
-								listId: op.data.listId,
+								listId: listId,
 								name: op.data.name,
 								groupName: op.data.groupName,
 								rank: op.data.rank,
 								done: op.data.done,
 								deletedAt: op.data.deletedAt ? new Date(op.data.deletedAt) : null,
-								updatedAt: new Date(op.data.updatedAt)
-							})
-							.onConflictDoUpdate({
+								updatedAt: itemDate
+							}).onConflictDoUpdate({
 								target: items.id,
 								set: {
 									name: op.data.name,
@@ -129,113 +147,103 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 									rank: op.data.rank,
 									done: op.data.done,
 									deletedAt: op.data.deletedAt ? new Date(op.data.deletedAt) : null,
-									updatedAt: new Date(op.data.updatedAt)
-								}
-							});
-					}
-				} else if (op.type === 'UPDATE') {
-					// Verify access (cached) first if we don't have listId, or if we do
-					// Actually, op.data might not have listId. Let's get the item first to know its listId, 
-					// OR we can just update it and return the listId if we verify access via a subquery.
-					// Since Drizzle is tricky with cross-table updates, let's just fetch the current item once.
-					const currentItem = await db.select().from(items).where(eq(items.id, op.entityId)).limit(1);
-					
-					if (currentItem.length > 0) {
-						const listId = currentItem[0].listId;
+									updatedAt: itemDate
+								},
+								where: lt(items.updatedAt, itemDate)
+							})
+						);
+						updatedListIds.add(listId);
+						queryAdded = true;
+					} else if (op.type === 'UPDATE') {
+						const updateData: any = { updatedAt: new Date() };
+						if (op.data.name !== undefined) updateData.name = op.data.name;
+						if (op.data.groupName !== undefined) updateData.groupName = op.data.groupName;
+						if (op.data.rank !== undefined) updateData.rank = op.data.rank;
+						if (op.data.done !== undefined) updateData.done = op.data.done;
+						if (op.data.deletedAt !== undefined) updateData.deletedAt = op.data.deletedAt ? new Date(op.data.deletedAt) : null;
 						
-						// Verify access (cached)
-						if (!accessCache.has(listId)) {
-							const access = await db
-								.select()
-								.from(listUsers)
-								.where(and(eq(listUsers.listId, listId), eq(listUsers.userId, user.id)));
-							if (access.length > 0) accessCache.add(listId);
-						}
-						
-						if (accessCache.has(listId)) {
-							await db
-								.update(items)
-								.set({
-									name: op.data.name ?? currentItem[0].name,
-									groupName: op.data.groupName !== undefined ? op.data.groupName : currentItem[0].groupName,
-									rank: op.data.rank ?? currentItem[0].rank,
-									done: op.data.done !== undefined ? op.data.done : currentItem[0].done,
-									deletedAt: op.data.deletedAt !== undefined ? (op.data.deletedAt ? new Date(op.data.deletedAt) : null) : currentItem[0].deletedAt,
-									updatedAt: new Date()
-								})
-								.where(eq(items.id, op.entityId));
-							
-							// Ensure we don't need to fetch it again for notifications
-							op.data.listId = listId;
-						}
+						const itemDate = op.data.updatedAt ? new Date(op.data.updatedAt) : new Date();
+						if (op.data.updatedAt) updateData.updatedAt = itemDate;
+
+						batchQueries.push(
+							db.update(items)
+								.set(updateData)
+								.where(and(
+									eq(items.id, op.entityId),
+									lt(items.updatedAt, itemDate)
+								))
+						);
+						updatedListIds.add(listId);
+						queryAdded = true;
 					}
+				} else {
+					opStatusMapping.push({ opIndex: i, success: false, error: 'Unauthorized access to item list' });
 				}
 			}
-
-			results.push({ id: op.id, status: 'success' });
 			
-			// Track which lists were updated
-			if (op.entity === 'list') {
-				updatedListIds.add('global'); // Trigger global refresh for list changes
-				updatedListIds.add(op.entityId);
-			}
-			if (op.entity === 'item') {
-				let listIdToNotify = op.data?.listId;
-				if (!listIdToNotify) {
-					// This should rarely happen now that UPDATE sets op.data.listId
-					const itemRecord = await db.select({ listId: items.listId }).from(items).where(eq(items.id, op.entityId)).limit(1);
-					if (itemRecord[0]) listIdToNotify = itemRecord[0].listId;
-				}
-				if (listIdToNotify) {
-					syncLogger.debug(`Queueing notification for list: ${listIdToNotify}`, { entity: op.entity, type: op.type });
-					updatedListIds.add(listIdToNotify);
-				}
-			}
-		} catch (e) {
-			syncLogger.error(`Sync operation error`, { opId: op.id, entity: op.entity, type: op.type, userId: user.id }, e);
-			results.push({ id: op.id, status: 'error', message: (e as Error).message });
+			if (queryAdded) opStatusMapping.push({ opIndex: i, success: true });
 		}
-	}
 
-	// Broadcast updates
-	const notifications = [];
-	
-	// Fetch snapshots and authorized users in parallel for each updated list
-	await Promise.all(Array.from(updatedListIds).map(async (listId) => {
-		if (listId === 'global') {
+		if (batchQueries.length > 0) {
+			await db.batch(batchQueries as [any, ...any[]]);
+		}
+
+		// 3. SNAPSHOTS (Batched into 1 HTTP request)
+		const notifications: { channel: string; payload: any }[] = [];
+		const updatedListIdsArray = Array.from(updatedListIds).filter(id => id !== 'global');
+
+		if (updatedListIdsArray.length > 0) {
+			const [allLists, allItems, allListUsers] = await db.batch([
+				db.select().from(lists).where(inArray(lists.id, updatedListIdsArray)),
+				db.select().from(items).where(inArray(items.listId, updatedListIdsArray)),
+				db.select().from(listUsers).where(inArray(listUsers.listId, updatedListIdsArray))
+			]);
+
+			const listsMap = new Map((allLists as any[]).map(l => [l.id, l]));
+			const itemsByList = new Map<string, any[]>();
+			for (const item of (allItems as any[])) {
+				if (!itemsByList.has(item.listId)) itemsByList.set(item.listId, []);
+				itemsByList.get(item.listId)!.push(item);
+			}
+			const usersByList = new Map<string, string[]>();
+			for (const lu of (allListUsers as any[])) {
+				if (!usersByList.has(lu.listId)) usersByList.set(lu.listId, []);
+				usersByList.get(lu.listId)!.push(lu.userId);
+			}
+
+			for (const listId of updatedListIdsArray) {
+				const listRecord = listsMap.get(listId);
+				if (listRecord) {
+					const listItems = itemsByList.get(listId) || [];
+					const authorizedUsers = usersByList.get(listId) || [];
+					const payload = { list: listRecord, items: listItems, listId };
+					for (const userId of authorizedUsers) notifications.push({ channel: `user:${userId}`, payload });
+				} else {
+					const memberIds = deletedListMembers.get(listId) || [];
+					for (const userId of memberIds) notifications.push({ channel: `user:${userId}`, payload: { listId, deleted: true } });
+				}
+			}
+		}
+
+		if (updatedListIds.has('global')) {
 			notifications.push({ channel: `user:${user.id}`, payload: { listId: 'global' } });
-			return;
 		}
 
-		const [listRecord] = await db.select().from(lists).where(eq(lists.id, listId));
-		
-		if (listRecord) {
-			const listItems = await db.select().from(items).where(eq(items.listId, listId));
-			const payload = { list: listRecord, items: listItems, listId };
-			
-			const authorizedUsers = await db
-				.select({ userId: listUsers.userId })
-				.from(listUsers)
-				.where(eq(listUsers.listId, listId));
-
-			for (const { userId } of authorizedUsers) {
-				notifications.push({ channel: `user:${userId}`, payload });
-			}
-		} else {
-			// List was deleted - use captured members
-			const memberIds = deletedListMembers.get(listId) || [];
-			for (const userId of memberIds) {
-				notifications.push({ channel: `user:${userId}`, payload: { listId, deleted: true } });
-			}
+		// 4. Map results and emit notifications
+		for (const mapping of opStatusMapping) {
+			const op = operations[mapping.opIndex];
+			results.push(mapping.success ? { id: op.id, status: 'success' } : { id: op.id, status: 'error', message: mapping.error });
 		}
-	}));
 
-	// Emit all notifications
-	for (const { channel, payload } of notifications) {
-		syncHub.emit(channel, payload, clientId);
+		for (const { channel, payload } of notifications) {
+			syncHub.emit(channel, payload, clientId);
+		}
+
+		return json({ results });
+	} catch (e) {
+		syncLogger.error('Sync failed', { userId: user.id }, e);
+		throw error(500, MESSAGES.DATA.PROCESS_ERROR);
 	}
-
-	return json({ results });
 };
 
 export const GET: RequestHandler = async ({ locals, url }) => {
@@ -298,3 +306,4 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 		}
 	});
 };
+
