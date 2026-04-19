@@ -89,34 +89,32 @@
 
 	<Collapsible.Content>
 		<div
-			class="item-stack"
+			class="list-group-item-stack"
 			use:dndzone={{
 				items: groupItems,
 				flipDurationMs: 200,
 				type: "item",
+				dropTargetStyle: {},
 			}}
 			onconsider={onDndConsider}
 			onfinalize={onDndFinalize}
 		>
 			{#each groupItems as item (item.id)}
-				<div animate:flip={{ duration: 200 }}>
-					<li class="item-row transition-all" class:done={item.done}>
-						<div use:dragHandle class="drag-handle muted mono tiny">
-							::
-						</div>
-						<Checkbox
-							checked={item.done}
-							onCheckedChange={() => onToggleDone(item)}
-						/>
-						<span class="item-name">{item.name}</span>
-						<button
-							class="btn-delete"
-							onclick={() => onDeleteItem(item)}
-						>
-							×
-						</button>
-					</li>
-				</div>
+				<li
+					class="list-group-item-row {item.done ? 'done' : ''}"
+				>
+					<div use:dragHandle class="list-group-drag-handle">
+						::
+					</div>
+					<Checkbox
+						checked={item.done}
+						onCheckedChange={() => onToggleDone(item)}
+					/>
+					<span class="list-group-item-name">{item.name}</span>
+					<button class="list-group-btn-delete" onclick={() => onDeleteItem(item)}>
+						×
+					</button>
+				</li>
 			{/each}
 		</div>
 	</Collapsible.Content>
@@ -237,93 +235,90 @@
 					color: var(--fg-1);
 				}
 			}
-
-			.item-stack {
-				list-style: none;
-				display: flex;
-				flex-direction: column;
-				gap: var(--space-2);
-				padding: var(--space-2) 0;
-				min-height: 20px;
-			}
-
-			.item-row {
-				background: var(--bg-1);
-				padding: var(--space-3) var(--space-4);
-				border-radius: var(--radius-md);
-				border: 1px solid var(--border);
-				display: flex;
-				align-items: center;
-				gap: var(--space-4);
-				position: relative;
-
-				&.done .item-name {
-					text-decoration: line-through;
-					color: var(--fg-3);
-				}
-
-				&:hover {
-					border-color: var(--border-hover);
-				}
-
-				&[aria-disabled="true"] {
-					opacity: 0.3 !important;
-					background: var(--bg-2) !important;
-					border-style: dashed !important;
-				}
-			}
-
-			.drag-handle {
-				cursor: grab;
-				padding: var(--space-1);
-				opacity: 0.3;
-				transition: opacity 0.2s;
-				user-select: none;
-
-				&:hover {
-					opacity: 1;
-				}
-			}
-
-			.item-name {
-				flex: 1;
-				font-size: 1rem;
-			}
-
-			.btn-delete {
-				opacity: 1;
-				font-family: var(--font-mono);
-				font-size: 1.5rem;
-				line-height: 1.1;
-				color: var(--danger);
-				padding: var(--space-1);
-				border-radius: var(--radius-sm);
-				transition: all 0.2s;
-				border: 1px solid transparent;
-
-				&:hover {
-					opacity: 1 !important;
-					background: var(--danger-muted);
-					border-color: var(--danger);
-				}
-			}
 		}
 
-		/* Global DnD overrides - these remain top-level because they target portal-elements */
-		#dnd-action-dragged-el {
-			z-index: 2000 !important;
-			pointer-events: none !important;
-			opacity: 0.9 !important;
-			box-shadow: var(--shadow-lg) !important;
-			background: var(--bg-1) !important;
-			border: 1px solid var(--accent) !important;
-			border-radius: var(--radius-md) !important;
+		/* Portaled Item Styles (to be safe during Drag & Drop) */
+		.list-group-item-stack {
+			list-style: none;
+			display: flex;
+			flex-direction: column;
+			padding: var(--space-2) 0;
+			min-height: 20px;
+			width: 100%;
+		}
+
+		.list-group-item-row {
+			background: var(--bg-1);
 			padding: var(--space-3) var(--space-4);
+			border-radius: var(--radius-md);
+			border: 1px solid var(--border);
 			display: flex;
 			align-items: center;
 			gap: var(--space-4);
-			font-family: var(--font-sans);
-			color: var(--fg-1);
+			position: relative;
+			margin-bottom: var(--space-2);
+			box-sizing: border-box;
+			width: 100%;
+			
+			&.done .list-group-item-name {
+				text-decoration: line-through;
+				color: var(--fg-3);
+			}
+
+			&:hover {
+				border-color: var(--border-hover);
+			}
+		}
+
+		.list-group-drag-handle {
+			cursor: grab;
+			padding: var(--space-1);
+			opacity: 0.3;
+			transition: opacity 0.2s;
+			user-select: none;
+			font-family: var(--font-mono);
+			font-size: 0.7rem;
+			color: var(--fg-3);
+
+			&:hover {
+				opacity: 1;
+			}
+		}
+
+		.list-group-item-name {
+			flex: 1;
+			font-size: 1rem;
+		}
+
+		.list-group-btn-delete {
+			opacity: 1;
+			font-family: var(--font-mono);
+			font-size: 1.5rem;
+			line-height: 1.1;
+			color: var(--danger);
+			padding: var(--space-1);
+			border-radius: var(--radius-sm);
+			transition: all 0.2s;
+			border: 1px solid transparent;
+
+			&:hover {
+				background: var(--danger-muted);
+				border-color: var(--danger);
+			}
+		}
+
+		/* The element currently being dragged by svelte-dnd-action */
+		#dnd-action-dragged-el {
+			z-index: 2000 !important;
+			pointer-events: none !important;
+			opacity: 0.95 !important;
+			box-shadow: var(--shadow-xl) !important;
+			border-color: var(--accent) !important;
+			transition: none !important;
+			display: flex !important;
+			flex-direction: row !important;
+			align-items: center !important;
+			gap: var(--space-4) !important;
 		}
 
 		/* Dialog specific actions for ListGroup */

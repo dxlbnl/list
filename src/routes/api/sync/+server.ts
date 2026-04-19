@@ -268,7 +268,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		syncLogger.error('Sync failed', { userId: user.id }, e);
 		throw error(500, MESSAGES.DATA.PROCESS_ERROR);
 	}
-};
+}
 
 export const GET: RequestHandler = async ({ locals, url }) => {
 	const user = locals.user;

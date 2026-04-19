@@ -40,13 +40,14 @@
 	});
 
 	// Live query for active items
-	const items = liveQuery(() => {
+	const items = liveQuery(async () => {
 		if (!data.listId) return [];
-		return dexieDb.items
+		const all = await dexieDb.items
 			.where("listId")
 			.equals(data.listId)
 			.and((item) => item.deletedAt === null)
 			.toArray();
+		return all.sort((a, b) => a.rank - b.rank);
 	});
 
 	let newItemName = $state("");
@@ -137,11 +138,11 @@
 			await updateItems(updates);
 		}
 
-		// Debounce setting dragInProgress to false to allow all finalize events to settle
+		// Debounce setting dragInProgress to false to allow all finalize events to settle and DB to update
 		clearTimeout(finalizeTimeout);
 		finalizeTimeout = setTimeout(() => {
 			dragInProgress = false;
-		}, 100);
+		}, 500);
 	}
 
 	async function handleRenameGroup(oldName: string, newName: string) {
