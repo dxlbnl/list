@@ -52,6 +52,14 @@ export const listUsers = pgTable(
 	})
 );
 
+export const listInvites = pgTable('list_invites', {
+	token: text('token').primaryKey(),
+	listId: text('list_id')
+		.notNull()
+		.references(() => lists.id, { onDelete: 'cascade' }),
+	expiresAt: timestamp('expires_at') // Nullable for permanent links
+});
+
 export const items = pgTable('items', {
 	id: text('id').primaryKey(),
 	listId: text('list_id')

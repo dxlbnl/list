@@ -1,7 +1,7 @@
 import { db } from '$lib/server/db';
-import { users, sessions, magicLinks, lists } from '$lib/server/db/schema';
+import { users, sessions, magicLinks, lists, listUsers } from '$lib/server/db/schema';
 import { nanoid } from '$lib/utils';
-import { eq } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { error, redirect } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
@@ -38,11 +38,60 @@ export const GET: RequestHandler = async ({ params, cookies }) => {
 
 			// 2. Merge anonymous data if applicable
 			if (link.userIdToMerge && link.userIdToMerge !== targetUserId) {
-				// Move lists
-				await db
-					.update(lists)
-					.set({ createdBy: targetUserId })
+				const anonLists = await db
+					.select()
+					.from(lists)
 					.where(eq(lists.createdBy, link.userIdToMerge));
+
+				for (const listRecord of anonLists) {
+					let newSlug = listRecord.slug;
+					
+					// Check for slug collision for the target user
+					const collision = await db
+						.select()
+						.from(lists)
+						.where(
+							and(
+								eq(lists.createdBy, targetUserId), 
+								eq(lists.slug, newSlug)
+							)
+						);
+
+					if (collision.length > 0) {
+						newSlug = `${newSlug}-${Math.random().toString(36).slice(2, 6)}`;
+					}
+
+					// Update list ownership and slug
+					await db
+						.update(lists)
+						.set({ createdBy: targetUserId, slug: newSlug })
+						.where(eq(lists.id, listRecord.id));
+				}
+
+				// Transfer shared list access
+				// 1. Delete anonymous access where the target user already has access
+				const anonAccessSubquery = db
+					.select({ listId: listUsers.listId })
+					.from(listUsers)
+					.where(eq(listUsers.userId, targetUserId));
+
+				await db
+					.delete(listUsers)
+					.where(
+						and(
+							eq(listUsers.userId, link.userIdToMerge),
+							inArray(listUsers.listId, anonAccessSubquery)
+						)
+					);
+
+				// 2. Transfer remaining access
+				await db
+					.update(listUsers)
+					.set({ userId: targetUserId })
+					.where(eq(listUsers.userId, link.userIdToMerge));
+
+				// 3. Finally, delete the anonymous user
+				await db.delete(users).where(eq(users.id, link.userIdToMerge));
 			}
 		} else {
 			// 3. Convert anonymous user to registered user

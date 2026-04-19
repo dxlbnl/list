@@ -11,6 +11,7 @@ A streamlined, **offline-first** collaborative list application built for speed,
 - **QR Code Session Migration**: Effortlessly move your current session (even anonymous ones) to a mobile device by scanning a generated QR code from the user menu.
 - **Soft Deletes & Recovery**: Deleted items aren't gone forever. A dedicated "Safe Delete" flow allows for instant restoration of accidentally removed items.
 - **Lab-Bench Aesthetic**: A custom-built design system using vanilla CSS and **Bits UI** primitives, focused on high-density information and professional utility.
+- **Collaborative Sharing**: Invite others via secure links or QR codes. Includes automatic slug disambiguation (e.g., `/list--prefix`) if multiple users share the same list name.
 
 ## 🛠️ Technology Stack
 
@@ -68,6 +69,8 @@ A streamlined, **offline-first** collaborative list application built for speed,
 - **Create**: Click the "New List" button on the dashboard to generate a unique list slug.
 - **Collaborate**: Simply share the URL with anyone. If they are logged in (or even anonymous), changes will sync across devices.
 - **Organize**: Use the drag handles to reorder items. The app uses precision ranking to ensure consistency.
+- **Share**: Use the context menu in any list to generate an invite link or QR code. You can choose between permanent links or 24-hour temporary invites.
+- **Disambiguation**: If you join a list with a slug that you already own (e.g., both named "Grocery"), the joined list will automatically be available at a unique path (e.g., `/grocery--oac123`).
 
 ### 2. Authentication Flow
 - **Anonymous Mode**: Start using the app immediately without an account.

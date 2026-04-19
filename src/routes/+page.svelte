@@ -23,6 +23,29 @@
 		await createList(newListName, data.user.id);
 		newListName = "";
 	}
+
+	/**
+	 * Compute effective slug for routing.
+	 * Own lists always get their slug as-is.
+	 * Shared lists get disambiguated if there's a collision with an own list.
+	 */
+	function getEffectiveSlug(
+		list: { slug: string; createdBy: string },
+		allLists: { slug: string; createdBy: string }[],
+	) {
+		const userId = data.user?.id;
+		const isOwn = list.createdBy === userId;
+		if (isOwn) return list.slug;
+
+		// Check if the current user has their OWN list with the same slug
+		const hasOwnWithSameSlug = allLists.some(
+			(l) => l.slug === list.slug && l.createdBy === userId,
+		);
+		if (hasOwnWithSameSlug) {
+			return `${list.slug}--${list.createdBy.slice(0, 8)}`;
+		}
+		return list.slug;
+	}
 </script>
 
 <div class="home-page-container">
@@ -30,9 +53,16 @@
 		{#if $lists && $lists.length > 0}
 			<div class="list-grid">
 				{#each $lists as list}
-					<a href="/{list.slug}" class="list-card transition-all">
+					{@const effectiveSlug = getEffectiveSlug(list, $lists)}
+					{@const isShared = list.createdBy !== data.user?.id}
+					<a href="/{effectiveSlug}" class="list-card transition-all">
 						<h3>{list.name}</h3>
-						<span class="muted small mono">{list.slug}</span>
+						<div class="list-card-meta">
+							<span class="muted small mono">{effectiveSlug}</span>
+							{#if isShared}
+								<span class="shared-badge">SHARED</span>
+							{/if}
+						</div>
 					</a>
 				{/each}
 			</div>
@@ -112,6 +142,38 @@
 				h3 {
 					font-size: 1rem;
 					font-weight: 600;
+					overflow: hidden;
+					text-overflow: ellipsis;
+					white-space: nowrap;
+				}
+
+				.list-card-meta {
+					display: flex;
+					align-items: center;
+					justify-content: space-between;
+					gap: var(--space-2);
+					width: 100%;
+					min-width: 0; /* Important for flex child ellipsis */
+				}
+
+				.mono.small {
+					overflow: hidden;
+					text-overflow: ellipsis;
+					white-space: nowrap;
+					flex: 1;
+				}
+
+				.shared-badge {
+					flex-shrink: 0;
+					font-size: 0.6rem;
+					font-family: var(--font-mono);
+					font-weight: 600;
+					letter-spacing: 0.1em;
+					color: var(--accent);
+					background: var(--accent-muted);
+					padding: 1px var(--space-2);
+					border-radius: var(--radius-sm);
+					border: 1px solid var(--accent);
 				}
 			}
 

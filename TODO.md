@@ -23,6 +23,7 @@
 - [x] Session Cloning (QR code to move session to another device)
 - [ ] Item Restoration UI (Creatable Select with Bits UI)
 - [x] Drag & Drop (svelte-dnd-action integration)
+- [ ] 404 page, finding a list that is not yours
 
 ## UX & Polish
 - [x] Lab-Bench Design System (Inputs, Buttons, Cards)
