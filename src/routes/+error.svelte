@@ -6,30 +6,25 @@
 	<div class="error-card">
 		<header class="error-header">
 			<div class="system-tag mono tiny uppercase tracking-widest">
-				System_Error_Report // V4.0.4
+				Error report
 			</div>
-			<h1 class="mono">STATUS: {page.status}</h1>
+			<h1 class="mono">Status: {page.status}</h1>
 		</header>
 
 		<div class="error-body">
 			<div class="terminal-output">
-				<div class="output-line">
-					<span class="prefix">></span>
-					<span class="command">diagnostic_check --verbose</span>
-				</div>
 				<div class="output-line response">
-					<span class="timestamp mono tiny">[{new Date().toISOString()}]</span>
-					<span class="message danger">{page.error?.message || "Unknown_Error_Encountered"}</span>
+					<span class="message danger">{page.error?.message || "An unexpected error occurred"}</span>
 				</div>
 				<div class="output-line hint">
 					<span class="prefix">></span>
-					<span class="muted">Access restricted or resource lifecycle terminated.</span>
+					<span class="muted">The requested resource could not be accessed.</span>
 				</div>
 			</div>
 		</div>
 
 		<footer class="error-footer">
-			<a href="/" class="btn-primary">Return_To_Base</a>
+			<a href="/" class="btn-primary">Return home</a>
 		</footer>
 	</div>
 </div>

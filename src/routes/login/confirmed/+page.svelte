@@ -19,8 +19,8 @@
 
 <main class="login-container">
 	<AccessCard 
-		title="VERIFIED"
-		subtitle="Security_Protocol // V2.4"
+		title="Verified"
+		subtitle="Access granted"
 	>
 		<div class="success-message">
 			<div class="success-icon success">✓</div>
@@ -30,8 +30,8 @@
 
 		{#snippet footer()}
 			<div class="card-footer split">
-				<span class="mono tiny muted">REDIRECTING_IN_{countdown}S...</span>
-				<a href="/" class="manual-link mono tiny">CONTINUE_NOW</a>
+				<span class="mono tiny muted">Redirecting in {countdown}s...</span>
+				<a href="/" class="manual-link mono tiny">Continue now</a>
 			</div>
 		{/snippet}
 	</AccessCard>

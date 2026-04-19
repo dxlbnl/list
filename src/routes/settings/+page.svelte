@@ -5,46 +5,46 @@
 	let { data, form } = $props();
 
 	const themes: { id: Theme; label: string }[] = [
-		{ id: 'system', label: 'SYSTEM' },
-		{ id: 'light', label: 'LIGHT' },
-		{ id: 'dark', label: 'DARK' }
+		{ id: 'system', label: 'System' },
+		{ id: 'light', label: 'Light' },
+		{ id: 'dark', label: 'Dark' }
 	];
 </script>
 
 <main class="settings-container">
 	<header class="settings-header">
-		<h1>SYSTEM_SETTINGS</h1>
+		<h1>Settings</h1>
 	</header>
 
 	<section class="settings-section">
 		<div class="section-header">
-			<h2 class="mono tiny uppercase tracking-widest">User_Identity</h2>
+			<h2 class="mono tiny uppercase tracking-widest">User identity</h2>
 			<div class="status-badge" class:verified={data.user.email_verified}>
-				{data.user.email_verified ? 'VERIFIED' : 'ANONYMOUS_SESSION'}
+				{data.user.email_verified ? 'Verified' : 'Anonymous session'}
 			</div>
 		</div>
 
 		<div class="settings-card">
 			{#if data.user.email}
 				<div class="info-row">
-					<span class="label mono tiny muted">EMAIL_ADDRESS</span>
+					<span class="label mono tiny muted">Email address</span>
 					<span class="value">{data.user.email}</span>
 				</div>
 				<div class="info-row">
-					<span class="label mono tiny muted">ACCOUNT_STATUS</span>
-					<span class="value success">SECURED</span>
+					<span class="label mono tiny muted">Account status</span>
+					<span class="value success">Secured</span>
 				</div>
 			{:else}
 				<AccessCard 
 					{form}
 					action="?/secureAccount"
-					title="SECURE_IDENTITY"
-					subtitle="Account_Security_Protocol // V1.0"
+					title="Secure account"
+					subtitle="Account security"
 					description="This is an anonymous session. Secure your account with an email address to ensure you never lose access to your lists."
-					placeholder="ENTER_EMAIL_TO_SECURE"
-					actionLabel="SECURE"
-					loadingLabel="SENDING..."
-					successTitle="Security Link Sent"
+					placeholder="email@example.com"
+					actionLabel="Secure"
+					loadingLabel="Sending..."
+					successTitle="Security link sent"
 					successMessage="Check your email for the magic link to secure your account and merge your anonymous data."
 				/>
 			{/if}
@@ -52,10 +52,10 @@
 	</section>
 
 	<section class="settings-section">
-		<h2 class="mono tiny uppercase tracking-widest">Interface_Visuals</h2>
+		<h2 class="mono tiny uppercase tracking-widest">Interface</h2>
 		<div class="settings-card">
 			<div class="info-row">
-				<span class="label mono tiny muted">THEME_SELECTION</span>
+				<span class="label mono tiny muted">Theme selection</span>
 				<div class="theme-toggle-group">
 					{#each themes as theme}
 						<button 
@@ -72,15 +72,15 @@
 	</section>
 
 	<section class="settings-section">
-		<h2 class="mono tiny uppercase tracking-widest">Technical_Details</h2>
+		<h2 class="mono tiny uppercase tracking-widest">Technical details</h2>
 		<div class="settings-card mono small">
 			<div class="info-row">
-				<span class="label tiny muted">USER_ID</span>
+				<span class="label tiny muted">User ID</span>
 				<span class="value">{data.user.id}</span>
 			</div>
 			<div class="info-row">
-				<span class="label tiny muted">SESSION_PERSISTENCE</span>
-				<span class="value">PERMANENT_COOKIE</span>
+				<span class="label tiny muted">Session persistence</span>
+				<span class="value">Persistent</span>
 			</div>
 		</div>
 	</section>

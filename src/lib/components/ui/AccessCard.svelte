@@ -20,7 +20,7 @@
 
 	let {
 		title,
-		subtitle = "System_Access_Portal // V2.4",
+		subtitle = "Identity verification",
 		description,
 		placeholder,
 		actionLabel,
@@ -53,7 +53,7 @@
 			<div class="success-message">
 				<div class="success-icon">✉</div>
 				<p
-					class="mTo protect your account, please confirm you want ono tiny uppercase tracking-widest"
+					class="mono tiny uppercase tracking-widest"
 				>
 					{successTitle}
 				</p>
@@ -105,7 +105,7 @@
 			{@render footer()}
 		{:else}
 			<p class="mono tiny muted uppercase">
-				Security_Protocol: Magic_Link_Only
+				Secure magic link authentication
 			</p>
 		{/if}
 	</footer>

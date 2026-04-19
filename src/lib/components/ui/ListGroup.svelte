@@ -73,13 +73,13 @@
 					</Menu.Trigger>
 					<Menu.Content class="mini" sideOffset={4} align="end">
 						<Menu.Item onSelect={() => (isRenameDialogOpen = true)}>
-							<span>Rename Group</span>
+							<span>Rename group</span>
 						</Menu.Item>
 						<Menu.Item
 							danger
 							onSelect={() => (isDeleteDialogOpen = true)}
 						>
-							<span>Delete Group</span>
+							<span>Delete group</span>
 						</Menu.Item>
 					</Menu.Content>
 				</Menu.Root>
@@ -124,14 +124,14 @@
 
 <Dialog
 	bind:open={isRenameDialogOpen}
-	title="Rename Group"
+	title="Rename group"
 	description="Enter a new name for this group."
 >
 	<div class="input-group">
 		<div class="input-prefix">&gt;</div>
 		<input
 			type="text"
-			placeholder="GROUP_NAME"
+			placeholder="group name"
 			bind:value={editName}
 			onkeydown={(e) => {
 				if (e.key === "Enter" && editName && editName !== groupName) {
@@ -148,14 +148,14 @@
 			}}
 			disabled={!editName || editName === groupName}
 		>
-			RENAME
+			Rename
 		</button>
 	</div>
 </Dialog>
 
 <Dialog
 	bind:open={isDeleteDialogOpen}
-	title="Delete Group"
+	title="Delete group"
 	description="Are you sure you want to delete '{groupName}'? All items in this group will be permanently removed."
 >
 	<div class="list-group-dialog-actions">
@@ -166,7 +166,7 @@
 				isDeleteDialogOpen = false;
 			}}
 		>
-			DELETE_GROUP
+			Delete group
 		</button>
 	</div>
 </Dialog>
@@ -266,7 +266,7 @@
 					border-color: var(--border-hover);
 				}
 
-				&[aria-disabled='true'] {
+				&[aria-disabled="true"] {
 					opacity: 0.3 !important;
 					background: var(--bg-2) !important;
 					border-style: dashed !important;
@@ -293,9 +293,10 @@
 			.btn-delete {
 				opacity: 1;
 				font-family: var(--font-mono);
-				font-size: 0.75rem;
+				font-size: 1.5rem;
+				line-height: 1.1;
 				color: var(--danger);
-				padding: var(--space-1) var(--space-2);
+				padding: var(--space-1);
 				border-radius: var(--radius-sm);
 				transition: all 0.2s;
 				border: 1px solid transparent;

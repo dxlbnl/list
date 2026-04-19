@@ -48,6 +48,10 @@
 							<div class="dialog-body">
 								{@render children()}
 							</div>
+
+							<BitsDialog.Close class="dialog-close">
+								×
+							</BitsDialog.Close>
 						</div>
 					</div>
 				{/if}
@@ -94,6 +98,28 @@
 			display: flex;
 			flex-direction: column;
 			gap: var(--space-6);
+		}
+
+		.dialog-close {
+			position: absolute;
+			top: var(--space-4);
+			right: var(--space-4);
+			width: 24px;
+			height: 24px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			color: var(--fg-3);
+			font-family: var(--font-mono);
+			font-size: 1.25rem;
+			border-radius: var(--radius-sm);
+			transition: all 0.2s;
+			cursor: pointer;
+
+			&:hover {
+				background: var(--bg-2);
+				color: var(--fg-0);
+			}
 		}
 	}
 </style>

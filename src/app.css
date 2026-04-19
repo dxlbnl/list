@@ -256,6 +256,7 @@ input {
 
 	input {
 		flex: 1;
+		min-width: 0;
 		padding: var(--space-3) var(--space-4);
 		font-family: var(--font-mono);
 		font-size: 0.9rem;
@@ -289,6 +290,10 @@ input {
 
 		&:disabled {
 			opacity: 0.5;
+		}
+
+		@media (max-width: 600px) {
+			padding: 0 var(--space-4);
 		}
 	}
 }

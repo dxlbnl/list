@@ -301,7 +301,7 @@
 				{/if}
 			</div>
 			<div class="user-menu-qr-footer small muted mono">
-				MIRROR_PROTOCOL_V1
+				Sync session active
 			</div>
 		</div>
 	</Dialog>
@@ -316,7 +316,7 @@
 				<div class="input-prefix">&gt;</div>
 				<input
 					type="text"
-					placeholder="CONFIRM_LIST_NAME"
+					placeholder="Confirm list name"
 					bind:value={confirmDeleteName}
 					onkeydown={(e) => e.key === "Enter" && handleDeleteList()}
 				/>
@@ -325,11 +325,11 @@
 					onclick={handleDeleteList}
 					disabled={confirmDeleteName !== currentList?.name}
 				>
-					DELETE
+					Delete
 				</button>
 			</div>
 			<div class="user-menu-qr-footer small muted mono">
-				DANGER_ZONE_V1
+				Warning: permanent action
 			</div>
 		</div>
 	</Dialog>
@@ -449,8 +449,9 @@
 			flex-direction: column;
 			align-items: center;
 			justify-content: center;
-			width: 280px;
-			height: 280px;
+			width: 100%;
+			max-width: 280px;
+			aspect-ratio: 1 / 1;
 			background: white;
 			border-radius: var(--radius-md);
 			padding: var(--space-4);

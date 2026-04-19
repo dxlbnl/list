@@ -6,12 +6,11 @@
 <main class="login-container">
 	<AccessCard 
 		{form}
-		title="AUTHENTICATE"
-		description="Enter your registered email address to receive a one-time magic link. New users will be automatically registered."
-		placeholder="IDENTITY_EMAIL_ADDRESS"
-		actionLabel="DISPATCH"
-		loadingLabel="SENDING..."
-		successMessage="If a verified account exists for this email, you will receive a secure access link shortly."
+		title="Sign in"
+		description="Enter your email to receive a secure login link. New accounts will be created automatically."
+		placeholder="email@example.com"
+		actionLabel="Send link"
+		loadingLabel="Sending..."
 	/>
 </main>
 

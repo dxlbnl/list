@@ -12,8 +12,8 @@
 
 <div class="confirm-page">
 	<AccessCard 
-		title="CONFIRM_SESSION" 
-		subtitle="To protect your account, please confirm you want to sign in on this device."
+		title="Confirm session" 
+		subtitle="Please confirm you want to sign in on this device to secure your lists."
 	>
 		<form 
 			method="POST" 
@@ -27,7 +27,7 @@
 		>
 			<div class="confirm-content">
 				<div class="token-display mono tiny muted">
-					SECURE_TOKEN: {data.token.slice(0, 8)}...
+					Secure token: {data.token.slice(0, 8)}...
 				</div>
 				
 				<button 
@@ -35,12 +35,9 @@
 					class="btn-primary w-full mono tracking-widest"
 					disabled={isLoading}
 				>
-					{isLoading ? "AUTHORIZING..." : "CONFIRM_SESSION_&_SYNC"}
+					{isLoading ? "Authorizing..." : "Confirm & sync"}
 				</button>
 				
-				<p class="small muted mono mt-4 text-center">
-					PROMPT_V1 · SHIELD_ACTIVE
-				</p>
 			</div>
 		</form>
 	</AccessCard>

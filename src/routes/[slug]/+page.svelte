@@ -18,7 +18,7 @@
 	import { menuState } from "$lib/client/menu.svelte";
 	import ListGroup from "$lib/components/ui/ListGroup.svelte";
 	import { fade } from "svelte/transition";
-import QRCode from "qrcode";
+	import QRCode from "qrcode";
 
 	let { data } = $props();
 
@@ -254,10 +254,12 @@ import QRCode from "qrcode";
 				stroke-width="2"
 				stroke-linecap="round"
 				stroke-linejoin="round"
-				><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" x2="12" y1="2" y2="15" /></svg
+				><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" /><polyline
+					points="16 6 12 2 8 6"
+				/><line x1="12" x2="12" y1="2" y2="15" /></svg
 			>
 		</div>
-		<span>Share List</span>
+		<span>Share list</span>
 	</DropdownMenu.Item>
 	<DropdownMenu.Item
 		class="menu-item danger"
@@ -284,167 +286,176 @@ import QRCode from "qrcode";
 				/><line x1="14" x2="14" y1="11" y2="17" /></svg
 			>
 		</div>
-		<span>Delete List</span>
+		<span>Delete list</span>
 	</DropdownMenu.Item>
 {/snippet}
 
 {#if listDeleted}
 	<div class="list-deleted-state" transition:fade>
 		<div class="error-box">
-			<h2 class="mono">LIST_DELETED</h2>
+			<h2 class="mono">List deleted</h2>
 			<p class="muted small">This list has been removed by the owner.</p>
-			<a href="/" class="btn-primary-ghost mt-4 mono small tracking-widest">
-				&lt; BACK_TO_DASHBOARD
+			<a
+				href="/"
+				class="btn-primary-ghost mt-4 mono small tracking-widest"
+			>
+				← Back to Dashboard
 			</a>
 		</div>
 	</div>
 {:else}
-	<div class="list-page-container" use:registerContextualMenu={contextualMenuItems}>
-	<div class="list-controls">
-		<div class="input-group">
-			<div class="input-prefix">&gt;</div>
-			<input
-				type="text"
-				placeholder="ADD ITEM OR [GROUP] ITEM"
-				bind:value={newItemName}
-				onkeydown={(e) => e.key === "Enter" && handleAddItem()}
-			/>
-			<button
-				class="input-action-btn"
-				onclick={handleAddItem}
-				disabled={!newItemName.trim()}
-			>
-				ADD
-			</button>
-		</div>
-	</div>
-
-	<section class="items-section">
-		{#if $items && $items.length > 0}
-			<div class="groups-container">
-				{#each sortedGroupNames as groupName (groupName)}
-					<ListGroup
-						{groupName}
-						groupItems={localGroups[groupName]}
-						showHeader={sortedGroupNames.length > 1 || groupName !== ""}
-						onRename={(newName: string) => renameGroup(data.listId, groupName, newName)}
-						onDelete={() => handleDeleteGroup(groupName)}
-						onToggleDone={toggleDone}
-						onDeleteItem={deleteItem}
-						onDndConsider={(e: CustomEvent<any>) =>
-							handleDndConsider(groupName, e)}
-						onDndFinalize={(e: CustomEvent<any>) =>
-							handleDndFinalize(groupName, e)}
-					/>
-				{/each}
-			</div>
-		{:else}
-			<div class="empty-state muted">
-				<p>List is empty.</p>
-			</div>
-		{/if}
-	</section>
-
-	<Dialog
-		bind:open={isShareDialogOpen}
-		title="Share List"
-		description="Share this list with others. Anyone with the link can join and collaborate."
+	<div
+		class="list-page-container"
+		use:registerContextualMenu={contextualMenuItems}
 	>
-		<div class="share-dialog-wrapper">
-			<div class="share-qr-container">
-				{#if isShareLoading}
-					<div class="share-qr-placeholder mono small muted">
-						Generating invite link...
-					</div>
-				{:else if shareQrDataUrl}
-					<img
-						src={shareQrDataUrl}
-						alt="Share QR Code"
-						class="share-qr-image"
-					/>
-				{:else}
-					<div class="share-qr-placeholder mono small danger">
-						Failed to generate link
-					</div>
-				{/if}
-			</div>
-
-			<div class="share-options">
-				<button 
-					class="option-toggle" 
-					class:active={sharePermanent}
-					onclick={() => {
-						sharePermanent = true;
-						handleShareList();
-					}}
-				>
-					PERMANENT
-				</button>
-				<button 
-					class="option-toggle" 
-					class:active={!sharePermanent}
-					onclick={() => {
-						sharePermanent = false;
-						handleShareList();
-					}}
-				>
-					24 HOURS
-				</button>
-			</div>
-
-			{#if shareUrl}
-				<div class="share-link-row">
-					<div class="input-group">
-						<div class="input-prefix">🔗</div>
-						<input
-							type="text"
-							readonly
-							value={shareUrl}
-							onclick={(e) => e.currentTarget.select()}
-						/>
-						<button
-							class="input-action-btn"
-							onclick={handleCopyShareUrl}
-						>
-							{shareCopied ? "COPIED" : "COPY"}
-						</button>
-					</div>
-				</div>
-			{/if}
-			<div class="share-dialog-footer small muted mono">
-				{sharePermanent ? "PERMANENT_LINK" : "EXPIRES_24H"} · SHARE_PROTOCOL_V1
-			</div>
-		</div>
-	</Dialog>
-
-	<Dialog
-		bind:open={isDeleteDialogOpen}
-		title="Delete List"
-		description="This action cannot be undone. To confirm, please type the name of the list: '{$list?.name}'"
-	>
-		<div class="list-page-dialog-wrapper">
+		<div class="list-controls">
 			<div class="input-group">
 				<div class="input-prefix">&gt;</div>
 				<input
 					type="text"
-					placeholder="CONFIRM_LIST_NAME"
-					bind:value={confirmDeleteName}
-					onkeydown={(e) => e.key === "Enter" && handleDeleteList()}
+					placeholder="Add item or [Group] item"
+					bind:value={newItemName}
+					onkeydown={(e) => e.key === "Enter" && handleAddItem()}
 				/>
 				<button
-					class="input-action-btn danger"
-					onclick={handleDeleteList}
-					disabled={confirmDeleteName !== $list?.name}
+					class="input-action-btn"
+					onclick={handleAddItem}
+					disabled={!newItemName.trim()}
 				>
-					DELETE
+					Add
 				</button>
 			</div>
-			<div class="list-page-dialog-footer small muted mono">
-				DANGER_ZONE_V1
-			</div>
 		</div>
-	</Dialog>
-</div>
+
+		<section class="items-section">
+			{#if $items && $items.length > 0}
+				<div class="groups-container">
+					{#each sortedGroupNames as groupName (groupName)}
+						<ListGroup
+							{groupName}
+							groupItems={localGroups[groupName]}
+							showHeader={sortedGroupNames.length > 1}
+							onRename={(newName: string) =>
+								renameGroup(data.listId, groupName, newName)}
+							onDelete={() => handleDeleteGroup(groupName)}
+							onToggleDone={toggleDone}
+							onDeleteItem={deleteItem}
+							onDndConsider={(e: CustomEvent<any>) =>
+								handleDndConsider(groupName, e)}
+							onDndFinalize={(e: CustomEvent<any>) =>
+								handleDndFinalize(groupName, e)}
+						/>
+					{/each}
+				</div>
+			{:else}
+				<div class="empty-state muted">
+					<p>List is empty.</p>
+				</div>
+			{/if}
+		</section>
+
+		<Dialog
+			bind:open={isShareDialogOpen}
+			title="Share List"
+			description="Share this list with others. Anyone with the link can join and collaborate."
+		>
+			<div class="share-dialog-wrapper">
+				<div class="share-qr-container">
+					{#if isShareLoading}
+						<div class="share-qr-placeholder mono small muted">
+							Generating invite link...
+						</div>
+					{:else if shareQrDataUrl}
+						<img
+							src={shareQrDataUrl}
+							alt="Share QR Code"
+							class="share-qr-image"
+						/>
+					{:else}
+						<div class="share-qr-placeholder mono small danger">
+							Failed to generate link
+						</div>
+					{/if}
+				</div>
+
+				<div class="share-options">
+					<button
+						class="option-toggle"
+						class:active={sharePermanent}
+						onclick={() => {
+							sharePermanent = true;
+							handleShareList();
+						}}
+					>
+						Permanent
+					</button>
+					<button
+						class="option-toggle"
+						class:active={!sharePermanent}
+						onclick={() => {
+							sharePermanent = false;
+							handleShareList();
+						}}
+					>
+						24 hours
+					</button>
+				</div>
+
+				{#if shareUrl}
+					<div class="share-link-row">
+						<div class="input-group">
+							<div class="input-prefix">🔗</div>
+							<input
+								type="text"
+								readonly
+								value={shareUrl}
+								onclick={(e) => e.currentTarget.select()}
+							/>
+							<button
+								class="input-action-btn"
+								onclick={handleCopyShareUrl}
+							>
+								{shareCopied ? "Copied" : "Copy"}
+							</button>
+						</div>
+					</div>
+				{/if}
+				<div class="share-dialog-footer small muted mono">
+					{sharePermanent ? "Permanent link" : "Expires in 24h"} · Share
+					active
+				</div>
+			</div>
+		</Dialog>
+
+		<Dialog
+			bind:open={isDeleteDialogOpen}
+			title="Delete list"
+			description="This action cannot be undone. To confirm, please type the name of the list: '{$list?.name}'"
+		>
+			<div class="list-page-dialog-wrapper">
+				<div class="input-group">
+					<div class="input-prefix">&gt;</div>
+					<input
+						type="text"
+						placeholder="Confirm list name"
+						bind:value={confirmDeleteName}
+						onkeydown={(e) =>
+							e.key === "Enter" && handleDeleteList()}
+					/>
+					<button
+						class="input-action-btn danger"
+						onclick={handleDeleteList}
+						disabled={confirmDeleteName !== $list?.name}
+					>
+						Delete
+					</button>
+				</div>
+				<div class="list-page-dialog-footer small muted mono">
+					Permanent action
+				</div>
+			</div>
+		</Dialog>
+	</div>
 {/if}
 
 <style>
@@ -479,7 +490,9 @@ import QRCode from "qrcode";
 				letter-spacing: 0.2em;
 			}
 
-			.mt-4 { margin-top: var(--space-4); }
+			.mt-4 {
+				margin-top: var(--space-4);
+			}
 		}
 
 		.list-page-container {
@@ -564,8 +577,9 @@ import QRCode from "qrcode";
 			flex-direction: column;
 			align-items: center;
 			justify-content: center;
-			width: 280px;
-			height: 280px;
+			width: 100%;
+			max-width: 280px;
+			aspect-ratio: 1 / 1;
 			background: white;
 			border-radius: var(--radius-md);
 			padding: var(--space-4);
