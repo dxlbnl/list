@@ -127,15 +127,25 @@ export async function deleteList(listId: string) {
 }
 
 export async function renameGroup(listId: string, oldName: string, newName: string) {
-	const items = await db.items.where({ listId, groupName: oldName }).toArray();
-	for (const item of items) {
-		await updateItem(item.id, { groupName: newName });
-	}
+	const actualOldName = oldName === "GENERAL" ? "" : oldName;
+	const actualNewName = newName === "GENERAL" ? "" : newName;
+	
+	const groupItems = await db.items.where({ listId, groupName: actualOldName }).toArray();
+	if (groupItems.length === 0) return;
+
+	const updates = groupItems.map(item => ({
+		id: item.id,
+		data: { groupName: actualNewName }
+	}));
+
+	await updateItems(updates);
 }
 
 export async function deleteGroup(listId: string, groupName: string) {
-	const items = await db.items.where({ listId, groupName }).toArray();
-	for (const item of items) {
+	const actualGroupName = groupName === "GENERAL" ? "" : groupName;
+	const groupItems = await db.items.where({ listId, groupName: actualGroupName }).toArray();
+	
+	for (const item of groupItems) {
 		await deleteItem(item.id);
 	}
 }

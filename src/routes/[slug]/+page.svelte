@@ -17,7 +17,8 @@
 	import { DropdownMenu } from "bits-ui";
 	import { menuState } from "$lib/client/menu.svelte";
 	import ListGroup from "$lib/components/ui/ListGroup.svelte";
-	import QRCode from "qrcode";
+	import { fade } from "svelte/transition";
+import QRCode from "qrcode";
 
 	let { data } = $props();
 
@@ -25,6 +26,18 @@
 	const list = liveQuery(() =>
 		data.listId ? dexieDb.lists.get(data.listId) : undefined,
 	);
+
+	let wasLoaded = $state(false);
+	let listDeleted = $state(false);
+
+	$effect(() => {
+		const currentList = $list;
+		if (currentList) {
+			wasLoaded = true;
+		} else if (wasLoaded && !currentList) {
+			listDeleted = true;
+		}
+	});
 
 	// Live query for active items
 	const items = liveQuery(() => {
@@ -275,7 +288,18 @@
 	</DropdownMenu.Item>
 {/snippet}
 
-<div class="list-page-container" use:registerContextualMenu={contextualMenuItems}>
+{#if listDeleted}
+	<div class="list-deleted-state" transition:fade>
+		<div class="error-box">
+			<h2 class="mono">LIST_DELETED</h2>
+			<p class="muted small">This list has been removed by the owner.</p>
+			<a href="/" class="btn-primary-ghost mt-4 mono small tracking-widest">
+				&lt; BACK_TO_DASHBOARD
+			</a>
+		</div>
+	</div>
+{:else}
+	<div class="list-page-container" use:registerContextualMenu={contextualMenuItems}>
 	<div class="list-controls">
 		<div class="input-group">
 			<div class="input-prefix">&gt;</div>
@@ -421,9 +445,43 @@
 		</div>
 	</Dialog>
 </div>
+{/if}
 
 <style>
 	:global {
+		.list-deleted-state {
+			position: fixed;
+			inset: 0;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			background: var(--bg-0);
+			z-index: 1000;
+			padding: var(--space-8);
+
+			.error-box {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				gap: var(--space-4);
+				text-align: center;
+				max-width: 400px;
+				padding: var(--space-12);
+				border: 1px solid var(--border);
+				background: var(--bg-1);
+				border-radius: var(--radius-lg);
+				box-shadow: var(--shadow-lg);
+			}
+
+			h2 {
+				color: var(--danger);
+				font-size: 1.5rem;
+				letter-spacing: 0.2em;
+			}
+
+			.mt-4 { margin-top: var(--space-4); }
+		}
+
 		.list-page-container {
 			.list-controls {
 				margin-bottom: var(--space-8);

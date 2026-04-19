@@ -154,15 +154,21 @@ class SyncManager {
 				items = data.items;
 			}
 
-			// Update list with reconciliation
+			// Reconciliation: Only update if not pending local changes AND server is newer
 			const pendingListOps = await db.syncQueue.where('entity').equals('list').toArray();
 			const pendingListIds = new Set(pendingListOps.map(op => op.entityId));
 
+			const localList = await db.lists.get(list.id);
+			const serverDate = new Date(list.createdAt);
+			
 			if (!pendingListIds.has(list.id)) {
-				await db.lists.put({
-					...list,
-					createdAt: new Date(list.createdAt)
-				});
+				// For lists, we just check existence or major changes
+				if (!localList || localList.name !== list.name) {
+					await db.lists.put({
+						...list,
+						createdAt: serverDate
+					});
+				}
 			}
 
 			// Update items with reconciliation
@@ -170,13 +176,20 @@ class SyncManager {
 			const pendingItemIds = new Set(pendingOps.map(op => op.entityId));
 
 			for (const item of items) {
-				// Only update if not pending local changes
-				if (!pendingItemIds.has(item.id)) {
+				const localItem = await db.items.get(item.id);
+				const serverUpdatedAt = new Date(item.updatedAt);
+				
+				// Only update if:
+				// 1. We don't have pending changes for this item
+				// 2. AND (we don't have the item OR the server version is strictly newer)
+				const isNewer = !localItem || serverUpdatedAt > new Date(localItem.updatedAt);
+
+				if (!pendingItemIds.has(item.id) && isNewer) {
 					await db.items.put({
 						...item,
 						groupName: item.groupName || "",
 						deletedAt: item.deletedAt ? new Date(item.deletedAt) : null,
-						updatedAt: new Date(item.updatedAt)
+						updatedAt: serverUpdatedAt
 					});
 				}
 			}

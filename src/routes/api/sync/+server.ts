@@ -134,20 +134,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 								.where(eq(items.id, op.entityId));
 						}
 					}
-				} else if (op.type === 'DELETE') {
-					// Verify ownership/access for list deletion
-					const list = await db.select().from(lists).where(and(eq(lists.id, op.entityId), eq(lists.createdBy, user.id)));
-					if (list.length > 0) {
-						await db.delete(lists).where(eq(lists.id, op.entityId));
-						// Cascade handles items/listUsers
-					}
 				}
 			}
-			
-			if (op.entity === 'item') {
-				// Existing item handling...
-				// (Assuming soft-deletes for items via UPDATE)
-			}
+
 			results.push({ id: op.id, status: 'success' });
 			
 			// Track which lists were updated
@@ -156,11 +145,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				updatedListIds.add(op.entityId);
 			}
 			if (op.entity === 'item') {
-				if (op.type === 'INSERT') updatedListIds.add(op.data.listId);
-				else {
-					// For updates/deletes, fetch listId if not in op.data
-					const item = await db.select().from(items).where(eq(items.id, op.entityId)).limit(1);
-					if (item[0]) updatedListIds.add(item[0].listId);
+				let listIdToNotify = op.data?.listId;
+				if (!listIdToNotify) {
+					const itemRecord = await db.select().from(items).where(eq(items.id, op.entityId)).limit(1);
+					if (itemRecord[0]) listIdToNotify = itemRecord[0].listId;
+				}
+				if (listIdToNotify) {
+					console.log(`Queueing notification for list: ${listIdToNotify} due to ${op.entity} ${op.type}`);
+					updatedListIds.add(listIdToNotify);
 				}
 			}
 		} catch (e) {
@@ -172,20 +164,38 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	// Broadcast updates
 	for (const listId of updatedListIds) {
 		if (listId === 'global') {
-			syncHub.broadcast('global');
+			// Global updates for list index changes should only go to the user who triggered them
+			// or we can just let them pull. For now, let's just push to the current user.
+			syncHub.emit(`user:${user.id}`, { listId: 'global' });
 			continue;
 		}
 
-		// Fetch current state to push to clients
-		const [list] = await db.select().from(lists).where(eq(lists.id, listId));
-		if (list) {
+		// Notify authorized clients that this list has changed.
+		const [listRecord] = await db.select().from(lists).where(eq(lists.id, listId));
+		if (listRecord) {
 			const listItems = await db.select().from(items).where(eq(items.listId, listId));
-			syncHub.broadcast(listId, { 
-				list, 
+			const payload = { 
+				list: listRecord, 
 				items: listItems 
-			});
+			};
+			
+			// Find all users who have access to this list
+			const authorizedUsers = await db
+				.select({ userId: listUsers.userId })
+				.from(listUsers)
+				.where(eq(listUsers.listId, listId));
+
+			console.log(`Broadcasting update for list ${listId} to ${authorizedUsers.length} users`);
+			for (const { userId } of authorizedUsers) {
+				console.log(`Emitting to user channel: user:${userId}`);
+				syncHub.emit(`user:${userId}`, { listId, ...payload });
+			}
 		} else {
-			// List was likely deleted
+			// List was likely deleted - find who HAD access? 
+			// For simplicity with deletion, we can broadcast a global event or keep track of members.
+			// Let's just broadcast the deletion globally for now, but minimal payload.
+			// Actually, better to just let users reconcile on next refresh if we want perfect security,
+			// or we can query listUsers before deletion.
 			syncHub.broadcast(listId, { deleted: true });
 		}
 	}
@@ -208,15 +218,18 @@ export const GET: RequestHandler = async ({ locals }) => {
 			console.log(`SSE stream starting for user: ${user.id}`);
 			
 			const onUpdate = (payload: any) => {
+				console.log(`SSE sending update to user ${user.id}:`, payload.listId || 'global');
 				try {
 					controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'update', ...payload })}\n\n`));
 				} catch (e) {
 					console.log('SSE: Failed to enqueue message, closing...');
 					syncHub.off('update', onUpdate);
+					syncHub.off(`user:${user.id}`, onUpdate);
 				}
 			};
 
 			syncHub.on('update', onUpdate);
+			syncHub.on(`user:${user.id}`, onUpdate);
 			
 			// Initial connection message
 			controller.enqueue(encoder.encode(': connected\n\n'));
@@ -227,6 +240,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 				} catch (e) {
 					clearInterval(interval);
 					syncHub.off('update', onUpdate);
+					syncHub.off(`user:${user.id}`, onUpdate);
 				}
 			}, 30000);
 
@@ -234,6 +248,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 				console.log('SSE stream cleaning up');
 				clearInterval(interval);
 				syncHub.off('update', onUpdate);
+				syncHub.off(`user:${user.id}`, onUpdate);
 			};
 		},
 		cancel() {
