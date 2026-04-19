@@ -29,7 +29,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const updatedListIds = new Set<string>();
 	const deletedListMembers = new Map<string, string[]>();
 
+	const tStart = performance.now();
+	let tValidation = 0;
+	let tPreFetch = 0;
+	let tOps = 0;
+	let tSnapshots = 0;
+
 	try {
+		tValidation = performance.now() - tStart;
+		const tPreFetchStart = performance.now();
+
 		// 1. PRE-FETCH DATA (Batched into 1 HTTP request)
 		const preFetchQueries: any[] = [
 			db.select({ listId: listUsers.listId }).from(listUsers).where(eq(listUsers.userId, user.id))
@@ -58,12 +67,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			for (const item of fetchedItems) itemIdToListId.set(item.id, item.listId);
 		}
 		if (listsBeingDeleted.length > 0) {
-			const members = (preFetchResults[itemIdsToFetch.length > 0 ? 2 : 1] as any[]);
+			const membersIdx = itemIdsToFetch.length > 0 ? 2 : 1;
+			const members = (preFetchResults[membersIdx] as any[]);
 			for (const m of members) {
 				if (!deletedListMembers.has(m.listId)) deletedListMembers.set(m.listId, []);
 				deletedListMembers.get(m.listId)!.push(m.userId);
 			}
 		}
+
+		tPreFetch = performance.now() - tPreFetchStart;
+		const tOpsStart = performance.now();
 
 		// 2. OPERATIONS (Batched into 1 HTTP request)
 		const batchQueries: any[] = [];
@@ -184,6 +197,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			await db.batch(batchQueries as [any, ...any[]]);
 		}
 
+		tOps = performance.now() - tOpsStart;
+		const tSnapshotsStart = performance.now();
+
 		// 3. SNAPSHOTS (Batched into 1 HTTP request)
 		const notifications: { channel: string; payload: any }[] = [];
 		const updatedListIdsArray = Array.from(updatedListIds).filter(id => id !== 'global');
@@ -225,6 +241,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			notifications.push({ channel: `user:${user.id}`, payload: { listId: 'global' } });
 		}
 
+		tSnapshots = performance.now() - tSnapshotsStart;
+
 		// 4. Map results and emit notifications
 		for (const mapping of opStatusMapping) {
 			const op = operations[mapping.opIndex];
@@ -234,6 +252,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		for (const { channel, payload } of notifications) {
 			syncHub.emit(channel, payload, clientId);
 		}
+
+		const tTotal = performance.now() - tStart;
+		syncLogger.info(`Sync complete tracing`, {
+			tValidation: tValidation.toFixed(2),
+			tPreFetch: tPreFetch.toFixed(2),
+			tOps: tOps.toFixed(2),
+			tSnapshots: tSnapshots.toFixed(2),
+			tTotal: tTotal.toFixed(2),
+			opCount: operations.length
+		});
 
 		return json({ results });
 	} catch (e) {

@@ -18,25 +18,31 @@ if (!dev) {
 export const handle: Handle = async ({ event, resolve }) => {
 	const start = Date.now();
 	
+	const tAuthStart = Date.now();
 	let auth = await getSession(event);
 
 	if (!auth) {
 		auth = await createAnonymousSession(event);
 	}
+	const tAuth = Date.now() - tAuthStart;
 
 	event.locals.user = auth.user;
 	event.locals.session = auth.session;
 
+	const tResolveStart = Date.now();
 	const response = await resolve(event);
+	const tResolve = Date.now() - tResolveStart;
 	
 	const duration = Date.now() - start;
 	
-	// Log request summary (Happy path)
+	// Log request summary with detailed tracing
 	logger.info(`${event.request.method} ${event.url.pathname} - ${response.status} (${duration}ms)`, {
 		method: event.request.method,
 		path: event.url.pathname,
 		status: response.status,
 		duration,
+		tAuth,
+		tResolve,
 		userId: event.locals.user?.id
 	});
 
