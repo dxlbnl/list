@@ -6,6 +6,7 @@
 - [x] Offline-First Database (IndexedDB + Dexie.js)
 - [x] Anonymous Magic Sessions
 - [x] Magic Link Auth Flow
+- [ ] Email registration & Account Merging (Recovery)
 - [x] Design System (Vanilla CSS + Lab-Bench aesthetic)
 
 ## Sync Engine
@@ -21,14 +22,15 @@
 - [ ] List Sharing (Invite links/QR Codes)
 - [x] Session Cloning (QR code to move session to another device)
 - [ ] Item Restoration UI (Creatable Select with Bits UI)
-- [ ] Drag & Drop (svelte-dnd-action integration)
+- [x] Drag & Drop (svelte-dnd-action integration)
 
 ## UX & Polish
 - [x] Lab-Bench Design System (Inputs, Buttons, Cards)
-- [ ] Loading states for sync operations
+- [x] Loading states for sync operations
 - [ ] Error handling & Toast notifications
 - [x] Mobile responsive refinements (Header & UserMenu)
 - [ ] Accessibility audit (focus management, ARIA)
+- [ ] UX: Hide group header if only one group exists
 
 ## Findings & Bugs
 - [x] Fixed UserMenu Bits UI scoping and Portal issues

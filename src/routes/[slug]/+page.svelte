@@ -195,6 +195,7 @@
 				<ListGroup
 					{groupName}
 					groupItems={localGroups[groupName]}
+					showHeader={sortedGroupNames.length > 1}
 					onRename={() => handleRenameGroup(groupName)}
 					onDelete={() => handleDeleteGroup(groupName)}
 					onToggleDone={toggleDone}

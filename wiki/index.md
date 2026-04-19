@@ -9,6 +9,7 @@ This is the central catalog of all documentation for the List App rewrite.
 ## Architecture & Stack
 - [Technology Stack](architecture/stack.md) - Core choices: Vercel, Neon, Drizzle, Dexie, SvelteKit.
 - [Database Schema](architecture/database.md) - Drizzle table definitions.
+- [Design Philosophy](architecture/design-philosophy.md) - The "Lab-Bench" aesthetic and global tokens.
 - [Sync Engine](architecture/sync-engine.md) - Offline-first architecture (Dexie + Vercel SSE).
 
 ## Features & Flows
@@ -17,4 +18,4 @@ This is the central catalog of all documentation for the List App rewrite.
 - [Soft Deletes](features/soft-deletes.md) - Restoring items via custom select UI.
 
 ## Components
-- [Global CSS Strategy](components/css-strategy.md) - Using Vanilla CSS namespacing alongside Bits UI.
+- [Styling Bits UI](components/bits-ui-styling.md) - Using :global {} to style headless primitives.

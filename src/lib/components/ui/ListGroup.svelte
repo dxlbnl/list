@@ -13,75 +13,78 @@
 		onToggleDone, 
 		onDeleteItem,
 		onDndConsider,
-		onDndFinalize
+		onDndFinalize,
+		showHeader = true
 	} = $props();
 
 	let isOpen = $state(true);
 </script>
 
 <Collapsible.Root class="group-wrapper" bind:open={isOpen}>
-	<div class="group-header-container">
-		<Collapsible.Trigger class="group-header">
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				width="14"
-				height="14"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				class="chevron"
-				class:rotated={isOpen}><path d="m9 18 6-6-6-6" /></svg
-			>
-			<span class="mono tiny uppercase tracking-widest">{groupName}</span>
-			<span class="count mono tiny muted">[{groupItems.length}]</span>
-		</Collapsible.Trigger>
+	{#if showHeader}
+		<div class="group-header-container">
+			<Collapsible.Trigger class="group-header">
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					width="14"
+					height="14"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					class="chevron"
+					class:rotated={isOpen}><path d="m9 18 6-6-6-6" /></svg
+				>
+				<span class="mono tiny uppercase tracking-widest">{groupName}</span>
+				<span class="count mono tiny muted">[{groupItems.length}]</span>
+			</Collapsible.Trigger>
 
-		<div class="group-actions">
-			<DropdownMenu.Root>
-				<DropdownMenu.Trigger class="btn-icon-tiny">
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="14"
-						height="14"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						><circle cx="12" cy="12" r="1" /><circle
-							cx="12"
-							cy="5"
-							r="1"
-						/><circle cx="12" cy="19" r="1" /></svg
-					>
-				</DropdownMenu.Trigger>
-				<DropdownMenu.Portal disabled={true}>
-					<DropdownMenu.Content
-						class="menu-content mini"
-						sideOffset={4}
-						align="end"
-					>
-						<DropdownMenu.Item
-							class="menu-item"
-							onSelect={onRename}
+			<div class="group-actions">
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger class="btn-icon-tiny">
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="14"
+							height="14"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							><circle cx="12" cy="12" r="1" /><circle
+								cx="12"
+								cy="5"
+								r="1"
+							/><circle cx="12" cy="19" r="1" /></svg
 						>
-							<span>Rename Group</span>
-						</DropdownMenu.Item>
-						<DropdownMenu.Item
-							class="menu-item danger"
-							onSelect={onDelete}
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Portal disabled={true}>
+						<DropdownMenu.Content
+							class="menu-content mini"
+							sideOffset={4}
+							align="end"
 						>
-							<span>Delete Group</span>
-						</DropdownMenu.Item>
-					</DropdownMenu.Content>
-				</DropdownMenu.Portal>
-			</DropdownMenu.Root>
+							<DropdownMenu.Item
+								class="menu-item"
+								onSelect={onRename}
+							>
+								<span>Rename Group</span>
+							</DropdownMenu.Item>
+							<DropdownMenu.Item
+								class="menu-item danger"
+								onSelect={onDelete}
+							>
+								<span>Delete Group</span>
+							</DropdownMenu.Item>
+						</DropdownMenu.Content>
+					</DropdownMenu.Portal>
+				</DropdownMenu.Root>
+			</div>
 		</div>
-	</div>
+	{/if}
 
 	<Collapsible.Content>
 		<div
@@ -118,73 +121,73 @@
 </Collapsible.Root>
 
 <style>
-	.group-wrapper {
-		display: flex;
-		flex-direction: column;
-	}
-
-	.group-header-container {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: var(--space-2);
-	}
-
-	.group-header {
-		flex: 1;
-		display: flex !important;
-		flex-direction: row !important;
-		align-items: center !important;
-		gap: var(--space-2);
-		padding: var(--space-2) 0;
-		color: var(--fg-3);
-		background: transparent;
-		border: none;
-		cursor: pointer;
-		user-select: none;
-		transition: color 0.2s;
-		text-align: left;
-
-		&:hover {
-			color: var(--fg-1);
+	:global {
+		.group-wrapper {
+			display: flex;
+			flex-direction: column;
 		}
 
-		.chevron {
-			flex-shrink: 0;
-			transition: transform 0.2s;
-			&.rotated {
-				transform: rotate(90deg);
+		.group-header-container {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: var(--space-2);
+		}
+
+		.group-header {
+			flex: 1;
+			display: flex !important;
+			flex-direction: row !important;
+			align-items: center !important;
+			gap: var(--space-2);
+			padding: var(--space-2) 0;
+			color: var(--fg-3);
+			background: transparent;
+			border: none;
+			cursor: pointer;
+			user-select: none;
+			transition: color 0.2s;
+			text-align: left;
+
+			&:hover {
+				color: var(--fg-1);
+			}
+
+			.chevron {
+				flex-shrink: 0;
+				transition: transform 0.2s;
+				&.rotated {
+					transform: rotate(90deg);
+				}
+			}
+
+			.count {
+				opacity: 0.5;
+				font-variant-numeric: tabular-nums;
 			}
 		}
 
-		.count {
-			opacity: 0.5;
-			font-variant-numeric: tabular-nums;
+		.group-actions {
+			opacity: 0;
+			transition: opacity 0.2s;
 		}
-	}
 
-	.group-actions {
-		opacity: 0;
-		transition: opacity 0.2s;
-	}
-
-	.group-header-container:hover .group-actions {
-		opacity: 1;
-	}
-
-	.btn-icon-tiny {
-		padding: var(--space-1);
-		color: var(--fg-3);
-		border-radius: var(--radius-sm);
-		transition: all 0.2s;
-
-		&:hover {
-			background: var(--bg-2);
-			color: var(--fg-1);
+		.group-header-container:hover .group-actions {
+			opacity: 1;
 		}
-	}
 
-	:global {
+		.btn-icon-tiny {
+			padding: var(--space-1);
+			color: var(--fg-3);
+			border-radius: var(--radius-sm);
+			transition: all 0.2s;
+
+			&:hover {
+				background: var(--bg-2);
+				color: var(--fg-1);
+			}
+		}
+
 		.item-stack {
 			list-style: none;
 			display: flex;
@@ -253,7 +256,7 @@
 		}
 
 		/* Global DnD overrides scoped to this component's existence */
-		:global(#dnd-action-dragged-el) {
+		#dnd-action-dragged-el {
 			z-index: 2000 !important;
 			pointer-events: none !important;
 			opacity: 0.9 !important;
@@ -269,7 +272,7 @@
 			color: var(--fg-1);
 		}
 
-		:global(.item-row[aria-disabled="true"]) {
+		.item-row[aria-disabled="true"] {
 			opacity: 0.3 !important;
 			background: var(--bg-2) !important;
 			border-style: dashed !important;

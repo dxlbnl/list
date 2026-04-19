@@ -9,3 +9,7 @@ Chronological record of major events, decisions, and wiki updates.
 - Finalized Auth plan: Magic sessions by default, recoverable via Magic Email Links.
 - Fully documented all architectural components and features in the wiki.
 - Refined CSS strategy: Global resets in `app.css`, component styles inside `<style>` blocks wrapped in `:global {}` for namespacing.
+- [2026-04-19] update | Documentation Refinement & CSS Refactor
+- Refactored `ListGroup.svelte` to use `:global` for Bits UI component classes to prevent Svelte purging.
+- Created `bits-ui-styling.md` to document the headless styling pattern.
+- Implemented "Hide Single Group" logic for cleaner UI on non-categorized lists.
