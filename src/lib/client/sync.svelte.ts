@@ -15,12 +15,16 @@ class SyncManager {
 		if (typeof window !== 'undefined') {
 			this.isOnline = navigator.onLine;
 
-			window.addEventListener('online', () => {
+			window.addEventListener('online', async () => {
 				this.isOnline = true;
 				syncLogger.info('Network online: triggering sync...');
 				this.connectSSE();
-				this.processQueue();
-				this.reconcileAllLists();
+				// Run in parallel for faster recovery
+				await Promise.all([
+					this.processQueue(),
+					this.reconcileAllLists(),
+					...Array.from(this.activeListIds).map(id => this.pull(id))
+				]);
 			});
 
 			window.addEventListener('offline', () => {
@@ -100,6 +104,10 @@ class SyncManager {
 
 	async processQueue() {
 		if (!this.isOnline) return;
+		if (this.isSyncing) {
+			syncLogger.debug('Sync already in progress, skipping...');
+			return;
+		}
 
 		// Check if we have work to do before setting state
 		const count = await db.syncQueue.count();
@@ -159,6 +167,12 @@ class SyncManager {
 			throw e;
 		} finally {
 			this.isSyncing = false;
+			// If more items were added while we were syncing, process them immediately
+			const remaining = await db.syncQueue.count();
+			if (remaining > 0) {
+				syncLogger.debug(`Found ${remaining} more items in queue, triggering next batch...`);
+				setTimeout(() => this.processQueue(), 100);
+			}
 		}
 	}
 
@@ -235,10 +249,10 @@ class SyncManager {
 			}
 
 			const totalDuration = (performance.now() - startTime).toFixed(2);
-			syncLogger.info(`Pull/Reconcile for ${listId} complete in ${totalDuration}ms`, { items: items.length });
+			syncLogger.info(`Local DB Update for ${listId} complete in ${totalDuration}ms`, { items: items.length });
 		} catch (e) {
 			const duration = (performance.now() - startTime).toFixed(2);
-			syncLogger.error(`Pull error for list ${listId} after ${duration}ms`, {}, e);
+			syncLogger.error(`DB Update error for ${listId} after ${duration}ms`, {}, e);
 		}
 	}
 
@@ -259,8 +273,6 @@ class SyncManager {
 						...list,
 						createdAt: new Date(list.createdAt)
 					});
-					// Also subscribe and pull items for each list
-					this.subscribeToList(list.id);
 				}
 			}
 
@@ -280,12 +292,6 @@ class SyncManager {
 		}
 	}
 
-	async forceSync() {
-		await this.processQueue();
-		for (const listId of this.activeListIds) {
-			await this.pull(listId);
-		}
-	}
 }
 
 export const syncManager = new SyncManager();

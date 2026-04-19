@@ -209,7 +209,25 @@
 	}
 
 	async function handleCopyShareUrl() {
-		await navigator.clipboard.writeText(shareUrl);
+		if (navigator.clipboard) {
+			await navigator.clipboard.writeText(shareUrl);
+		} else {
+			// Fallback for non-secure contexts (like local network IPs)
+			const textArea = document.createElement("textarea");
+			textArea.value = shareUrl;
+			textArea.style.position = "fixed";
+			textArea.style.left = "-999999px";
+			textArea.style.top = "-999999px";
+			document.body.appendChild(textArea);
+			textArea.focus();
+			textArea.select();
+			try {
+				document.execCommand("copy");
+			} catch (error) {
+				console.error("Copy failed", error);
+			}
+			textArea.remove();
+		}
 		shareCopied = true;
 		setTimeout(() => (shareCopied = false), 2000);
 	}

@@ -32,7 +32,7 @@ export async function createList(name: string, userId: string) {
 		timestamp: Date.now()
 	});
 
-	syncManager.forceSync();
+	syncManager.processQueue();
 	return id;
 }
 
@@ -60,7 +60,7 @@ export async function addItem(listId: string, name: string, groupName: string = 
 		timestamp: Date.now()
 	});
 
-	syncManager.forceSync();
+	syncManager.processQueue();
 	return id;
 }
 
@@ -75,7 +75,7 @@ export async function updateItem(itemId: string, data: any) {
 		timestamp: Date.now()
 	});
 
-	syncManager.forceSync();
+	syncManager.processQueue();
 }
 
 export async function updateItems(updates: { id: string; data: any }[]) {
@@ -92,7 +92,7 @@ export async function updateItems(updates: { id: string; data: any }[]) {
 		});
 	}
 
-	syncManager.forceSync();
+	syncManager.processQueue();
 }
 
 export async function deleteItem(itemId: string) {
@@ -107,7 +107,7 @@ export async function deleteItem(itemId: string) {
 		timestamp: Date.now()
 	});
 
-	syncManager.forceSync();
+	syncManager.processQueue();
 }
 
 export async function deleteList(listId: string) {
@@ -123,7 +123,7 @@ export async function deleteList(listId: string) {
 		timestamp: Date.now()
 	});
 
-	syncManager.forceSync();
+	syncManager.processQueue();
 }
 
 export async function renameGroup(listId: string, oldName: string, newName: string) {
