@@ -31,15 +31,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	const tStart = performance.now();
 	let tValidation = 0;
-	let tPreFetch = 0;
-	let tOps = 0;
-	let tSnapshots = 0;
+	let tBatch1 = 0; // Pre-fetch
+	let tBatch2 = 0; // Ops + Snapshots
 
 	try {
 		tValidation = performance.now() - tStart;
-		const tPreFetchStart = performance.now();
+		const tBatch1Start = performance.now();
 
-		// 1. PRE-FETCH DATA (Batched into 1 HTTP request)
+		// 1. BATCH 1: PRE-FETCH (Auth + Metadata)
 		const preFetchQueries: any[] = [
 			db.select({ listId: listUsers.listId }).from(listUsers).where(eq(listUsers.userId, user.id))
 		];
@@ -75,11 +74,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		}
 
-		tPreFetch = performance.now() - tPreFetchStart;
-		const tOpsStart = performance.now();
+		tBatch1 = performance.now() - tBatch1Start;
+		const tBatch2Start = performance.now();
 
-		// 2. OPERATIONS (Batched into 1 HTTP request)
-		const batchQueries: any[] = [];
+		// 2. BATCH 2: OPERATIONS + SNAPSHOTS
+		const batch2Queries: any[] = [];
 		const opStatusMapping: { opIndex: number; success: boolean; error?: string }[] = [];
 
 		for (let i = 0; i < operations.length; i++) {
@@ -88,7 +87,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 			if (op.entity === 'list') {
 				if (op.type === 'INSERT') {
-					batchQueries.push(
+					batch2Queries.push(
 						db.insert(lists).values({
 							id: op.entityId,
 							slug: op.data.slug,
@@ -100,7 +99,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 							set: { name: op.data.name }
 						})
 					);
-					batchQueries.push(
+					batch2Queries.push(
 						db.insert(listUsers).values({
 							listId: op.entityId,
 							userId: user.id
@@ -112,7 +111,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					queryAdded = true;
 				} else if (op.type === 'UPDATE') {
 					if (authorizedListIds.has(op.entityId)) {
-						batchQueries.push(
+						batch2Queries.push(
 							db.update(lists).set({ name: op.data.name }).where(eq(lists.id, op.entityId))
 						);
 						updatedListIds.add('global');
@@ -123,9 +122,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					}
 				} else if (op.type === 'DELETE') {
 					if (authorizedListIds.has(op.entityId)) {
-						batchQueries.push(db.delete(items).where(eq(items.listId, op.entityId)));
-						batchQueries.push(db.delete(listUsers).where(eq(listUsers.listId, op.entityId)));
-						batchQueries.push(db.delete(lists).where(eq(lists.id, op.entityId)));
+						batch2Queries.push(db.delete(items).where(eq(items.listId, op.entityId)));
+						batch2Queries.push(db.delete(listUsers).where(eq(listUsers.listId, op.entityId)));
+						batch2Queries.push(db.delete(lists).where(eq(lists.id, op.entityId)));
 						updatedListIds.add('global');
 						updatedListIds.add(op.entityId);
 						queryAdded = true;
@@ -138,7 +137,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				if (listId && authorizedListIds.has(listId)) {
 					if (op.type === 'INSERT') {
 						const itemDate = new Date(op.data.updatedAt);
-						batchQueries.push(
+						batch2Queries.push(
 							db.insert(items).values({
 								id: op.entityId,
 								listId: listId,
@@ -174,7 +173,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 						const itemDate = op.data.updatedAt ? new Date(op.data.updatedAt) : new Date();
 						if (op.data.updatedAt) updateData.updatedAt = itemDate;
 
-						batchQueries.push(
+						batch2Queries.push(
 							db.update(items)
 								.set(updateData)
 								.where(and(
@@ -193,32 +192,36 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			if (queryAdded) opStatusMapping.push({ opIndex: i, success: true });
 		}
 
-		if (batchQueries.length > 0) {
-			await db.batch(batchQueries as [any, ...any[]]);
-		}
-
-		tOps = performance.now() - tOpsStart;
-		const tSnapshotsStart = performance.now();
-
-		// 3. SNAPSHOTS (Batched into 1 HTTP request)
-		const notifications: { channel: string; payload: any }[] = [];
+		// Add snapshot queries to the same batch
 		const updatedListIdsArray = Array.from(updatedListIds).filter(id => id !== 'global');
+		let snapshotIdx = -1;
 
 		if (updatedListIdsArray.length > 0) {
-			const [allLists, allItems, allListUsers] = await db.batch([
-				db.select().from(lists).where(inArray(lists.id, updatedListIdsArray)),
-				db.select().from(items).where(inArray(items.listId, updatedListIdsArray)),
-				db.select().from(listUsers).where(inArray(listUsers.listId, updatedListIdsArray))
-			]);
+			snapshotIdx = batch2Queries.length;
+			batch2Queries.push(db.select().from(lists).where(inArray(lists.id, updatedListIdsArray)));
+			batch2Queries.push(db.select().from(items).where(inArray(items.listId, updatedListIdsArray)));
+			batch2Queries.push(db.select().from(listUsers).where(inArray(listUsers.listId, updatedListIdsArray)));
+		}
 
-			const listsMap = new Map((allLists as any[]).map(l => [l.id, l]));
+		const batch2Results = await db.batch(batch2Queries as [any, ...any[]]);
+		tBatch2 = performance.now() - tBatch2Start;
+
+		// 3. PROCESS RESULTS & NOTIFICATIONS
+		const notifications: { channel: string; payload: any }[] = [];
+
+		if (snapshotIdx !== -1) {
+			const allLists = batch2Results[snapshotIdx] as any[];
+			const allItems = batch2Results[snapshotIdx + 1] as any[];
+			const allListUsers = batch2Results[snapshotIdx + 2] as any[];
+
+			const listsMap = new Map(allLists.map(l => [l.id, l]));
 			const itemsByList = new Map<string, any[]>();
-			for (const item of (allItems as any[])) {
+			for (const item of allItems) {
 				if (!itemsByList.has(item.listId)) itemsByList.set(item.listId, []);
 				itemsByList.get(item.listId)!.push(item);
 			}
 			const usersByList = new Map<string, string[]>();
-			for (const lu of (allListUsers as any[])) {
+			for (const lu of allListUsers) {
 				if (!usersByList.has(lu.listId)) usersByList.set(lu.listId, []);
 				usersByList.get(lu.listId)!.push(lu.userId);
 			}
@@ -241,9 +244,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			notifications.push({ channel: `user:${user.id}`, payload: { listId: 'global' } });
 		}
 
-		tSnapshots = performance.now() - tSnapshotsStart;
-
-		// 4. Map results and emit notifications
+		// Map operation results
 		for (const mapping of opStatusMapping) {
 			const op = operations[mapping.opIndex];
 			results.push(mapping.success ? { id: op.id, status: 'success' } : { id: op.id, status: 'error', message: mapping.error });
@@ -256,9 +257,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const tTotal = performance.now() - tStart;
 		syncLogger.info(`Sync complete tracing`, {
 			tValidation: tValidation.toFixed(2),
-			tPreFetch: tPreFetch.toFixed(2),
-			tOps: tOps.toFixed(2),
-			tSnapshots: tSnapshots.toFixed(2),
+			tBatch1: tBatch1.toFixed(2),
+			tBatch2: tBatch2.toFixed(2),
 			tTotal: tTotal.toFixed(2),
 			opCount: operations.length
 		});
@@ -268,6 +268,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		syncLogger.error('Sync failed', { userId: user.id }, e);
 		throw error(500, MESSAGES.DATA.PROCESS_ERROR);
 	}
+};
 };
 
 export const GET: RequestHandler = async ({ locals, url }) => {
