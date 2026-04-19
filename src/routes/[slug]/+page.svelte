@@ -12,45 +12,52 @@
 	import { liveQuery } from "dexie";
 	import { goto } from "$app/navigation";
 	import Dialog from "$lib/components/ui/Dialog.svelte";
-	import Checkbox from "$lib/components/ui/Checkbox.svelte";
 	import { syncManager } from "$lib/client/sync.svelte";
 	import { onMount } from "svelte";
 	import { DropdownMenu } from "bits-ui";
 	import { menuState } from "$lib/client/menu.svelte";
 	import ListGroup from "$lib/components/ui/ListGroup.svelte";
-	import { dndzone } from "svelte-dnd-action";
-	import { flip } from "svelte/animate";
 
 	let { data } = $props();
 
 	// Live query for the list details
-	const list = liveQuery(() => dexieDb.lists.get(data.listId));
+	const list = liveQuery(() =>
+		data.listId ? dexieDb.lists.get(data.listId) : undefined,
+	);
 
 	// Live query for active items
-	const items = liveQuery(() =>
-		dexieDb.items
+	const items = liveQuery(() => {
+		if (!data.listId) return [];
+		return dexieDb.items
 			.where("listId")
 			.equals(data.listId)
-			.filter((item) => item.deletedAt === null)
-			.sortBy("rank"),
-	);
+			.and((item) => item.deletedAt === null)
+			.toArray();
+	});
 
 	let newItemName = $state("");
 
 	async function handleAddItem() {
-		if (!newItemName.trim()) return;
+		if (!newItemName.trim() || !data.listId) return;
 
-		let name = newItemName;
-		let groupName = null;
+		const match = newItemName.match(/^\[(.*?)\]\s*(.*)$/);
+		let groupName = "";
+		let itemName = newItemName.trim();
 
-		// Technical syntax: [Group Name] Item Name
-		if (name.startsWith("[") && name.includes("]")) {
-			const endIdx = name.indexOf("]");
-			groupName = name.slice(1, endIdx).trim();
-			name = name.slice(endIdx + 1).trim();
+		if (match) {
+			groupName = match[1].trim();
+			itemName = match[2].trim();
 		}
 
-		await addItemAction(data.listId, name, groupName);
+		if (!itemName) return;
+
+		// If no group specified, use the first existing group
+		if (!groupName && sortedGroupNames.length > 0) {
+			const firstGroup = sortedGroupNames[0];
+			groupName = firstGroup === "GENERAL" ? "" : firstGroup;
+		}
+
+		await addItemAction(data.listId, itemName, groupName);
 		newItemName = "";
 	}
 
@@ -98,7 +105,6 @@
 		const { items: newItems } = e.detail;
 		localGroups[groupName] = newItems;
 
-		// Prepare batch updates
 		const updates: { id: string; data: any }[] = [];
 
 		Object.entries(localGroups).forEach(([gName, items]) => {
@@ -142,6 +148,7 @@
 	let confirmDeleteName = $state("");
 
 	async function handleDeleteList() {
+		if (!data.listId) return;
 		const currentList = await dexieDb.lists.get(data.listId);
 		if (confirmDeleteName === currentList?.name) {
 			await deleteList(data.listId);
@@ -151,61 +158,22 @@
 	}
 
 	onMount(() => {
-		syncManager.subscribeToList(data.listId);
-		return () => syncManager.unsubscribeFromList(data.listId);
+		const listId = data.listId;
+		if (listId) {
+			syncManager.subscribeToList(listId);
+			return () => syncManager.unsubscribeFromList(listId);
+		}
 	});
 
-	$effect(() => {
-		menuState.setContextualSnippet(deleteMenuItem);
-		return () => menuState.setContextualSnippet(null);
-	});
+	function registerContextualMenu(node: HTMLElement, snippet: any) {
+		menuState.setContextualSnippet(snippet);
+		return {
+			destroy() {
+				menuState.setContextualSnippet(null);
+			},
+		};
+	}
 </script>
-
-<div class="list-controls">
-	<div class="input-group">
-		<div class="input-prefix">&gt;</div>
-		<input
-			type="text"
-			placeholder="ADD ITEM OR [GROUP] ITEM"
-			bind:value={newItemName}
-			onkeydown={(e) => e.key === "Enter" && handleAddItem()}
-		/>
-		<button
-			class="input-action-btn"
-			onclick={handleAddItem}
-			disabled={!newItemName.trim()}
-		>
-			ADD
-		</button>
-	</div>
-</div>
-
-<section class="items-section">
-	{#if $items && $items.length > 0}
-		<div class="groups-container">
-			{#each sortedGroupNames as groupName (groupName)}
-				<ListGroup
-					{groupName}
-					groupItems={localGroups[groupName]}
-					showHeader={sortedGroupNames.length > 1}
-					onRename={(newName: string) =>
-						handleRenameGroup(groupName, newName)}
-					onDelete={() => handleDeleteGroup(groupName)}
-					onToggleDone={toggleDone}
-					onDeleteItem={deleteItem}
-					onDndConsider={(e: CustomEvent<any>) =>
-						handleDndConsider(groupName, e)}
-					onDndFinalize={(e: CustomEvent<any>) =>
-						handleDndFinalize(groupName, e)}
-				/>
-			{/each}
-		</div>
-	{:else}
-		<div class="empty-state muted">
-			<p>List is empty.</p>
-		</div>
-	{/if}
-</section>
 
 {#snippet deleteMenuItem()}
 	<DropdownMenu.Item
@@ -237,262 +205,150 @@
 	</DropdownMenu.Item>
 {/snippet}
 
-<Dialog
-	bind:open={isDeleteDialogOpen}
-	title="Delete List"
-	description="This action cannot be undone. To confirm, please type the name of the list: '{$list?.name}'"
->
-	<div class="qr-wrapper">
+<div class="list-page-container" use:registerContextualMenu={deleteMenuItem}>
+	<div class="list-controls">
 		<div class="input-group">
 			<div class="input-prefix">&gt;</div>
 			<input
 				type="text"
-				placeholder="CONFIRM_LIST_NAME"
-				bind:value={confirmDeleteName}
-				onkeydown={(e) => e.key === "Enter" && handleDeleteList()}
+				placeholder="ADD ITEM OR [GROUP] ITEM"
+				bind:value={newItemName}
+				onkeydown={(e) => e.key === "Enter" && handleAddItem()}
 			/>
 			<button
-				class="input-action-btn danger"
-				onclick={handleDeleteList}
-				disabled={confirmDeleteName !== $list?.name}
+				class="input-action-btn"
+				onclick={handleAddItem}
+				disabled={!newItemName.trim()}
 			>
-				DELETE
+				ADD
 			</button>
 		</div>
-		<div class="qr-footer small muted mono">DANGER_ZONE_V1</div>
 	</div>
-</Dialog>
+
+	<section class="items-section">
+		{#if $items && $items.length > 0}
+			<div class="groups-container">
+				{#each sortedGroupNames as groupName (groupName)}
+					<ListGroup
+						{groupName}
+						groupItems={localGroups[groupName]}
+						showHeader={sortedGroupNames.length > 1}
+						onRename={(newName: string) =>
+							handleRenameGroup(groupName, newName)}
+						onDelete={() => handleDeleteGroup(groupName)}
+						onToggleDone={toggleDone}
+						onDeleteItem={deleteItem}
+						onDndConsider={(e: CustomEvent<any>) =>
+							handleDndConsider(groupName, e)}
+						onDndFinalize={(e: CustomEvent<any>) =>
+							handleDndFinalize(groupName, e)}
+					/>
+				{/each}
+			</div>
+		{:else}
+			<div class="empty-state muted">
+				<p>List is empty.</p>
+			</div>
+		{/if}
+	</section>
+
+	<Dialog
+		bind:open={isDeleteDialogOpen}
+		title="Delete List"
+		description="This action cannot be undone. To confirm, please type the name of the list: '{$list?.name}'"
+	>
+		<div class="list-page-dialog-wrapper">
+			<div class="input-group">
+				<div class="input-prefix">&gt;</div>
+				<input
+					type="text"
+					placeholder="CONFIRM_LIST_NAME"
+					bind:value={confirmDeleteName}
+					onkeydown={(e) => e.key === "Enter" && handleDeleteList()}
+				/>
+				<button
+					class="input-action-btn danger"
+					onclick={handleDeleteList}
+					disabled={confirmDeleteName !== $list?.name}
+				>
+					DELETE
+				</button>
+			</div>
+			<div class="list-page-dialog-footer small muted mono">
+				DANGER_ZONE_V1
+			</div>
+		</div>
+	</Dialog>
+</div>
 
 <style>
-	.list-controls {
-		margin-bottom: var(--space-8);
-	}
-
-	.empty-state {
-		text-align: center;
-		padding: var(--space-8) 0;
-		color: var(--fg-3);
-	}
-
-	.groups-container {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-4);
-	}
-
 	:global {
-		.item-stack {
-			list-style: none;
-			display: flex;
-			flex-direction: column;
-			gap: var(--space-2);
-			padding: var(--space-2) 0;
-			min-height: 20px;
-		}
+		.list-page-container {
+			.list-controls {
+				margin-bottom: var(--space-8);
+			}
 
-		.item-row {
-			background: var(--bg-1);
-			padding: var(--space-3) var(--space-4);
-			border-radius: var(--radius-md);
-			border: 1px solid var(--border);
-			display: flex;
-			align-items: center;
-			gap: var(--space-4);
-			position: relative;
-		}
+			.items-section {
+				display: flex;
+				flex-direction: column;
+				gap: var(--space-8);
+			}
 
-		.drag-handle {
-			cursor: grab;
-			padding: var(--space-1);
-			opacity: 0.3;
-			transition: opacity 0.2s;
-			user-select: none;
+			.groups-container {
+				display: flex;
+				flex-direction: column;
+				gap: var(--space-6);
+			}
 
-			&:hover {
-				opacity: 1;
+			.empty-state {
+				text-align: center;
+				padding: var(--space-12);
+				border: 1px dashed var(--border);
+				border-radius: var(--radius-lg);
+				font-family: var(--font-mono);
+				text-transform: uppercase;
+				letter-spacing: 0.1em;
 			}
 		}
 
-		.item-row.done .item-name {
-			text-decoration: line-through;
-			color: var(--fg-3);
-		}
-
-		.item-row:hover {
-			border-color: var(--border-hover);
-		}
-
-		.check-box {
-			width: 22px;
-			height: 22px;
-			border: 2px solid var(--fg-3);
-			border-radius: 4px;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			transition: all 0.2s;
-		}
-
-		.item-row.done .check-box {
-			background: var(--accent);
-			border-color: var(--accent);
-		}
-
-		.icon-done {
-			color: white;
-			font-size: 14px;
-			font-weight: bold;
-		}
-
-		.item-name {
-			flex: 1;
-			font-size: 1rem;
-		}
-
-		.btn-delete {
-			opacity: 0;
-			font-family: var(--font-mono);
-			font-size: 0.75rem;
-			color: var(--danger);
-			padding: var(--space-1) var(--space-2);
-			border-radius: var(--radius-sm);
-			transition: all 0.2s;
-			border: 1px solid transparent;
-		}
-
-		.item-row:hover .btn-delete {
-			opacity: 0.6;
-		}
-
-		.btn-delete:hover {
-			opacity: 1 !important;
-			background: rgba(239, 68, 68, 0.1);
-			border-color: var(--danger);
-		}
-
-		.danger-zone {
-			margin-top: var(--space-8);
-			padding-top: var(--space-8);
-			border-top: 1px solid var(--border);
-			display: flex;
-			flex-direction: column;
-			gap: var(--space-4);
-		}
-
-		.btn-danger-outline {
-			border: 1px solid var(--danger);
-			color: var(--danger);
-			padding: var(--space-2) var(--space-6);
-			border-radius: var(--radius-md);
-			font-family: var(--font-mono);
-			font-size: 0.75rem;
-			font-weight: 600;
-			text-transform: uppercase;
-			transition: all 0.2s;
-			cursor: pointer;
-		}
-
-		.btn-danger-outline:hover {
-			background: var(--danger);
-			color: white;
-			box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
-		}
-
-		.btn-danger {
-			background: var(--danger);
-			color: white;
-			padding: var(--space-2) var(--space-6);
-			border-radius: var(--radius-md);
-			font-family: var(--font-mono);
-			font-size: 0.75rem;
-			font-weight: 600;
-			text-transform: uppercase;
-			transition: all 0.2s;
-		}
-
-		.btn-danger:hover:not(:disabled) {
-			opacity: 0.9;
-			transform: scale(1.02);
-			box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
-		}
-
-		.btn-danger:disabled {
-			opacity: 0.3;
-			cursor: not-allowed;
-			filter: grayscale(1);
-		}
-
-		.btn-ghost {
-			padding: var(--space-2) var(--space-6);
-			border-radius: var(--radius-md);
-			color: var(--fg-2);
-			font-family: var(--font-mono);
-			font-size: 0.75rem;
-			text-transform: uppercase;
-			transition: all 0.2s;
-		}
-
-		.btn-ghost:hover {
-			background: var(--bg-2);
-			color: var(--fg-0);
-		}
-
-		.dialog-input {
-			background: var(--bg-2);
-			border: 1px solid var(--border);
-			padding: var(--space-3) var(--space-4);
-			border-radius: var(--radius-md);
-			color: var(--fg-1);
-			width: 100%;
-		}
-
-		.dialog-input:focus {
-			border-color: var(--accent);
-		}
-
-		.dialog-actions {
-			display: flex;
-			justify-content: flex-end;
-			gap: var(--space-3);
-		}
-
-		.qr-wrapper {
+		/* Portaled Dialog Elements */
+		.list-page-dialog-wrapper {
 			display: flex;
 			flex-direction: column;
 			gap: var(--space-6);
 			margin-top: var(--space-2);
+
+			.input-prefix {
+				color: var(--danger);
+			}
+
+			.input-action-btn.danger {
+				background: var(--danger) !important;
+				color: white !important;
+				border-left: 1px solid rgba(0, 0, 0, 0.2) !important;
+				letter-spacing: 0.05em;
+				padding: 0 var(--space-8) !important;
+
+				&:hover:not(:disabled) {
+					background: #dc2626 !important;
+					box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+				}
+
+				&:disabled {
+					background: var(--bg-2) !important;
+					color: var(--fg-3) !important;
+					opacity: 0.5;
+				}
+			}
 		}
 
-		.qr-wrapper .input-prefix {
-			color: var(--danger);
-		}
-
-		.qr-footer {
+		.list-page-dialog-footer {
 			margin-top: var(--space-2);
 			padding-top: var(--space-4);
 			border-top: 1px dashed var(--border);
 			opacity: 0.4;
 			letter-spacing: 0.2em;
 			font-size: 0.65rem;
-		}
-
-		.input-action-btn.danger {
-			background: var(--danger) !important;
-			color: white !important;
-			border-left: 1px solid rgba(0, 0, 0, 0.2) !important;
-			letter-spacing: 0.05em;
-			padding: 0 var(--space-8) !important;
-		}
-
-		.input-action-btn.danger:hover:not(:disabled) {
-			background: #dc2626 !important;
-			box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
-		}
-
-		.input-action-btn.danger:disabled {
-			background: var(--bg-2) !important;
-			color: var(--fg-3) !important;
-			opacity: 0.5;
 		}
 	}
 </style>

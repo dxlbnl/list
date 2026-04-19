@@ -28,7 +28,7 @@
 	});
 </script>
 
-<Collapsible.Root class="group-wrapper" bind:open={isOpen}>
+<Collapsible.Root class="list-group-container" bind:open={isOpen}>
 	{#if showHeader}
 		<div class="group-header-container">
 			<Collapsible.Trigger class="group-header">
@@ -110,7 +110,7 @@
 						/>
 						<span class="item-name">{item.name}</span>
 						<button
-							class="btn-delete muted"
+							class="btn-delete"
 							onclick={() => onDeleteItem(item)}
 						>
 							×
@@ -158,7 +158,7 @@
 	title="Delete Group"
 	description="Are you sure you want to delete '{groupName}'? All items in this group will be permanently removed."
 >
-	<div class="dialog-actions">
+	<div class="list-group-dialog-actions">
 		<button
 			class="btn-primary danger"
 			onclick={() => {
@@ -173,140 +173,142 @@
 
 <style>
 	:global {
-		.group-wrapper {
+		.list-group-container {
 			display: flex;
 			flex-direction: column;
-		}
 
-		.group-header-container {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			gap: var(--space-2);
-		}
+			.group-header-container {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: var(--space-2);
 
-		.group-header {
-			flex: 1;
-			display: flex !important;
-			flex-direction: row !important;
-			align-items: center !important;
-			gap: var(--space-2);
-			padding: var(--space-2) 0;
-			color: var(--fg-3);
-			background: transparent;
-			border: none;
-			cursor: pointer;
-			user-select: none;
-			transition: color 0.2s;
-			text-align: left;
-
-			&:hover {
-				color: var(--fg-1);
-			}
-
-			.chevron {
-				flex-shrink: 0;
-				transition: transform 0.2s;
-				&.rotated {
-					transform: rotate(90deg);
+				&:hover .group-actions {
+					opacity: 1;
 				}
 			}
 
-			.count {
-				opacity: 0.5;
-				font-variant-numeric: tabular-nums;
+			.group-header {
+				flex: 1;
+				display: flex !important;
+				flex-direction: row !important;
+				align-items: center !important;
+				gap: var(--space-2);
+				padding: var(--space-2) 0;
+				color: var(--fg-3);
+				background: transparent;
+				border: none;
+				cursor: pointer;
+				user-select: none;
+				transition: color 0.2s;
+				text-align: left;
+
+				&:hover {
+					color: var(--fg-1);
+				}
+
+				.chevron {
+					flex-shrink: 0;
+					transition: transform 0.2s;
+					&.rotated {
+						transform: rotate(90deg);
+					}
+				}
+
+				.count {
+					opacity: 0.5;
+					font-variant-numeric: tabular-nums;
+				}
 			}
-		}
 
-		.group-actions {
-			opacity: 0.7;
-			transition: opacity 0.2s;
-		}
-
-		.group-header-container:hover .group-actions {
-			opacity: 1;
-		}
-
-		.btn-icon-tiny {
-			padding: var(--space-1);
-			color: var(--fg-3);
-			border-radius: var(--radius-sm);
-			transition: all 0.2s;
-
-			&:hover {
-				background: var(--bg-2);
-				color: var(--fg-1);
+			.group-actions {
+				opacity: 0.7;
+				transition: opacity 0.2s;
 			}
-		}
 
-		.item-stack {
-			list-style: none;
-			display: flex;
-			flex-direction: column;
-			gap: var(--space-2);
-			padding: var(--space-2) 0;
-			min-height: 20px;
-		}
+			.btn-icon-tiny {
+				padding: var(--space-1);
+				color: var(--fg-3);
+				border-radius: var(--radius-sm);
+				transition: all 0.2s;
 
-		.item-row {
-			background: var(--bg-1);
-			padding: var(--space-3) var(--space-4);
-			border-radius: var(--radius-md);
-			border: 1px solid var(--border);
-			display: flex;
-			align-items: center;
-			gap: var(--space-4);
-			position: relative;
-		}
+				&:hover {
+					background: var(--bg-2);
+					color: var(--fg-1);
+				}
+			}
 
-		.drag-handle {
-			cursor: grab;
-			padding: var(--space-1);
-			opacity: 0.3;
-			transition: opacity 0.2s;
-			user-select: none;
+			.item-stack {
+				list-style: none;
+				display: flex;
+				flex-direction: column;
+				gap: var(--space-2);
+				padding: var(--space-2) 0;
+				min-height: 20px;
+			}
 
-			&:hover {
+			.item-row {
+				background: var(--bg-1);
+				padding: var(--space-3) var(--space-4);
+				border-radius: var(--radius-md);
+				border: 1px solid var(--border);
+				display: flex;
+				align-items: center;
+				gap: var(--space-4);
+				position: relative;
+
+				&.done .item-name {
+					text-decoration: line-through;
+					color: var(--fg-3);
+				}
+
+				&:hover {
+					border-color: var(--border-hover);
+				}
+
+				&[aria-disabled='true'] {
+					opacity: 0.3 !important;
+					background: var(--bg-2) !important;
+					border-style: dashed !important;
+				}
+			}
+
+			.drag-handle {
+				cursor: grab;
+				padding: var(--space-1);
+				opacity: 0.3;
+				transition: opacity 0.2s;
+				user-select: none;
+
+				&:hover {
+					opacity: 1;
+				}
+			}
+
+			.item-name {
+				flex: 1;
+				font-size: 1rem;
+			}
+
+			.btn-delete {
 				opacity: 1;
+				font-family: var(--font-mono);
+				font-size: 0.75rem;
+				color: var(--danger);
+				padding: var(--space-1) var(--space-2);
+				border-radius: var(--radius-sm);
+				transition: all 0.2s;
+				border: 1px solid transparent;
+
+				&:hover {
+					opacity: 1 !important;
+					background: rgba(239, 68, 68, 0.1);
+					border-color: var(--danger);
+				}
 			}
 		}
 
-		.item-row.done .item-name {
-			text-decoration: line-through;
-			color: var(--fg-3);
-		}
-
-		.item-row:hover {
-			border-color: var(--border-hover);
-		}
-
-		.item-name {
-			flex: 1;
-			font-size: 1rem;
-		}
-
-		.btn-delete {
-			opacity: 0.5;
-			font-family: var(--font-mono);
-			font-size: 0.75rem;
-			color: var(--danger);
-			padding: var(--space-1) var(--space-2);
-			border-radius: var(--radius-sm);
-			transition: all 0.2s;
-			border: 1px solid transparent;
-		}
-
-		.item-row:hover .btn-delete {
-			opacity: 1;
-		}
-
-		.btn-delete:hover {
-			opacity: 1 !important;
-			background: rgba(239, 68, 68, 0.1);
-			border-color: var(--danger);
-		}
-
-		/* Global DnD overrides scoped to this component's existence */
+		/* Global DnD overrides - these remain top-level because they target portal-elements */
 		#dnd-action-dragged-el {
 			z-index: 2000 !important;
 			pointer-events: none !important;
@@ -323,27 +325,22 @@
 			color: var(--fg-1);
 		}
 
-		.item-row[aria-disabled="true"] {
-			opacity: 0.3 !important;
-			background: var(--bg-2) !important;
-			border-style: dashed !important;
-		}
-
-		.dialog-actions {
+		/* Dialog specific actions for ListGroup */
+		.list-group-dialog-actions {
 			display: flex;
 			justify-content: flex-end;
 			gap: var(--space-4);
 			margin-top: var(--space-2);
-		}
 
-		.btn-primary.danger {
-			background: var(--danger);
-			color: white;
+			.btn-primary.danger {
+				background: var(--danger);
+				color: white;
 
-			&:hover {
-				background: var(--bg-0);
-				color: var(--danger);
-				border-color: var(--danger);
+				&:hover {
+					background: var(--bg-0);
+					color: var(--danger);
+					border-color: var(--danger);
+				}
 			}
 		}
 	}

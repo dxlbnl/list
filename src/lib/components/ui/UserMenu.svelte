@@ -277,8 +277,8 @@
 		title="Sync Device"
 		description="Scan this QR code with another device to mirror this session. This link expires in 10 minutes."
 	>
-		<div class="qr-wrapper">
-			<div class="qr-container">
+		<div class="user-menu-qr-wrapper">
+			<div class="user-menu-qr-container">
 				{#if isLoadingQr}
 					<div class="qr-placeholder mono small muted">
 						Generating secure key...
@@ -287,15 +287,17 @@
 					<img
 						src={qrCodeDataUrl}
 						alt="Sync QR Code"
-						class="qr-image"
+						class="user-menu-qr-image"
 					/>
 				{:else}
-					<div class="qr-placeholder mono small danger">
+					<div class="user-menu-qr-placeholder mono small danger">
 						Failed to generate key
 					</div>
 				{/if}
 			</div>
-			<div class="qr-footer small muted mono">MIRROR_PROTOCOL_V1</div>
+			<div class="user-menu-qr-footer small muted mono">
+				MIRROR_PROTOCOL_V1
+			</div>
 		</div>
 	</Dialog>
 
@@ -304,7 +306,7 @@
 		title="Delete List"
 		description="This action cannot be undone. To confirm, please type the name of the list: {currentList?.name}"
 	>
-		<div class="qr-wrapper">
+		<div class="user-menu-qr-wrapper">
 			<div class="input-group">
 				<div class="input-prefix">&gt;</div>
 				<input
@@ -321,31 +323,18 @@
 					DELETE
 				</button>
 			</div>
-			<div class="qr-footer small muted mono">DANGER_ZONE_V1</div>
+			<div class="user-menu-qr-footer small muted mono">
+				DANGER_ZONE_V1
+			</div>
 		</div>
 	</Dialog>
 </div>
 
 <style>
-	@keyframes pulse {
-		0% {
-			opacity: 1;
-			transform: scale(1);
-		}
-		50% {
-			opacity: 0.4;
-			transform: scale(1.3);
-		}
-		100% {
-			opacity: 1;
-			transform: scale(1);
-		}
-	}
+	:global {
+		.user-menu-container {
+			position: relative;
 
-	.user-menu-container {
-		position: relative;
-
-		:global {
 			.user-trigger {
 				display: flex;
 				align-items: center;
@@ -431,7 +420,7 @@
 			}
 
 			.pulse {
-				animation: pulse 2s infinite;
+				animation: user-menu-pulse 2s infinite;
 			}
 
 			.chevron {
@@ -439,13 +428,20 @@
 				margin-right: var(--space-2);
 			}
 
-
-
+			@media (max-width: 600px) {
+				.user-id,
+				.user-label-container,
+				.chevron {
+					display: none;
+				}
+				.user-trigger {
+					padding: var(--space-1);
+				}
+			}
 		}
-	}
 
-	:global {
-		.qr-wrapper {
+		/* Portaled elements */
+		.user-menu-qr-wrapper {
 			display: flex;
 			flex-direction: column;
 			align-items: center;
@@ -453,7 +449,7 @@
 			width: 100%;
 		}
 
-		.qr-container {
+		.user-menu-qr-container {
 			display: flex;
 			flex-direction: column;
 			align-items: center;
@@ -466,37 +462,24 @@
 			box-shadow: 0 0 40px rgba(0, 0, 0, 0.3);
 		}
 
-		.qr-image {
+		.user-menu-qr-image {
 			width: 100%;
 			max-width: 250px;
 			image-rendering: pixelated;
 		}
 
-		.qr-placeholder {
+		.user-menu-qr-placeholder {
 			color: #000;
 			text-align: center;
 		}
 
-		.qr-footer {
+		.user-menu-qr-footer {
 			opacity: 0.5;
 			letter-spacing: 2px;
 		}
 	}
 
-	@media (max-width: 600px) {
-		:global {
-			.user-id,
-			.user-label-container,
-			.chevron {
-				display: none;
-			}
-			.user-trigger {
-				padding: var(--space-1);
-			}
-		}
-	}
-
-	@keyframes pulse {
+	@keyframes user-menu-pulse {
 		0% {
 			opacity: 1;
 			transform: scale(1);

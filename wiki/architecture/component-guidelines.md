@@ -43,33 +43,40 @@ Use `...rest` to forward additional props and standard HTML attributes to the un
 ### Modern CSS Nesting
 Leverage native CSS nesting to organize sub-elements, states (`:hover`, `[data-highlighted]`), and semantic variants (`.danger`).
 
-### The Global Wrapper Pattern
-When wrapping components that pass classes to hidden or third-party sub-elements, Svelte's compiler often incorrectly flags selectors as "unused." 
+### Unique Container Scoping
+To prevent global leakage (especially with `:global`), always nest all styles within a unique root class named after the component or page.
 
-**Fix:** Wrap the entire `<style>` block in a `:global {}` block.
-
+**Pattern:**
 ```css
 <style>
   :global {
-    .menu-item {
-      display: flex;
-      
-      &:hover {
-        background: var(--bg-2);
-      }
-      
-      .icon-container {
-        opacity: 0.7;
-      }
+    .unique-component-root {
+      /* All styles here */
+      .child-element { ... }
     }
   }
 </style>
 ```
 
-**Benefits:**
-- Eliminates "Unused CSS selector" warnings.
-- Allows standard nesting without repeating `:global()` on every line.
-- Correctly targets elements rendered by third-party libraries.
+### Portaled Element Naming
+Elements rendered in portals (like Bits UI Dialogs, Menus, or Popovers) live outside your component's root in the DOM. To style them safely without leakage:
+1. **Uniquely Prefix**: Use the component name as a prefix for all portal-specific classes (e.g., `.user-menu-qr-wrapper`).
+2. **Nest Portaled Styles**: Keep these styles in the same `:global` block but outside the main container.
+
+### Mobile-First Visibility
+Avoid patterns that hide critical actions (like Delete) behind hover states only. 
+- **Rule**: Critical actions must be consistently visible (`opacity: 1` or high contrast) by default to support touch devices.
+- **Feedback**: Use background shifts or border color changes for hover feedback instead of basic visibility toggles.
+
+## 4. Data & Persistence Patterns
+
+### Compound Indexing
+For high-performance queries involving multiple fields (e.g., `listId` + `groupName`), always define a compound index in `db.ts`.
+
+### IndexedDB Null Safety
+IndexedDB compound indexes **do not support `null` values**. 
+- **Pattern**: Use an empty string `""` to represent "None" or "General" states in indexed fields to avoid `DataError` crashes.
+- **Normalization**: Normalize incoming data from the server (which may use `null`) before saving it to the local Dexie instance.
 
 ## 4. Aesthetic Consistency
 

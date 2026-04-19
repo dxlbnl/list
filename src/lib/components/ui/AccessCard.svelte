@@ -107,75 +107,75 @@
 			flex-direction: column;
 			box-shadow: var(--shadow-md);
 			overflow: hidden;
-		}
 
-		.card-header {
-			padding: var(--space-6) var(--space-8);
-			border-bottom: 1px solid var(--border);
-			background: rgba(255, 255, 255, 0.02);
-		}
+			.card-header {
+				padding: var(--space-6) var(--space-8);
+				border-bottom: 1px solid var(--border);
+				background: rgba(255, 255, 255, 0.02);
 
-		.card-header h1 {
-			font-family: var(--font-mono);
-			font-size: 1.5rem;
-			letter-spacing: 0.15em;
-			margin-top: var(--space-2);
-			color: var(--fg-0);
-		}
+				h1 {
+					font-family: var(--font-mono);
+					font-size: 1.5rem;
+					letter-spacing: 0.15em;
+					margin-top: var(--space-2);
+					color: var(--fg-0);
+				}
+			}
 
-		.card-body {
-			padding: var(--space-8);
-			display: flex;
-			flex-direction: column;
-			gap: var(--space-6);
-		}
+			.card-body {
+				padding: var(--space-8);
+				display: flex;
+				flex-direction: column;
+				gap: var(--space-6);
+			}
 
-		.description {
-			font-size: 0.95rem;
-			line-height: 1.6;
-		}
+			.description {
+				font-size: 0.95rem;
+				line-height: 1.6;
+			}
 
-		.card-footer {
-			padding: var(--space-4) var(--space-8);
-			background: rgba(0, 0, 0, 0.2);
-			border-top: 1px solid var(--border);
-		}
+			.card-footer {
+				padding: var(--space-4) var(--space-8);
+				background: rgba(0, 0, 0, 0.2);
+				border-top: 1px solid var(--border);
+			}
 
-		.success-message {
-			padding: var(--space-12) var(--space-10);
-			text-align: center;
-			display: flex;
-			flex-direction: column;
-			align-items: center;
-			gap: var(--space-5);
-		}
+			.success-message {
+				padding: var(--space-12) var(--space-10);
+				text-align: center;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				gap: var(--space-4);
+			}
 
-		.success-icon {
-			font-size: 2.5rem;
-			color: var(--accent);
-			margin-bottom: var(--space-2);
-		}
+			.success-icon {
+				font-size: 2.5rem;
+				color: var(--accent);
+				margin-bottom: var(--space-2);
+			}
 
-		.message-text {
-			line-height: 1.6;
-			color: var(--fg-1);
-		}
+			.message-text {
+				line-height: 1.6;
+				color: var(--fg-1);
+			}
 
-		.hint {
-			margin-top: var(--space-6);
-			padding: 0 var(--space-4);
-			color: var(--fg-2);
-			font-size: 0.875rem;
-		}
+			.hint {
+				margin-top: var(--space-6);
+				padding: 0 var(--space-4);
+				color: var(--fg-2);
+				font-size: 0.875rem;
+			}
 
-		.error-text {
-			color: var(--danger);
-			margin-top: var(--space-2);
-		}
-		
-		.terminal-info {
-			color: var(--accent);
-			opacity: 0.8;
+			.error-text {
+				color: var(--danger);
+				margin-top: var(--space-2);
+			}
+
+			.terminal-info {
+				color: var(--accent);
+				opacity: 0.8;
+			}
 		}
 	}
 </style>
