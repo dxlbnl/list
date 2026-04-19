@@ -19,6 +19,7 @@ const LOG_LEVEL = dev ? levels.debug : levels.info;
  */
 class Logger {
 	private transport: ((payload: any) => void) | null = null;
+	private flushFn: (() => Promise<void>) | null = null;
 
 	constructor(private context: Record<string, any> = {}) { }
 
@@ -26,8 +27,18 @@ class Logger {
 	 * Internal method to register a server-side transport (e.g. Axiom).
 	 * This should only be called from server-only code (like hooks.server.ts).
 	 */
-	_setTransport(transport: (payload: any) => void) {
+	_setTransport(transport: (payload: any) => void, flush?: () => Promise<void>) {
 		this.transport = transport;
+		if (flush) this.flushFn = flush;
+	}
+
+	/**
+	 * Flushes any buffered logs. Useful for serverless environments.
+	 */
+	async flush() {
+		if (this.flushFn) {
+			await this.flushFn();
+		}
 	}
 
 	private log(level: LogLevel, message: string, data?: Record<string, any>) {
@@ -111,7 +122,10 @@ class Logger {
 	}
 
 	child(context: Record<string, any>) {
-		return new Logger({ ...this.context, ...context });
+		const child = new Logger({ ...this.context, ...context });
+		child.transport = this.transport;
+		child.flushFn = this.flushFn;
+		return child;
 	}
 }
 
