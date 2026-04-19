@@ -1,17 +1,20 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import type { Snippet } from 'svelte';
 	
 	interface Props {
 		title: string;
 		subtitle?: string;
-		description: string;
-		placeholder: string;
-		actionLabel: string;
-		loadingLabel: string;
-		form: any;
+		description?: string;
+		placeholder?: string;
+		actionLabel?: string;
+		loadingLabel?: string;
+		form?: any;
 		action?: string;
 		successTitle?: string;
 		successMessage?: string;
+		children?: Snippet;
+		footer?: Snippet;
 	}
 
 	let { 
@@ -24,7 +27,9 @@
 		form,
 		action,
 		successTitle = "Magic Link Sent",
-		successMessage = "We've dispatched a secure access link to your inbox. Please verify your identity via the link to continue."
+		successMessage = "We've dispatched a secure access link to your inbox. Please verify your identity via the link to continue.",
+		children,
+		footer
 	}: Props = $props();
 
 	let loading = $state(false);
@@ -38,47 +43,57 @@
 		<h1>{title}</h1>
 	</header>
 
-	{#if form?.success}
-		<div class="success-message">
-			<div class="success-icon">✉</div>
-			<p class="mono tiny uppercase tracking-widest">{successTitle}</p>
-			<p class="message-text">{successMessage}</p>
-			<p class="muted small hint">Check your spam folder if the transmission is delayed.</p>
-		</div>
-	{:else}
-		<div class="card-body">
-			<p class="muted description">{description}</p>
-			
-			<form method="POST" {action} use:enhance={() => {
-				loading = true;
-				return async ({ update }) => {
-					await update();
-					loading = false;
-				};
-			}}>
-				<div class="input-group">
-					<div class="input-prefix">></div>
-					<input 
-						type="email" 
-						name="email" 
-						{placeholder} 
-						required 
-						autofocus
-					/>
-					<button class="input-action-btn" disabled={loading}>
-						{loading ? loadingLabel : actionLabel}
-					</button>
-				</div>
-				{#if form?.error}
-					<p class="error-text mono tiny">{form.error}</p>
+	<div class="card-content">
+		{#if children}
+			{@render children()}
+		{:else if form?.success}
+			<div class="success-message">
+				<div class="success-icon">✉</div>
+				<p class="mono tiny uppercase tracking-widest">{successTitle}</p>
+				<p class="message-text">{successMessage}</p>
+				<p class="muted small hint">Check your spam folder if the transmission is delayed.</p>
+			</div>
+		{:else}
+			<div class="card-body">
+				{#if description}
+					<p class="muted description">{description}</p>
 				{/if}
-			</form>
-		</div>
+				
+				<form method="POST" {action} use:enhance={() => {
+					loading = true;
+					return async ({ update }) => {
+						await update();
+						loading = false;
+					};
+				}}>
+					<div class="input-group">
+						<div class="input-prefix">></div>
+						<input 
+							type="email" 
+							name="email" 
+							{placeholder} 
+							required 
+							autofocus
+						/>
+						<button class="input-action-btn" disabled={loading}>
+							{loading ? loadingLabel : actionLabel}
+						</button>
+					</div>
+					{#if form?.error}
+						<p class="error-text mono tiny">{form.error}</p>
+					{/if}
+				</form>
+			</div>
+		{/if}
+	</div>
 
-		<footer class="card-footer">
+	<footer class="card-footer">
+		{#if footer}
+			{@render footer()}
+		{:else}
 			<p class="mono tiny muted uppercase">Security_Protocol: Magic_Link_Only</p>
-		</footer>
-	{/if}
+		{/if}
+	</footer>
 </div>
 
 <style>
@@ -147,13 +162,20 @@
 		}
 
 		.hint {
-			margin-top: var(--space-2);
+			margin-top: var(--space-6);
 			padding: 0 var(--space-4);
+			color: var(--fg-2);
+			font-size: 0.875rem;
 		}
 
 		.error-text {
 			color: var(--danger);
 			margin-top: var(--space-2);
+		}
+		
+		.terminal-info {
+			color: var(--accent);
+			opacity: 0.8;
 		}
 	}
 </style>
