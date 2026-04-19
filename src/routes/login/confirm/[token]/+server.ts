@@ -4,9 +4,9 @@ import { nanoid } from '$lib/utils';
 import { eq } from 'drizzle-orm';
 import { error, redirect } from '@sveltejs/kit';
 import { dev } from '$app/environment';
-import type { PageServerLoad } from './$types';
+import type { RequestHandler } from './$types';
 
-export const load: PageServerLoad = async ({ params, cookies }) => {
+export const GET: RequestHandler = async ({ params, cookies }) => {
 	const { token } = params;
 
 	const result = await db
