@@ -346,6 +346,21 @@
 </div>
 
 <style>
+	@keyframes pulse {
+		0% {
+			opacity: 1;
+			transform: scale(1);
+		}
+		50% {
+			opacity: 0.4;
+			transform: scale(1.3);
+		}
+		100% {
+			opacity: 1;
+			transform: scale(1);
+		}
+	}
+
 	.user-menu-container {
 		position: relative;
 
@@ -436,21 +451,6 @@
 
 			.pulse {
 				animation: pulse 2s infinite;
-			}
-
-			@keyframes pulse {
-				0% {
-					opacity: 1;
-					transform: scale(1);
-				}
-				50% {
-					opacity: 0.4;
-					transform: scale(1.3);
-				}
-				100% {
-					opacity: 1;
-					transform: scale(1);
-				}
 			}
 
 			.chevron {
@@ -620,6 +620,21 @@
 					padding: var(--space-1);
 				}
 			}
+		}
+	}
+
+	@keyframes pulse {
+		0% {
+			opacity: 1;
+			transform: scale(1);
+		}
+		50% {
+			opacity: 0.4;
+			transform: scale(1.3);
+		}
+		100% {
+			opacity: 1;
+			transform: scale(1);
 		}
 	}
 </style>

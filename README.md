@@ -1,42 +1,92 @@
-# sv
+# 📝 List: High-Performance Collaborative List App
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+A streamlined, **offline-first** collaborative list application built for speed, reliability, and precision. Designed with a "Lab-Bench" aesthetic, it prioritizes functional clarity and robust synchronization.
 
-## Creating a project
+## 🚀 Key Features
 
-If you're seeing this, you've probably already done this step. Congrats!
+- **Offline-First Excellence**: The UI interacts directly with **IndexedDB (via Dexie.js)**. Use the app without an internet connection; changes sync automatically when you're back online.
+- **Real-Time Synchronization**: Intelligent background reconciliation between local state and a **Postgres (Neon)** backend using conflict resolution timestamps.
+- **Magic Link Authentication**: Passwordless login via **Resend**. Anonymous lists created before login are automatically merged into your account upon verification.
+- **Precision Reordering**: Drag-and-drop powered by `svelte-dnd-action` with float-based ranking for O(1) performance.
+- **QR Code Session Migration**: Effortlessly move your current session (even anonymous ones) to a mobile device by scanning a generated QR code from the user menu.
+- **Soft Deletes & Recovery**: Deleted items aren't gone forever. A dedicated "Safe Delete" flow allows for instant restoration of accidentally removed items.
+- **Lab-Bench Aesthetic**: A custom-built design system using vanilla CSS and **Bits UI** primitives, focused on high-density information and professional utility.
 
-```sh
-# create a new project
-npx sv create my-app
-```
+## 🛠️ Technology Stack
 
-To recreate this project with the same configuration:
+| Layer | Technology |
+| :--- | :--- |
+| **Frontend** | SvelteKit 5 (Runes) |
+| **Local Database** | Dexie.js (IndexedDB) |
+| **Remote Database** | Neon (PostgreSQL) |
+| **ORM** | Drizzle ORM |
+| **UI Primitives** | Bits UI (Headless) |
+| **Email/Auth** | Resend + Svelte Email |
+| **Deployment** | Vercel |
 
-```sh
-# recreate this project
-pnpm dlx sv@0.15.1 create --template minimal --types ts --add vitest="usages:unit,component" eslint sveltekit-adapter="adapter:vercel" drizzle="database:postgresql+postgresql:neon" --install pnpm .
-```
+## 🏁 Getting Started
 
-## Developing
+### Prerequisites
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+- [Node.js](https://nodejs.org/) (v20 or later)
+- [pnpm](https://pnpm.io/) (recommended)
 
-```sh
-npm run dev
+### Installation
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-repo/list.git
+   cd list
+   ```
 
-## Building
+2. Install dependencies:
+   ```bash
+   pnpm install
+   ```
 
-To create a production version of your app:
+3. Set up environment variables:
+   Create a `.env` file in the root directory:
+   ```env
+   DATABASE_URL=postgres://...
+   RESEND_API_KEY=re_...
+   PUBLIC_APP_URL=http://localhost:5173
+   ```
 
-```sh
-npm run build
-```
+4. Push the database schema:
+   ```bash
+   pnpm db:push
+   ```
 
-You can preview the production build with `npm run preview`.
+5. Start the development server:
+   ```bash
+   pnpm dev
+   ```
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+## 📖 How to Use
+
+### 1. Managing Lists
+- **Create**: Click the "New List" button on the dashboard to generate a unique list slug.
+- **Collaborate**: Simply share the URL with anyone. If they are logged in (or even anonymous), changes will sync across devices.
+- **Organize**: Use the drag handles to reorder items. The app uses precision ranking to ensure consistency.
+
+### 2. Authentication Flow
+- **Anonymous Mode**: Start using the app immediately without an account.
+- **Securing Your Data**: Enter your email in the settings or login page. You'll receive a magic link.
+- **Merging**: Once verified, any lists you created while anonymous are permanently linked to your verified account.
+- **Migration**: Open the user menu and select "Move to Mobile" (or scan the QR code) to instantly transfer your session to another device without logging in.
+
+### 3. Restoring Items
+- If you delete an item, it enters a "Soft Delete" state.
+- Use the **Restore UI** (often found in the list header or search) to see recently deleted items and bring them back with one click.
+
+## 🏗️ Architecture
+
+The app follows a **Local-First** architecture:
+1. **User Action**: UI updates instantly via Dexie.js.
+2. **Queueing**: The operation is added to a local `syncQueue`.
+3. **Background Sync**: A worker processes the queue, sending batches to the `/api/sync` endpoint.
+4. **Resolution**: The server applies changes and returns any remote updates, which are merged back into IndexedDB.
+
+---
+
+Built with ❤️ by the List Team.
