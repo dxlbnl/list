@@ -302,7 +302,7 @@
 
 				&:hover {
 					opacity: 1 !important;
-					background: rgba(239, 68, 68, 0.1);
+					background: var(--danger-muted);
 					border-color: var(--danger);
 				}
 			}

@@ -413,16 +413,6 @@
 				margin-top: 2px;
 			}
 
-			.status-dot {
-				width: 8px;
-				height: 8px;
-				border-radius: 50%;
-			}
-
-			.pulse {
-				animation: user-menu-pulse 2s infinite;
-			}
-
 			.chevron {
 				opacity: 0.3;
 				margin-right: var(--space-2);
@@ -476,21 +466,6 @@
 		.user-menu-qr-footer {
 			opacity: 0.5;
 			letter-spacing: 2px;
-		}
-	}
-
-	@keyframes user-menu-pulse {
-		0% {
-			opacity: 1;
-			transform: scale(1);
-		}
-		50% {
-			opacity: 0.4;
-			transform: scale(1.3);
-		}
-		100% {
-			opacity: 1;
-			transform: scale(1);
 		}
 	}
 </style>

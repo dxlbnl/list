@@ -26,7 +26,7 @@
 		border-bottom: 1px solid var(--border);
 		position: sticky;
 		top: 0;
-		background: rgba(10, 10, 10, 0.8);
+		background: var(--header-bg);
 		backdrop-filter: blur(12px);
 		z-index: 100;
 	}

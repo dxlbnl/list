@@ -44,12 +44,12 @@
 <style>
 	:global {
 		.menu-content {
-			background: rgba(20, 20, 20, 0.85);
+			background: var(--menu-bg);
 			border: 1px solid var(--border);
 			border-radius: var(--radius-lg);
 			padding: var(--space-2);
 			min-width: 260px;
-			box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+			box-shadow: var(--shadow-md);
 			backdrop-filter: blur(20px) saturate(180%);
 			outline: none;
 			z-index: 1000;

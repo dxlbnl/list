@@ -111,7 +111,7 @@
 			.card-header {
 				padding: var(--space-6) var(--space-8);
 				border-bottom: 1px solid var(--border);
-				background: rgba(255, 255, 255, 0.02);
+				background: var(--subtle-bg);
 
 				h1 {
 					font-family: var(--font-mono);
@@ -136,7 +136,7 @@
 
 			.card-footer {
 				padding: var(--space-4) var(--space-8);
-				background: rgba(0, 0, 0, 0.2);
+				background: var(--footer-bg);
 				border-top: 1px solid var(--border);
 			}
 

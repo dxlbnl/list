@@ -4,6 +4,7 @@
 	import favicon from "$lib/assets/favicon.svg";
 	import { page } from '$app/state';
 	import Header from "./Header.svelte";
+	import { themeManager } from "$lib/client/theme.svelte";
 
 	let { data, children } = $props();
 

@@ -61,7 +61,7 @@
 		.dialog-overlay {
 			position: fixed;
 			inset: 0;
-			background: rgba(0, 0, 0, 0.8);
+			background: var(--overlay-bg);
 			backdrop-filter: blur(4px);
 			z-index: 100;
 		}

@@ -325,13 +325,13 @@
 			.input-action-btn.danger {
 				background: var(--danger) !important;
 				color: white !important;
-				border-left: 1px solid rgba(0, 0, 0, 0.2) !important;
+				border-left: 1px solid var(--border) !important;
 				letter-spacing: 0.05em;
 				padding: 0 var(--space-8) !important;
 
 				&:hover:not(:disabled) {
-					background: #dc2626 !important;
-					box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+					background: var(--danger) !important;
+					box-shadow: 0 0 20px var(--danger-muted);
 				}
 
 				&:disabled {

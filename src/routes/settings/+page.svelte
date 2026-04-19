@@ -1,7 +1,14 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import AccessCard from '$lib/components/ui/AccessCard.svelte';
+	import { themeManager, type Theme } from '$lib/client/theme.svelte';
 	let { data, form } = $props();
+
+	const themes: { id: Theme; label: string }[] = [
+		{ id: 'system', label: 'SYSTEM' },
+		{ id: 'light', label: 'LIGHT' },
+		{ id: 'dark', label: 'DARK' }
+	];
 </script>
 
 <main class="settings-container">
@@ -41,6 +48,26 @@
 					successMessage="Check your email for the magic link to secure your account and merge your anonymous data."
 				/>
 			{/if}
+		</div>
+	</section>
+
+	<section class="settings-section">
+		<h2 class="mono tiny uppercase tracking-widest">Interface_Visuals</h2>
+		<div class="settings-card">
+			<div class="info-row">
+				<span class="label mono tiny muted">THEME_SELECTION</span>
+				<div class="theme-toggle-group">
+					{#each themes as theme}
+						<button 
+							class="theme-btn mono tiny" 
+							class:active={themeManager.current === theme.id}
+							onclick={() => themeManager.set(theme.id)}
+						>
+							{theme.label}
+						</button>
+					{/each}
+				</div>
+			</div>
 		</div>
 	</section>
 
@@ -106,7 +133,7 @@
 		.status-badge.verified {
 			color: var(--success);
 			border-color: var(--success);
-			background: rgba(34, 197, 94, 0.1);
+			background: var(--success-muted);
 		}
 
 		.settings-card {
@@ -123,7 +150,9 @@
 			display: flex;
 			justify-content: space-between;
 			align-items: center;
-			border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+			gap: var(--space-4);
+			flex-wrap: wrap;
+			border-bottom: 1px solid var(--border);
 			padding-bottom: var(--space-2);
 		}
 
@@ -137,7 +166,7 @@
 		}
 
 		.warning-box {
-			background: rgba(239, 68, 68, 0.05);
+			background: var(--danger-muted);
 			border-left: 3px solid var(--danger);
 			padding: var(--space-4);
 			color: var(--fg-2);
@@ -145,7 +174,7 @@
 		}
 
 		.success-box {
-			background: rgba(34, 197, 94, 0.05);
+			background: var(--success-muted);
 			border-left: 3px solid var(--success);
 			padding: var(--space-4);
 			display: flex;
@@ -166,5 +195,36 @@
 		.mb-2 { margin-bottom: var(--space-2); }
 		.block { display: block; }
 		.success { color: var(--success); }
+
+		.theme-toggle-group {
+			display: flex;
+			gap: var(--space-1);
+			background: var(--bg-0);
+			padding: var(--space-1);
+			border-radius: var(--radius-md);
+			border: 1px solid var(--border);
+			flex: 1;
+			justify-content: flex-end;
+			min-width: 200px;
+		}
+
+		.theme-btn {
+			flex: 1;
+			text-align: center;
+			padding: var(--space-1) var(--space-3);
+			border-radius: var(--radius-sm);
+			transition: all 0.2s;
+			color: var(--fg-3);
+			letter-spacing: 0.05em;
+
+			&:hover {
+				color: var(--fg-1);
+			}
+
+			&.active {
+				background: var(--accent);
+				color: white;
+			}
+		}
 	}
 </style>
