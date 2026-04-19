@@ -58,7 +58,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		const preFetchResults = await db.batch(preFetchQueries as [any, ...any[]]);
-		
+
 		const authorizedListIds = new Set((preFetchResults[0] as any[]).map(a => a.listId));
 		const itemIdToListId = new Map<string, string>();
 		if (itemIdsToFetch.length > 0) {
@@ -169,7 +169,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 						if (op.data.rank !== undefined) updateData.rank = op.data.rank;
 						if (op.data.done !== undefined) updateData.done = op.data.done;
 						if (op.data.deletedAt !== undefined) updateData.deletedAt = op.data.deletedAt ? new Date(op.data.deletedAt) : null;
-						
+
 						const itemDate = op.data.updatedAt ? new Date(op.data.updatedAt) : new Date();
 						if (op.data.updatedAt) updateData.updatedAt = itemDate;
 
@@ -188,7 +188,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					opStatusMapping.push({ opIndex: i, success: false, error: 'Unauthorized access to item list' });
 				}
 			}
-			
+
 			if (queryAdded) opStatusMapping.push({ opIndex: i, success: true });
 		}
 
@@ -269,7 +269,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		throw error(500, MESSAGES.DATA.PROCESS_ERROR);
 	}
 };
-};
 
 export const GET: RequestHandler = async ({ locals, url }) => {
 	const user = locals.user;
@@ -282,7 +281,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 	const stream = new ReadableStream({
 		start(controller) {
 			syncLogger.info(`SSE connection started`, { connectionId, userId: user.id, clientId });
-			
+
 			const onUpdate = (payload: any, senderId?: string) => {
 				// Filter out echo messages
 				if (senderId && senderId === clientId) {
@@ -301,7 +300,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 			const cleanup = () => {
 				syncLogger.info(`SSE connection cleanup`, { connectionId, userId: user.id });
 				syncHub.off(`user:${user.id}`, onUpdate);
-				try { controller.close(); } catch (e) {}
+				try { controller.close(); } catch (e) { }
 			};
 
 			syncHub.on(`user:${user.id}`, onUpdate);
