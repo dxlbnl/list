@@ -10,7 +10,8 @@ export const syncOperationSchema = z.object({
 });
 
 export const syncRequestSchema = z.object({
-	operations: z.array(syncOperationSchema)
+	operations: z.array(syncOperationSchema),
+	clientId: z.string().optional()
 });
 
 export const shareListRequestSchema = z.object({

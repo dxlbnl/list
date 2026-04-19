@@ -7,8 +7,8 @@ class SyncManager {
 	isSyncing = $state(false);
 	isOnline = $state(true);
 	lastSyncError = $state<string | null>(null);
-	private eventSource: EventSource | null = null;
 	private activeListIds = new Set<string>();
+	private clientId = Math.random().toString(36).substring(7);
 
 	constructor() {
 		// Start sync loop
@@ -37,7 +37,7 @@ class SyncManager {
 		if (this.eventSource && this.eventSource.readyState !== 2) return;
 		
 		if (this.eventSource) this.eventSource.close();
-		this.eventSource = new EventSource('/api/sync');
+		this.eventSource = new EventSource(`/api/sync?clientId=${this.clientId}`);
 		
 		this.eventSource.onopen = () => {
 			this.isOnline = true;
@@ -56,9 +56,10 @@ class SyncManager {
 						await db.lists.delete(data.listId);
 						await db.items.where('listId').equals(data.listId).delete();
 					} else if (data.list && data.items) {
-						syncLogger.debug(`Instant update received`, { listId: data.listId });
+						syncLogger.debug(`Instant update received via SSE`, { listId: data.listId });
 						await this.pull(data.listId, { list: data.list, items: data.items });
 					} else if (this.activeListIds.has(data.listId)) {
+						syncLogger.debug(`Pulling ${data.listId} due to SSE update message`);
 						await this.pull(data.listId);
 					} else {
 						this.reconcileAllLists();
@@ -117,7 +118,10 @@ class SyncManager {
 			const response = await fetch('/api/sync', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ operations: ops })
+				body: JSON.stringify({ 
+					operations: ops,
+					clientId: this.clientId 
+				})
 			});
 			const fetchDuration = (performance.now() - fetchStart).toFixed(2);
 
@@ -166,9 +170,10 @@ class SyncManager {
 			if (snapshot) {
 				list = snapshot.list;
 				items = snapshot.items;
-				syncLogger.debug(`Reconciling list ${listId} from snapshot`);
+				syncLogger.debug(`Reconciling ${listId} from SSE snapshot (no network fetch)`);
 			} else {
 				const fetchStart = performance.now();
+				syncLogger.debug(`Pulling ${listId} via network...`);
 				const response = await fetch(`/api/lists/${listId}`);
 				const fetchDuration = (performance.now() - fetchStart).toFixed(2);
 
@@ -176,7 +181,7 @@ class SyncManager {
 				const data = await response.json();
 				list = data.list;
 				items = data.items;
-				syncLogger.debug(`Fetched list ${listId} in ${fetchDuration}ms`);
+				syncLogger.debug(`Fetched ${listId} in ${fetchDuration}ms`);
 			}
 
 			// Reconciliation: Only update if not pending local changes AND server is newer

@@ -22,11 +22,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		throw error(400, `${MESSAGES.DATA.PROCESS_ERROR}: ${validation.error.message}`);
 	}
 
-	const { operations } = validation.data;
-	syncLogger.info(`Processing ${operations.length} operations`, { userId: user.id, count: operations.length });
+	const { operations, clientId } = validation.data;
+	syncLogger.info(`Processing ${operations.length} operations`, { userId: user.id, count: operations.length, clientId });
 
 	const results = [];
 	const updatedListIds = new Set<string>();
+	const accessCache = new Set<string>(); // Cache listId access for this request
 
 	const deletedListMembers = new Map<string, string[]>();
 
@@ -57,13 +58,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 						})
 						.onConflictDoNothing();
 				} else if (op.type === 'UPDATE') {
-					// Verify access
-					const access = await db
-						.select()
-						.from(listUsers)
-						.where(and(eq(listUsers.listId, op.entityId), eq(listUsers.userId, user.id)));
+					// Verify access (cached)
+					if (!accessCache.has(op.entityId)) {
+						const access = await db
+							.select()
+							.from(listUsers)
+							.where(and(eq(listUsers.listId, op.entityId), eq(listUsers.userId, user.id)));
+						if (access.length > 0) accessCache.add(op.entityId);
+					}
 					
-					if (access.length > 0) {
+					if (accessCache.has(op.entityId)) {
 						await db
 							.update(lists)
 							.set({ name: op.data.name })
@@ -95,13 +99,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				}
 			} else if (op.entity === 'item') {
 				if (op.type === 'INSERT') {
-					// Verify access to list
-					const access = await db
-						.select()
-						.from(listUsers)
-						.where(and(eq(listUsers.listId, op.data.listId), eq(listUsers.userId, user.id)));
+					// Verify access (cached)
+					if (!accessCache.has(op.data.listId)) {
+						const access = await db
+							.select()
+							.from(listUsers)
+							.where(and(eq(listUsers.listId, op.data.listId), eq(listUsers.userId, user.id)));
+						if (access.length > 0) accessCache.add(op.data.listId);
+					}
 					
-					if (access.length > 0) {
+					if (accessCache.has(op.data.listId)) {
 						await db
 							.insert(items)
 							.values({
@@ -184,10 +191,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	// Broadcast updates
 	const notifications = [];
 	
-	for (const listId of updatedListIds) {
+	// Fetch snapshots and authorized users in parallel for each updated list
+	await Promise.all(Array.from(updatedListIds).map(async (listId) => {
 		if (listId === 'global') {
 			notifications.push({ channel: `user:${user.id}`, payload: { listId: 'global' } });
-			continue;
+			return;
 		}
 
 		const [listRecord] = await db.select().from(lists).where(eq(lists.id, listId));
@@ -211,29 +219,35 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				notifications.push({ channel: `user:${userId}`, payload: { listId, deleted: true } });
 			}
 		}
-	}
+	}));
 
-	// Emit all notifications in order
+	// Emit all notifications
 	for (const { channel, payload } of notifications) {
-		syncLogger.debug(`Pushing update to channel ${channel}`, { channel, listId: payload.listId });
-		syncHub.emit(channel, payload);
+		syncHub.emit(channel, payload, clientId);
 	}
 
 	return json({ results });
 };
 
-export const GET: RequestHandler = async ({ locals }) => {
+export const GET: RequestHandler = async ({ locals, url }) => {
 	const user = locals.user;
 	if (!user) throw error(401, MESSAGES.AUTH.UNAUTHORIZED);
 
+	const clientId = url.searchParams.get('clientId');
 	const encoder = new TextEncoder();
 	const connectionId = Math.random().toString(36).slice(2, 10);
 
 	const stream = new ReadableStream({
 		start(controller) {
-			syncLogger.info(`SSE connection started`, { connectionId, userId: user.id });
+			syncLogger.info(`SSE connection started`, { connectionId, userId: user.id, clientId });
 			
-			const onUpdate = (payload: any) => {
+			const onUpdate = (payload: any, senderId?: string) => {
+				// Filter out echo messages
+				if (senderId && senderId === clientId) {
+					syncLogger.debug(`SSE skipping echo update`, { connectionId, clientId, senderId });
+					return;
+				}
+
 				syncLogger.debug(`SSE sending update`, { connectionId, listId: payload.listId || 'global' });
 				try {
 					controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'update', ...payload })}\n\n`));
