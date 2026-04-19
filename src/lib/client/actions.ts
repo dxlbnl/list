@@ -81,16 +81,35 @@ export async function updateItem(itemId: string, data: any) {
 export async function updateItems(updates: { id: string; data: any }[]) {
 	if (updates.length === 0) return;
 	
-	for (const { id, data } of updates) {
-		await db.items.update(id, { ...data, updatedAt: new Date() });
-		await db.syncQueue.add({
-			type: 'UPDATE',
-			entity: 'item',
-			entityId: id,
-			data: { ...data, updatedAt: new Date() },
-			timestamp: Date.now()
-		});
-	}
+	const now = new Date();
+	const timestamp = Date.now();
+	
+	// Prepare bulk item updates
+	const ids = updates.map(u => u.id);
+	const currentItems = await db.items.bulkGet(ids);
+	const itemMap = new Map(currentItems.filter(Boolean).map(i => [i!.id, i!]));
+
+	const itemUpdates = updates.map(({ id, data }) => {
+		const current = itemMap.get(id);
+		return {
+			...current,
+			...data,
+			updatedAt: now
+		};
+	});
+
+	await db.items.bulkPut(itemUpdates);
+
+	// Prepare bulk sync queue operations
+	const syncOps = updates.map(({ id, data }) => ({
+		type: 'UPDATE' as const,
+		entity: 'item' as const,
+		entityId: id,
+		data: { ...data, updatedAt: now },
+		timestamp
+	}));
+
+	await db.syncQueue.bulkPut(syncOps);
 
 	syncManager.processQueue();
 }

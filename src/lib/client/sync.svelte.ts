@@ -7,6 +7,7 @@ class SyncManager {
 	isSyncing = $state(false);
 	isOnline = $state(true);
 	lastSyncError = $state<string | null>(null);
+	private eventSource: EventSource | null = null;
 	private activeListIds = new Set<string>();
 	private clientId = Math.random().toString(36).substring(7);
 
@@ -219,17 +220,22 @@ class SyncManager {
 			const pendingOps = await db.syncQueue.where('entity').equals('item').toArray();
 			const pendingItemIds = new Set(pendingOps.map(op => op.entityId));
 
+			// Fetch all local items for this list once to avoid O(N) queries
+			const localItems = await db.items.where('listId').equals(listId).toArray();
+			const localItemMap = new Map(localItems.map(i => [i.id, i]));
+			
+			const itemsToPut: any[] = [];
+			const serverItemIds = new Set();
+
 			for (const item of items) {
-				const localItem = await db.items.get(item.id);
+				serverItemIds.add(item.id);
+				const localItem = localItemMap.get(item.id);
 				const serverUpdatedAt = new Date(item.updatedAt);
 				
-				// Only update if:
-				// 1. We don't have pending changes for this item
-				// 2. AND (we don't have the item OR the server version is strictly newer)
 				const isNewer = !localItem || serverUpdatedAt > new Date(localItem.updatedAt);
 
 				if (!pendingItemIds.has(item.id) && isNewer) {
-					await db.items.put({
+					itemsToPut.push({
 						...item,
 						groupName: item.groupName || "",
 						deletedAt: item.deletedAt ? new Date(item.deletedAt) : null,
@@ -238,14 +244,20 @@ class SyncManager {
 				}
 			}
 
+			if (itemsToPut.length > 0) {
+				await db.items.bulkPut(itemsToPut);
+			}
+
 			// Handle deleted items that are gone from server
-			const serverItemIds = new Set(items.map((i: any) => i.id));
-			const localItems = await db.items.where('listId').equals(listId).toArray();
-			
+			const idsToDelete: string[] = [];
 			for (const localItem of localItems) {
 				if (!serverItemIds.has(localItem.id) && !pendingItemIds.has(localItem.id)) {
-					await db.items.delete(localItem.id);
+					idsToDelete.push(localItem.id);
 				}
+			}
+			
+			if (idsToDelete.length > 0) {
+				await db.items.bulkDelete(idsToDelete);
 			}
 
 			const totalDuration = (performance.now() - startTime).toFixed(2);
@@ -267,23 +279,34 @@ class SyncManager {
 			const pendingListOps = await db.syncQueue.where('entity').equals('list').toArray();
 			const pendingListIds = new Set(pendingListOps.map(op => op.entityId));
 
+			const listsToPut: any[] = [];
 			for (const list of lists) {
 				if (!pendingListIds.has(list.id)) {
-					await db.lists.put({
+					listsToPut.push({
 						...list,
 						createdAt: new Date(list.createdAt)
 					});
 				}
 			}
+			if (listsToPut.length > 0) {
+				await db.lists.bulkPut(listsToPut);
+			}
 
 			// Optional: Remove local lists that were deleted on server
 			const serverListIds = new Set(lists.map((l: any) => l.id));
 			const localLists = await db.lists.toArray();
+			const listIdsToDelete: string[] = [];
+
 			for (const localList of localLists) {
 				if (!serverListIds.has(localList.id) && !pendingListIds.has(localList.id) && !localList.isLocalOnly) {
-					await db.lists.delete(localList.id);
+					listIdsToDelete.push(localList.id);
+					// Items must still be deleted per-list-id unless we do a bulk delete by criteria
 					await db.items.where('listId').equals(localList.id).delete();
 				}
+			}
+
+			if (listIdsToDelete.length > 0) {
+				await db.lists.bulkDelete(listIdsToDelete);
 			}
 		} catch (e) {
 			syncLogger.error('Reconcile all lists error', {}, e);

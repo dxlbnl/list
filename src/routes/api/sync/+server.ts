@@ -134,20 +134,25 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 							});
 					}
 				} else if (op.type === 'UPDATE') {
-					// Get current item to find its listId
-					const currentItem = await db
-						.select()
-						.from(items)
-						.where(eq(items.id, op.entityId));
+					// Verify access (cached) first if we don't have listId, or if we do
+					// Actually, op.data might not have listId. Let's get the item first to know its listId, 
+					// OR we can just update it and return the listId if we verify access via a subquery.
+					// Since Drizzle is tricky with cross-table updates, let's just fetch the current item once.
+					const currentItem = await db.select().from(items).where(eq(items.id, op.entityId)).limit(1);
 					
 					if (currentItem.length > 0) {
-						// Verify access
-						const access = await db
-							.select()
-							.from(listUsers)
-							.where(and(eq(listUsers.listId, currentItem[0].listId), eq(listUsers.userId, user.id)));
+						const listId = currentItem[0].listId;
 						
-						if (access.length > 0) {
+						// Verify access (cached)
+						if (!accessCache.has(listId)) {
+							const access = await db
+								.select()
+								.from(listUsers)
+								.where(and(eq(listUsers.listId, listId), eq(listUsers.userId, user.id)));
+							if (access.length > 0) accessCache.add(listId);
+						}
+						
+						if (accessCache.has(listId)) {
 							await db
 								.update(items)
 								.set({
@@ -159,6 +164,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 									updatedAt: new Date()
 								})
 								.where(eq(items.id, op.entityId));
+							
+							// Ensure we don't need to fetch it again for notifications
+							op.data.listId = listId;
 						}
 					}
 				}
@@ -174,7 +182,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			if (op.entity === 'item') {
 				let listIdToNotify = op.data?.listId;
 				if (!listIdToNotify) {
-					const itemRecord = await db.select().from(items).where(eq(items.id, op.entityId)).limit(1);
+					// This should rarely happen now that UPDATE sets op.data.listId
+					const itemRecord = await db.select({ listId: items.listId }).from(items).where(eq(items.id, op.entityId)).limit(1);
 					if (itemRecord[0]) listIdToNotify = itemRecord[0].listId;
 				}
 				if (listIdToNotify) {
