@@ -2,7 +2,7 @@ import { getSession, createAnonymousSession } from '$lib/server/auth';
 import type { Handle, HandleServerError } from '@sveltejs/kit';
 import { logger } from '$lib/logger';
 import { dev } from '$app/environment';
-import { getAxiomClient, getAxiomDataset } from '$lib/server/logger';
+import { getAxiomClient, getAxiomDataset, flush } from '$lib/server/logger';
 
 // Register Axiom transport on the server in production
 if (!dev) {
@@ -11,7 +11,7 @@ if (!dev) {
 	if (axiom && dataset) {
 		logger._setTransport((payload) => {
 			axiom.ingest(dataset, [payload]);
-		});
+		}, flush);
 	}
 }
 
@@ -40,14 +40,23 @@ export const handle: Handle = async ({ event, resolve }) => {
 		userId: event.locals.user?.id
 	});
 
+	// Ensure logs are sent to Axiom before Vercel freezes the function
+	if (!dev) {
+		await logger.flush();
+	}
+
 	return response;
 };
 
-export const handleError: HandleServerError = ({ error, event }) => {
+export const handleError: HandleServerError = async ({ error, event }) => {
 	logger.error(`Unhandled server error: ${event.url.pathname}`, {
 		path: event.url.pathname,
 		userId: event.locals.user?.id
 	}, error);
+
+	if (!dev) {
+		await logger.flush();
+	}
 
 	return {
 		message: 'An unexpected error occurred.',

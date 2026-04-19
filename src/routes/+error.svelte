@@ -92,10 +92,6 @@
 			font-weight: bold;
 		}
 
-		.command {
-			color: var(--fg-1);
-		}
-
 		.message {
 			color: var(--fg-1);
 		}

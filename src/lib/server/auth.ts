@@ -38,11 +38,14 @@ export async function createAnonymousSession(event: RequestEvent) {
 	// True permanence for persistent cookie
 	const farFuture = new Date('9999-12-31');
 
-	await db.insert(users).values({
+	const userValues = {
 		id: userId,
 		email: null,
-		email_verified: false
-	});
+		email_verified: false,
+		createdAt: new Date()
+	};
+
+	await db.insert(users).values(userValues);
 
 	await db.insert(sessions).values({
 		id: sessionId,
@@ -61,6 +64,6 @@ export async function createAnonymousSession(event: RequestEvent) {
 
 	return {
 		session: { id: sessionId, userId },
-		user: { id: userId, email: null, emailVerified: false }
+		user: userValues
 	};
 }

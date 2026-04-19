@@ -7,7 +7,8 @@ declare global {
 			user: {
 				id: string;
 				email: string | null;
-				emailVerified: boolean;
+				email_verified: boolean;
+				createdAt: Date;
 			} | null;
 			session: {
 				id: string;

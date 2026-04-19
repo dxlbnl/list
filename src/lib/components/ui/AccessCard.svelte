@@ -2,6 +2,7 @@
 	import { enhance } from "$app/forms";
 	import type { Snippet } from "svelte";
 	import { MESSAGES } from "$lib/constants/messages";
+	import { onMount, tick } from "svelte";
 
 	interface Props {
 		title: string;
@@ -34,6 +35,12 @@
 	}: Props = $props();
 
 	let loading = $state(false);
+	let inputElement: HTMLInputElement | undefined = $state();
+
+	onMount(async () => {
+		await tick();
+		inputElement?.focus();
+	});
 </script>
 
 <div class="access-card">
@@ -82,11 +89,11 @@
 					<div class="input-group">
 						<div class="input-prefix">></div>
 						<input
+							bind:this={inputElement}
 							type="email"
 							name="email"
 							{placeholder}
 							required
-							autofocus
 						/>
 						<button class="input-action-btn" disabled={loading}>
 							{loading ? loadingLabel : actionLabel}

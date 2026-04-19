@@ -34,25 +34,23 @@
 			{/snippet}
 		</BitsDialog.Overlay>
 		<BitsDialog.Content class="dialog-content" forceMount>
-			{#snippet child({ wrapperProps, props, open })}
+			{#snippet child({ props, open })}
 				{#if open}
-					<div {...wrapperProps}>
-						<div {...props} transition:fly={{ y: 20, duration: 300 }}>
-							<BitsDialog.Title class="dialog-title">{title}</BitsDialog.Title>
-							{#if description}
-								<BitsDialog.Description class="muted small">
-									{description}
-								</BitsDialog.Description>
-							{/if}
-							
-							<div class="dialog-body">
-								{@render children()}
-							</div>
-
-							<BitsDialog.Close class="dialog-close">
-								×
-							</BitsDialog.Close>
+					<div {...props} transition:fly={{ y: 20, duration: 300 }}>
+						<BitsDialog.Title class="dialog-title">{title}</BitsDialog.Title>
+						{#if description}
+							<BitsDialog.Description class="muted small">
+								{description}
+							</BitsDialog.Description>
+						{/if}
+						
+						<div class="dialog-body">
+							{@render children()}
 						</div>
+
+						<BitsDialog.Close class="dialog-close">
+							×
+						</BitsDialog.Close>
 					</div>
 				{/if}
 			{/snippet}

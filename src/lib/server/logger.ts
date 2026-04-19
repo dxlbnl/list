@@ -13,3 +13,9 @@ export function getAxiomClient() {
 export function getAxiomDataset() {
 	return env.AXIOM_DATASET;
 }
+
+export async function flush() {
+	if (axiom) {
+		await axiom.flush();
+	}
+}

@@ -71,6 +71,4 @@
 	}
 
 	.w-full { width: 100%; }
-	.mt-4 { margin-top: var(--space-4); }
-	.text-center { text-align: center; }
 </style>
