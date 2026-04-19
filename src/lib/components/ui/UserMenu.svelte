@@ -418,7 +418,7 @@
 				margin-right: var(--space-2);
 			}
 
-			@media (max-width: 600px) {
+			@media (max-width: 250px) {
 				.user-id,
 				.user-label-container,
 				.chevron {
