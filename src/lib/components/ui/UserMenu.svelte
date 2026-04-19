@@ -129,8 +129,15 @@
 								transition:fly={{ y: 8, duration: 200 }}
 							>
 								<div class="menu-status-header">
-									<div class="status-dot" style:background={statusColor} class:pulse={syncManager.isSyncing}></div>
-									<span class="tiny muted mono uppercase tracking-widest">{statusText}</span>
+									<div
+										class="status-dot"
+										style:background={statusColor}
+										class:pulse={syncManager.isSyncing}
+									></div>
+									<span
+										class="tiny muted mono uppercase tracking-widest"
+										>{statusText}</span
+									>
 								</div>
 
 								<DropdownMenu.Separator class="separator" />
@@ -165,8 +172,6 @@
 											</div>
 											<span>Settings</span>
 										</DropdownMenu.Item>
-
-
 									{:else}
 										<DropdownMenu.Item
 											class="menu-item highlight-accent"
@@ -212,7 +217,16 @@
 													stroke-width="2"
 													stroke-linecap="round"
 													stroke-linejoin="round"
-													><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" /></svg
+													><path
+														d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"
+													/><polyline
+														points="10 17 15 12 10 7"
+													/><line
+														x1="15"
+														y1="12"
+														x2="3"
+														y2="12"
+													/></svg
 												>
 											</div>
 											<span>Login</span>
@@ -276,7 +290,16 @@
 													stroke-width="2"
 													stroke-linecap="round"
 													stroke-linejoin="round"
-													><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg
+													><path
+														d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
+													/><polyline
+														points="16 17 21 12 16 7"
+													/><line
+														x1="21"
+														y1="12"
+														x2="9"
+														y2="12"
+													/></svg
 												>
 											</div>
 											<span>Logout</span>
@@ -585,11 +608,12 @@
 				flex-direction: column;
 				align-items: center;
 				justify-content: center;
-				min-height: 250px;
-				width: 100%;
+				width: 280px;
+				height: 280px;
 				background: white;
 				border-radius: var(--radius-md);
 				padding: var(--space-4);
+				box-shadow: 0 0 40px rgba(0, 0, 0, 0.3);
 			}
 
 			.qr-image {

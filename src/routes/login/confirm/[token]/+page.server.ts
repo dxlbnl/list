@@ -1,11 +1,12 @@
 import { db } from '$lib/server/db';
 import { users, sessions, magicLinks, lists } from '$lib/server/db/schema';
 import { nanoid } from '$lib/utils';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { error, redirect } from '@sveltejs/kit';
-import type { RequestHandler } from './$types';
+import { dev } from '$app/environment';
+import type { PageServerLoad } from './$types';
 
-export const GET: RequestHandler = async ({ params, cookies }) => {
+export const load: PageServerLoad = async ({ params, cookies }) => {
 	const { token } = params;
 
 	const result = await db
@@ -89,7 +90,7 @@ export const GET: RequestHandler = async ({ params, cookies }) => {
 		expires: farFuture,
 		httpOnly: true,
 		sameSite: 'lax',
-		secure: process.env.NODE_ENV === 'production'
+		secure: !dev
 	});
 
 	throw redirect(303, '/login/confirmed');
