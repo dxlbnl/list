@@ -2,6 +2,7 @@ import { db } from '$lib/server/db';
 import { magicLinks } from '$lib/server/db/schema';
 import { nanoid } from '$lib/utils';
 import { fail, redirect } from '@sveltejs/kit';
+import { MESSAGES } from '$lib/constants/messages';
 import { sendMagicLink } from '$lib/server/email';
 import { checkRateLimit } from '$lib/server/ratelimit';
 import type { Actions, PageServerLoad } from './$types';
@@ -22,18 +23,18 @@ export const actions: Actions = {
 		const ip = getClientAddress();
 		const allowed = await checkRateLimit(`secure-email:${ip}`, 3, 10);
 		if (!allowed) {
-			return fail(429, { error: 'Too many requests. Please try again in 10 minutes.' });
+			return fail(429, { error: MESSAGES.AUTH.RATE_LIMIT });
 		}
 
 		const formData = await request.formData();
 		const email = formData.get('email')?.toString();
 
 		if (!email) {
-			return fail(400, { error: 'Email is required' });
+			return fail(400, { error: MESSAGES.AUTH.EMAIL_REQUIRED });
 		}
 
 		if (!locals.user) {
-			return fail(401, { error: 'Not authenticated' });
+			return fail(401, { error: MESSAGES.AUTH.NOT_AUTHENTICATED });
 		}
 
 		// Generate token

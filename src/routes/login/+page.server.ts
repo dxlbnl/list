@@ -3,6 +3,7 @@ import { users, magicLinks } from '$lib/server/db/schema';
 import { nanoid } from '$lib/utils';
 import { eq, and } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
+import { MESSAGES } from '$lib/constants/messages';
 import { sendMagicLink } from '$lib/server/email';
 import { checkRateLimit } from '$lib/server/ratelimit';
 import type { Actions } from './$types';
@@ -13,14 +14,14 @@ export const actions: Actions = {
 		const ip = getClientAddress();
 		const allowed = await checkRateLimit(`login-email:${ip}`, 3, 10);
 		if (!allowed) {
-			return fail(429, { error: 'Too many requests. Please try again in 10 minutes.' });
+			return fail(429, { error: MESSAGES.AUTH.RATE_LIMIT });
 		}
 
 		const formData = await request.formData();
 		const email = formData.get('email')?.toString();
 
 		if (!email) {
-			return fail(400, { error: 'Email is required' });
+			return fail(400, { error: MESSAGES.AUTH.EMAIL_REQUIRED });
 		}
 
 		// Check if user exists and is verified

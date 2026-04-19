@@ -3,6 +3,7 @@ import { users, sessions, magicLinks, lists, listUsers } from '$lib/server/db/sc
 import { nanoid } from '$lib/utils';
 import { eq, and, inArray } from 'drizzle-orm';
 import { error, redirect } from '@sveltejs/kit';
+import { MESSAGES } from '$lib/constants/messages';
 import { dev } from '$app/environment';
 import type { PageServerLoad, Actions } from './$types';
 
@@ -15,13 +16,13 @@ export const load: PageServerLoad = async ({ params }) => {
 		.where(eq(magicLinks.token, token));
 
 	if (result.length === 0) {
-		throw error(400, 'Invalid or expired magic link');
+		throw error(400, MESSAGES.AUTH.INVALID_TOKEN);
 	}
 
 	const link = result[0];
 	if (Date.now() >= link.expiresAt.getTime()) {
 		await db.delete(magicLinks).where(eq(magicLinks.token, token));
-		throw error(400, 'Magic link has expired');
+		throw error(400, MESSAGES.AUTH.EXPIRED_TOKEN);
 	}
 
 	return { token };
@@ -140,7 +141,7 @@ export const actions: Actions = {
 			// Session Cloning Case: No email, just a userId to clone
 			targetUserId = link.userIdToMerge;
 		} else {
-			throw error(400, 'Invalid magic link: no email or user to merge');
+			throw error(400, MESSAGES.AUTH.CONTEXT_MISSING);
 		}
 
 		// 4. Create new session

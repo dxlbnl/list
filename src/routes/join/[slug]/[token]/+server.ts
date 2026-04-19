@@ -2,6 +2,7 @@ import { db } from '$lib/server/db';
 import { lists, listUsers, listInvites } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { error, redirect } from '@sveltejs/kit';
+import { MESSAGES } from '$lib/constants/messages';
 import { nanoid } from '$lib/utils';
 import type { RequestHandler } from './$types';
 
@@ -9,7 +10,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	const { token } = params;
 	const user = locals.user;
 
-	if (!user) throw error(401, 'Unauthorized');
+	if (!user) throw error(401, MESSAGES.AUTH.UNAUTHORIZED);
 
 	// 1. Validate Invite
 	const invite = await db.query.listInvites.findFirst({
@@ -17,12 +18,12 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	});
 
 	if (!invite) {
-		throw error(404, 'Invite link not found or expired');
+		throw error(404, MESSAGES.DATA.NOT_FOUND);
 	}
 
 	if (invite.expiresAt && invite.expiresAt < new Date()) {
 		await db.delete(listInvites).where(eq(listInvites.token, token));
-		throw error(410, 'Invite link has expired');
+		throw error(410, MESSAGES.DATA.INVITE_EXPIRED);
 	}
 
 	// 2. Grant Access
@@ -39,7 +40,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		where: eq(lists.id, invite.listId)
 	});
 
-	if (!list) throw error(404, 'List not found');
+	if (!list) throw error(404, MESSAGES.DATA.NOT_FOUND);
 
 	// 4. Check for slug collision for THIS user
 	// A collision occurs if the user ALREADY has a list with this slug that they CREATED.

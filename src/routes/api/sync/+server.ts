@@ -2,20 +2,21 @@ import { db } from '$lib/server/db';
 import { lists, items, listUsers } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { error, json } from '@sveltejs/kit';
+import { MESSAGES } from '$lib/constants/messages';
 import type { RequestHandler } from './$types';
 import { syncHub } from '$lib/server/sync';
 import { syncRequestSchema } from '$lib/validations';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const user = locals.user;
-	if (!user) throw error(401, 'Unauthorized');
+	if (!user) throw error(401, MESSAGES.AUTH.UNAUTHORIZED);
 
 	const body = await request.json();
 	const validation = syncRequestSchema.safeParse(body);
 
 	if (!validation.success) {
 		console.error('Sync validation failed:', validation.error.format());
-		throw error(400, `Invalid request format: ${validation.error.message}`);
+		throw error(400, `${MESSAGES.DATA.PROCESS_ERROR}: ${validation.error.message}`);
 	}
 
 	const { operations } = validation.data;
@@ -219,7 +220,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 export const GET: RequestHandler = async ({ locals }) => {
 	const user = locals.user;
-	if (!user) throw error(401, 'Unauthorized');
+	if (!user) throw error(401, MESSAGES.AUTH.UNAUTHORIZED);
 
 	const encoder = new TextEncoder();
 	const connectionId = Math.random().toString(36).slice(2, 10);

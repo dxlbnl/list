@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from "$app/forms";
 	import type { Snippet } from "svelte";
+	import { MESSAGES } from "$lib/constants/messages";
 
 	interface Props {
 		title: string;
@@ -26,8 +27,8 @@
 		loadingLabel,
 		form,
 		action,
-		successTitle = "Magic Link Sent",
-		successMessage = "We've dispatched a secure access link to your inbox. Please verify your identity via the link to continue.",
+		successTitle = MESSAGES.AUTH.MAGIC_LINK_SENT_TITLE,
+		successMessage = MESSAGES.AUTH.MAGIC_LINK_SENT_MESSAGE,
 		children,
 		footer,
 	}: Props = $props();
@@ -58,7 +59,7 @@
 				</p>
 				<p class="message-text">{successMessage}</p>
 				<p class="muted small hint">
-					Check your spam folder if the transmission is delayed.
+					{MESSAGES.AUTH.MAGIC_LINK_HINT}
 				</p>
 			</div>
 		{:else}
