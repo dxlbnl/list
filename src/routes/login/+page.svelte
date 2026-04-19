@@ -11,6 +11,7 @@
 		placeholder="IDENTITY_EMAIL_ADDRESS"
 		actionLabel="DISPATCH"
 		loadingLabel="SENDING..."
+		successMessage="If a verified account exists for this email, you will receive a secure access link shortly."
 	/>
 </main>
 

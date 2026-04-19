@@ -4,16 +4,21 @@ import { eq, and } from 'drizzle-orm';
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { syncHub } from '$lib/server/sync';
+import { syncRequestSchema } from '$lib/validations';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const user = locals.user;
 	if (!user) throw error(401, 'Unauthorized');
 
-	const { operations } = await request.json();
+	const body = await request.json();
+	const validation = syncRequestSchema.safeParse(body);
 
-	if (!Array.isArray(operations)) {
-		throw error(400, 'Invalid operations format');
+	if (!validation.success) {
+		console.error('Sync validation failed:', validation.error.format());
+		throw error(400, `Invalid request format: ${validation.error.message}`);
 	}
+
+	const { operations } = validation.data;
 
 	const results = [];
 	const updatedListIds = new Set<string>();

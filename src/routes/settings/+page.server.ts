@@ -3,6 +3,7 @@ import { magicLinks } from '$lib/server/db/schema';
 import { nanoid } from '$lib/utils';
 import { fail, redirect } from '@sveltejs/kit';
 import { sendMagicLink } from '$lib/server/email';
+import { checkRateLimit } from '$lib/server/ratelimit';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -16,7 +17,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
-	secureAccount: async ({ request, locals, url }) => {
+	secureAccount: async ({ request, locals, url, getClientAddress }) => {
+		// Rate limit: 3 emails per 10 minutes per IP
+		const ip = getClientAddress();
+		const allowed = await checkRateLimit(`secure-email:${ip}`, 3, 10);
+		if (!allowed) {
+			return fail(429, { error: 'Too many requests. Please try again in 10 minutes.' });
+		}
+
 		const formData = await request.formData();
 		const email = formData.get('email')?.toString();
 

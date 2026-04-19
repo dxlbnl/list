@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, doublePrecision, primaryKey, unique } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, doublePrecision, primaryKey, unique, integer } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
 	id: text('id').primaryKey(),
@@ -71,4 +71,10 @@ export const items = pgTable('items', {
 	done: boolean('done').notNull().default(false),
 	deletedAt: timestamp('deleted_at'),
 	updatedAt: timestamp('updated_at').notNull().defaultNow()
+});
+
+export const rateLimits = pgTable('rate_limits', {
+	key: text('key').primaryKey(),
+	count: integer('count').notNull().default(0),
+	resetAt: timestamp('reset_at').notNull()
 });

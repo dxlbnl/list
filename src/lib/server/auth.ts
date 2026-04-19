@@ -2,6 +2,7 @@ import { db } from '$lib/server/db';
 import { users, sessions } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import type { RequestEvent } from '@sveltejs/kit';
+import { dev } from '$app/environment';
 
 const SESSION_COOKIE_NAME = 'auth_session';
 
@@ -49,7 +50,7 @@ export async function createAnonymousSession(event: RequestEvent) {
 		expires: farFuture,
 		httpOnly: true,
 		sameSite: 'lax',
-		secure: process.env.NODE_ENV === 'production'
+		secure: !dev
 	});
 
 	return {

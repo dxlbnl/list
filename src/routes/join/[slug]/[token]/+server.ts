@@ -2,6 +2,7 @@ import { db } from '$lib/server/db';
 import { lists, listUsers, listInvites } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { error, redirect } from '@sveltejs/kit';
+import { nanoid } from '$lib/utils';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ params, locals }) => {
@@ -49,8 +50,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	let redirectSlug = list.slug;
 	if (myOwnListWithSameSlug && myOwnListWithSameSlug.id !== list.id) {
 		// Collision! Redirect to disambiguated slug
-		const ownerPrefix = list.createdBy.slice(0, 8);
-		redirectSlug = `${list.slug}--${ownerPrefix}`;
+		redirectSlug = `${list.slug}--${nanoid(4)}`;
 	}
 
 	throw redirect(303, `/${redirectSlug}`);

@@ -8,6 +8,7 @@
 	import { deleteList } from "$lib/client/actions";
 	import { goto } from "$app/navigation";
 	import { menuState } from "$lib/client/menu.svelte";
+	import { db as dexieDb } from "$lib/client/db";
 
 	let { user } = $props();
 
@@ -53,6 +54,13 @@
 			handleSyncDevice();
 		}
 	});
+
+	async function handleLogout() {
+		// Clear local database to prevent data leaking
+		await dexieDb.delete();
+		// Redirect to server-side logout
+		window.location.href = "/logout";
+	}
 
 	const statusColor = $derived(
 		!syncManager.isOnline
@@ -240,10 +248,7 @@
 			{#if user?.email_verified}
 				<Menu.Separator />
 				<Menu.Group>
-					<Menu.Item
-						danger
-						onSelect={() => (window.location.href = "/logout")}
-					>
+					<Menu.Item danger onSelect={handleLogout}>
 						<div class="icon-container">
 							<svg
 								xmlns="http://www.w3.org/2000/svg"

@@ -3,14 +3,22 @@ import { lists, listUsers, listInvites } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { error, json } from '@sveltejs/kit';
 import { nanoid } from '$lib/utils';
+import { shareListRequestSchema } from '$lib/validations';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ params, locals, request, url }) => {
 	const user = locals.user;
 	if (!user) throw error(401, 'Unauthorized');
 
+	const body = await request.json();
+	const validation = shareListRequestSchema.safeParse(body);
+
+	if (!validation.success) {
+		throw error(400, `Invalid request: ${validation.error.message}`);
+	}
+
+	const { expiresAt } = validation.data;
 	const listId = params.id;
-	const { expiresAt } = await request.json();
 
 	// Verify access
 	const access = await db

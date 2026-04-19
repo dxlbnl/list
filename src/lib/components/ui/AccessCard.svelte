@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
-	import type { Snippet } from 'svelte';
-	
+	import { enhance } from "$app/forms";
+	import type { Snippet } from "svelte";
+
 	interface Props {
 		title: string;
 		subtitle?: string;
@@ -17,19 +17,19 @@
 		footer?: Snippet;
 	}
 
-	let { 
-		title, 
-		subtitle = "System_Access_Portal // V2.4", 
-		description, 
-		placeholder, 
-		actionLabel, 
-		loadingLabel, 
+	let {
+		title,
+		subtitle = "System_Access_Portal // V2.4",
+		description,
+		placeholder,
+		actionLabel,
+		loadingLabel,
 		form,
 		action,
 		successTitle = "Magic Link Sent",
 		successMessage = "We've dispatched a secure access link to your inbox. Please verify your identity via the link to continue.",
 		children,
-		footer
+		footer,
 	}: Props = $props();
 
 	let loading = $state(false);
@@ -45,34 +45,46 @@
 
 	<div class="card-content">
 		{#if children}
-			{@render children()}
+			<div class="card-body">
+				{@render children()}
+			</div>
 		{:else if form?.success}
 			<div class="success-message">
 				<div class="success-icon">✉</div>
-				<p class="mono tiny uppercase tracking-widest">{successTitle}</p>
+				<p
+					class="mTo protect your account, please confirm you want ono tiny uppercase tracking-widest"
+				>
+					{successTitle}
+				</p>
 				<p class="message-text">{successMessage}</p>
-				<p class="muted small hint">Check your spam folder if the transmission is delayed.</p>
+				<p class="muted small hint">
+					Check your spam folder if the transmission is delayed.
+				</p>
 			</div>
 		{:else}
 			<div class="card-body">
 				{#if description}
 					<p class="muted description">{description}</p>
 				{/if}
-				
-				<form method="POST" {action} use:enhance={() => {
-					loading = true;
-					return async ({ update }) => {
-						await update();
-						loading = false;
-					};
-				}}>
+
+				<form
+					method="POST"
+					{action}
+					use:enhance={() => {
+						loading = true;
+						return async ({ update }) => {
+							await update();
+							loading = false;
+						};
+					}}
+				>
 					<div class="input-group">
 						<div class="input-prefix">></div>
-						<input 
-							type="email" 
-							name="email" 
-							{placeholder} 
-							required 
+						<input
+							type="email"
+							name="email"
+							{placeholder}
+							required
 							autofocus
 						/>
 						<button class="input-action-btn" disabled={loading}>
@@ -91,7 +103,9 @@
 		{#if footer}
 			{@render footer()}
 		{:else}
-			<p class="mono tiny muted uppercase">Security_Protocol: Magic_Link_Only</p>
+			<p class="mono tiny muted uppercase">
+				Security_Protocol: Magic_Link_Only
+			</p>
 		{/if}
 	</footer>
 </div>
