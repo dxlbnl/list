@@ -11,23 +11,26 @@
 ## Sync Engine
 - [x] Client-side Sync Queue
 - [x] Server-side Batch Sync API
-- [ ] Server-Sent Events (SSE) for real-time updates (Pull)
-- [ ] SSE Reconnection & Snapshot Reconciliation logic
+- [x] Server-Sent Events (SSE) for real-time updates (Pull)
+- [x] SSE Reconnection & Snapshot Reconciliation logic
 
 ## Feature Implementation
 - [x] List Creation (Offline-first)
 - [x] Item CRUD (Offline-first)
 - [x] Soft Deletes
 - [ ] List Sharing (Invite links/QR Codes)
-- [ ] Session Cloning (QR code to move session to another device)
+- [x] Session Cloning (QR code to move session to another device)
 - [ ] Item Restoration UI (Creatable Select with Bits UI)
 - [ ] Drag & Drop (svelte-dnd-action integration)
 
 ## UX & Polish
+- [x] Lab-Bench Design System (Inputs, Buttons, Cards)
 - [ ] Loading states for sync operations
 - [ ] Error handling & Toast notifications
-- [ ] Mobile responsive refinements
+- [x] Mobile responsive refinements (Header & UserMenu)
 - [ ] Accessibility audit (focus management, ARIA)
 
 ## Findings & Bugs
-- *Log findings here as you go over the app...*
+- [x] Fixed UserMenu Bits UI scoping and Portal issues
+- [x] Fixed Dialog centering and QRCode generation imports
+- [x] Moved context-aware actions to UserMenu

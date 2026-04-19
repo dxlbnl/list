@@ -36,13 +36,13 @@ export async function createList(name: string, userId: string) {
 	return id;
 }
 
-export async function addItem(listId: string, name: string) {
+export async function addItem(listId: string, name: string, groupName: string | null = null) {
 	const id = nanoid();
 	const newItem = {
 		id,
 		listId,
 		name,
-		groupName: null,
+		groupName,
 		rank: Date.now(), // Simplified rank for now
 		done: false,
 		deletedAt: null,
@@ -78,6 +78,23 @@ export async function updateItem(itemId: string, data: any) {
 	syncManager.forceSync();
 }
 
+export async function updateItems(updates: { id: string; data: any }[]) {
+	if (updates.length === 0) return;
+	
+	for (const { id, data } of updates) {
+		await db.items.update(id, { ...data, updatedAt: new Date() });
+		await db.syncQueue.add({
+			type: 'UPDATE',
+			entity: 'item',
+			entityId: id,
+			data: { ...data, updatedAt: new Date() },
+			timestamp: Date.now()
+		});
+	}
+
+	syncManager.forceSync();
+}
+
 export async function deleteItem(itemId: string) {
 	const deletedAt = new Date();
 	await db.items.update(itemId, { deletedAt });
@@ -107,4 +124,18 @@ export async function deleteList(listId: string) {
 	});
 
 	syncManager.forceSync();
+}
+
+export async function renameGroup(listId: string, oldName: string, newName: string) {
+	const items = await db.items.where({ listId, groupName: oldName }).toArray();
+	for (const item of items) {
+		await updateItem(item.id, { groupName: newName });
+	}
+}
+
+export async function deleteGroup(listId: string, groupName: string) {
+	const items = await db.items.where({ listId, groupName }).toArray();
+	for (const item of items) {
+		await deleteItem(item.id);
+	}
 }

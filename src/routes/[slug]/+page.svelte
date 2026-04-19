@@ -3,7 +3,10 @@
 		addItem as addItemAction,
 		deleteList,
 		updateItem,
+		updateItems,
 		deleteItem as deleteItemAction,
+		renameGroup,
+		deleteGroup,
 	} from "$lib/client/actions";
 	import { db as dexieDb } from "$lib/client/db";
 	import { liveQuery } from "dexie";
@@ -14,6 +17,9 @@
 	import { onMount } from "svelte";
 	import { DropdownMenu } from "bits-ui";
 	import { menuState } from "$lib/client/menu.svelte";
+	import ListGroup from "$lib/components/ui/ListGroup.svelte";
+	import { dndzone } from "svelte-dnd-action";
+	import { flip } from "svelte/animate";
 
 	let { data } = $props();
 
@@ -33,7 +39,18 @@
 
 	async function handleAddItem() {
 		if (!newItemName.trim()) return;
-		await addItemAction(data.listId, newItemName);
+
+		let name = newItemName;
+		let groupName = null;
+
+		// Technical syntax: [Group Name] Item Name
+		if (name.startsWith("[") && name.includes("]")) {
+			const endIdx = name.indexOf("]");
+			groupName = name.slice(1, endIdx).trim();
+			name = name.slice(endIdx + 1).trim();
+		}
+
+		await addItemAction(data.listId, name, groupName);
 		newItemName = "";
 	}
 
@@ -43,6 +60,90 @@
 
 	async function deleteItem(item: any) {
 		await deleteItemAction(item.id);
+	}
+
+	// Grouping logic with local state for DnD
+	let dragInProgress = $state(false);
+	let localGroups = $state<Record<string, any[]>>({});
+
+	$effect(() => {
+		const allItems = $items;
+		if (!dragInProgress && allItems) {
+			const groups: Record<string, any[]> = {};
+			allItems.forEach((item) => {
+				const g = item.groupName || "GENERAL";
+				if (!groups[g]) groups[g] = [];
+				groups[g].push(item);
+			});
+			localGroups = groups;
+		}
+	});
+
+	const sortedGroupNames = $derived.by(() => {
+		const names = Object.keys(localGroups).sort();
+		if (names.includes("GENERAL")) {
+			return ["GENERAL", ...names.filter((n) => n !== "GENERAL")];
+		}
+		return names;
+	});
+
+	function handleDndConsider(groupName: string, e: CustomEvent<any>) {
+		const { items: newItems } = e.detail;
+		dragInProgress = true;
+		localGroups[groupName] = newItems;
+	}
+
+	let finalizeTimeout: any;
+	async function handleDndFinalize(groupName: string, e: CustomEvent<any>) {
+		const { items: newItems } = e.detail;
+		localGroups[groupName] = newItems;
+
+		// Prepare batch updates
+		const updates: { id: string; data: any }[] = [];
+
+		Object.entries(localGroups).forEach(([gName, items]) => {
+			const actualGroupName = gName === "GENERAL" ? null : gName;
+			items.forEach((item, index) => {
+				if (item.rank !== index || item.groupName !== actualGroupName) {
+					updates.push({
+						id: item.id,
+						data: { rank: index, groupName: actualGroupName },
+					});
+				}
+			});
+		});
+
+		if (updates.length > 0) {
+			await updateItems(updates);
+		}
+
+		// Debounce setting dragInProgress to false to allow all finalize events to settle
+		clearTimeout(finalizeTimeout);
+		finalizeTimeout = setTimeout(() => {
+			dragInProgress = false;
+		}, 100);
+	}
+
+	async function handleRenameGroup(oldName: string) {
+		const newName = prompt("New group name:", oldName);
+		if (newName && newName !== oldName) {
+			await renameGroup(
+				data.listId,
+				oldName === "GENERAL" ? null : oldName,
+				newName,
+			);
+		}
+	}
+
+	async function handleDeleteGroup(groupName: string) {
+		setTimeout(async () => {
+			if (confirm(`Delete all items in group "${groupName}"?`)) {
+				await deleteGroup(
+					data.listId,
+					groupName === "GENERAL" ? null : groupName,
+				);
+			}
+		}, 100);
 	}
 
 	let isDeleteDialogOpen = $state(false);
@@ -56,7 +157,6 @@
 			goto("/");
 		}
 	}
-
 
 	onMount(() => {
 		syncManager.subscribeToList(data.listId);
@@ -74,7 +174,7 @@
 		<div class="input-prefix">&gt;</div>
 		<input
 			type="text"
-			placeholder="ADD ITEM"
+			placeholder="ADD ITEM OR [GROUP] ITEM"
 			bind:value={newItemName}
 			onkeydown={(e) => e.key === "Enter" && handleAddItem()}
 		/>
@@ -90,23 +190,22 @@
 
 <section class="items-section">
 	{#if $items && $items.length > 0}
-		<ul class="item-stack">
-			{#each $items as item (item.id)}
-				<li class="item-row transition-all" class:done={item.done}>
-					<Checkbox
-						checked={item.done}
-						onCheckedChange={() => toggleDone(item)}
-					/>
-					<span class="item-name">{item.name}</span>
-					<button
-						class="btn-delete muted"
-						onclick={() => deleteItem(item)}
-					>
-						×
-					</button>
-				</li>
+		<div class="groups-container">
+			{#each sortedGroupNames as groupName (groupName)}
+				<ListGroup
+					{groupName}
+					groupItems={localGroups[groupName]}
+					onRename={() => handleRenameGroup(groupName)}
+					onDelete={() => handleDeleteGroup(groupName)}
+					onToggleDone={toggleDone}
+					onDeleteItem={deleteItem}
+					onDndConsider={(e: CustomEvent<any>) =>
+						handleDndConsider(groupName, e)}
+					onDndFinalize={(e: CustomEvent<any>) =>
+						handleDndFinalize(groupName, e)}
+				/>
 			{/each}
-		</ul>
+		</div>
 	{:else}
 		<div class="empty-state muted">
 			<p>List is empty.</p>
@@ -147,7 +246,7 @@
 <Dialog
 	bind:open={isDeleteDialogOpen}
 	title="Delete List"
-	description="This action cannot be undone. To confirm, please type the name of the list: {$list?.name}"
+	description="This action cannot be undone. To confirm, please type the name of the list: '{$list?.name}'"
 >
 	<div class="qr-wrapper">
 		<div class="input-group">
@@ -170,7 +269,6 @@
 	</div>
 </Dialog>
 
-
 <style>
 	.list-controls {
 		margin-bottom: var(--space-8);
@@ -182,12 +280,20 @@
 		color: var(--fg-3);
 	}
 
+	.groups-container {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+
 	:global {
 		.item-stack {
 			list-style: none;
 			display: flex;
 			flex-direction: column;
 			gap: var(--space-2);
+			padding: var(--space-2) 0;
+			min-height: 20px;
 		}
 
 		.item-row {
@@ -198,6 +304,19 @@
 			display: flex;
 			align-items: center;
 			gap: var(--space-4);
+			position: relative;
+		}
+
+		.drag-handle {
+			cursor: grab;
+			padding: var(--space-1);
+			opacity: 0.3;
+			transition: opacity 0.2s;
+			user-select: none;
+
+			&:hover {
+				opacity: 1;
+			}
 		}
 
 		.item-row.done .item-name {
@@ -341,6 +460,45 @@
 			display: flex;
 			justify-content: flex-end;
 			gap: var(--space-3);
+		}
+
+		.qr-wrapper {
+			display: flex;
+			flex-direction: column;
+			gap: var(--space-6);
+			margin-top: var(--space-2);
+		}
+
+		.qr-wrapper .input-prefix {
+			color: var(--danger);
+		}
+
+		.qr-footer {
+			margin-top: var(--space-2);
+			padding-top: var(--space-4);
+			border-top: 1px dashed var(--border);
+			opacity: 0.4;
+			letter-spacing: 0.2em;
+			font-size: 0.65rem;
+		}
+
+		.input-action-btn.danger {
+			background: var(--danger) !important;
+			color: white !important;
+			border-left: 1px solid rgba(0, 0, 0, 0.2) !important;
+			letter-spacing: 0.05em;
+			padding: 0 var(--space-8) !important;
+		}
+
+		.input-action-btn.danger:hover:not(:disabled) {
+			background: #dc2626 !important;
+			box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+		}
+
+		.input-action-btn.danger:disabled {
+			background: var(--bg-2) !important;
+			color: var(--fg-3) !important;
+			opacity: 0.5;
 		}
 	}
 </style>
