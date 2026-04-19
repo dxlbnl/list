@@ -142,5 +142,9 @@ export const GET: RequestHandler = async ({ params, cookies }) => {
 		secure: !dev
 	});
 
+	// 7. Notify other sessions for this user to pull new lists
+	const { syncHub } = await import('$lib/server/sync');
+	syncHub.emit(`user:${targetUserId}`, { listId: 'global' });
+
 	throw redirect(303, '/login/confirmed');
 };
