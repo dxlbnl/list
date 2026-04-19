@@ -180,7 +180,7 @@
 								/></svg
 							>
 						</div>
-						<span class="font-bold">Secure Account</span>
+						<span class="font-bold">Register</span>
 					</Menu.Item>
 
 					<Menu.Item

@@ -38,7 +38,7 @@
 				<AccessCard 
 					{form}
 					action="?/secureAccount"
-					title="Secure account"
+					title="Register"
 					subtitle="Account security"
 					description="This is an anonymous session. Secure your account with an email address to ensure you never lose access to your lists."
 					placeholder="email@example.com"
