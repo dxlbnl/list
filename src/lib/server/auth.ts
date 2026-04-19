@@ -36,7 +36,7 @@ export async function createAnonymousSession(event: RequestEvent) {
 	await db.insert(users).values({
 		id: userId,
 		email: null,
-		emailVerified: false
+		email_verified: false
 	});
 
 	await db.insert(sessions).values({

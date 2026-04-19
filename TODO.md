@@ -6,7 +6,7 @@
 - [x] Offline-First Database (IndexedDB + Dexie.js)
 - [x] Anonymous Magic Sessions
 - [x] Magic Link Auth Flow
-- [ ] Email registration & Account Merging (Recovery)
+- [x] Email registration & Account Merging (Recovery)
 - [x] Design System (Vanilla CSS + Lab-Bench aesthetic)
 
 ## Sync Engine

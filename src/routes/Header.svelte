@@ -9,7 +9,10 @@
 
 <header>
 	<div class="header-content">
-		<a href="/" class="logo-link">
+		<a href="/" class="logo-link" class:is-back={page.url.pathname !== '/'}>
+			{#if page.url.pathname !== '/'}
+				<span class="back-arrow mono">←</span>
+			{/if}
 			<h1>{pageTitle}</h1>
 		</a>
 		<UserMenu {user} />
@@ -40,11 +43,25 @@
 	.logo-link {
 		text-decoration: none;
 		color: inherit;
-		transition: opacity 0.2s;
+		transition: all 0.2s;
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
 	}
 
 	.logo-link:hover {
 		opacity: 0.8;
+	}
+
+	.logo-link.is-back:hover {
+		transform: translateX(-4px);
+		color: var(--accent);
+	}
+
+	.back-arrow {
+		color: var(--accent);
+		font-weight: bold;
+		font-size: 1.1rem;
 	}
 
 	h1 {

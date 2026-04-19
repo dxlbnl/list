@@ -47,7 +47,9 @@
 		"dexie": "^4.4.2",
 		"nanoid": "^5.1.9",
 		"qrcode": "^1.5.4",
+		"resend": "^6.12.0",
 		"svelte-dnd-action": "^0.9.69",
+		"svelte-email": "^0.0.4",
 		"zod": "^4.3.6"
 	}
 }

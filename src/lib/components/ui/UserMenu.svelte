@@ -136,34 +136,88 @@
 								<DropdownMenu.Separator class="separator" />
 
 								<DropdownMenu.Group>
-									<DropdownMenu.Item
-										class="menu-item"
-										onSelect={() =>
-											(window.location.href =
-												"/settings")}
-									>
-										<div class="icon-container">
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="16"
-												height="16"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												><path
-													d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.1a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
-												/><circle
-													cx="12"
-													cy="12"
-													r="3"
-												/></svg
+									{#if user?.email_verified}
+										<DropdownMenu.Item
+											class="menu-item"
+											onSelect={() =>
+												(window.location.href =
+													"/settings")}
+										>
+											<div class="icon-container">
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													width="16"
+													height="16"
+													viewBox="0 0 24 24"
+													fill="none"
+													stroke="currentColor"
+													stroke-width="2"
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													><path
+														d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.1a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+													/><circle
+														cx="12"
+														cy="12"
+														r="3"
+													/></svg
+												>
+											</div>
+											<span>Settings</span>
+										</DropdownMenu.Item>
+
+
+									{:else}
+										<DropdownMenu.Item
+											class="menu-item highlight-accent"
+											onSelect={() =>
+												(window.location.href =
+													"/settings")}
+										>
+											<div class="icon-container">
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													width="16"
+													height="16"
+													viewBox="0 0 24 24"
+													fill="none"
+													stroke="currentColor"
+													stroke-width="2"
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													><path
+														d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"
+													/></svg
+												>
+											</div>
+											<span class="font-bold"
+												>Secure Account</span
 											>
-										</div>
-										<span>Settings</span>
-									</DropdownMenu.Item>
+										</DropdownMenu.Item>
+
+										<DropdownMenu.Item
+											class="menu-item muted"
+											onSelect={() =>
+												(window.location.href =
+													"/login")}
+										>
+											<div class="icon-container">
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													width="16"
+													height="16"
+													viewBox="0 0 24 24"
+													fill="none"
+													stroke="currentColor"
+													stroke-width="2"
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" /></svg
+												>
+											</div>
+											<span>Login</span>
+										</DropdownMenu.Item>
+									{/if}
 
 									<DropdownMenu.Item
 										class="menu-item"
@@ -199,6 +253,34 @@
 									<DropdownMenu.Separator class="separator" />
 									<DropdownMenu.Group>
 										{@render menuState.contextualSnippet()}
+									</DropdownMenu.Group>
+								{/if}
+
+								{#if user?.email_verified}
+									<DropdownMenu.Separator class="separator" />
+									<DropdownMenu.Group>
+										<DropdownMenu.Item
+											class="menu-item danger"
+											onSelect={() =>
+												(window.location.href =
+													"/logout")}
+										>
+											<div class="icon-container">
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													width="16"
+													height="16"
+													viewBox="0 0 24 24"
+													fill="none"
+													stroke="currentColor"
+													stroke-width="2"
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg
+												>
+											</div>
+											<span>Logout</span>
+										</DropdownMenu.Item>
 									</DropdownMenu.Group>
 								{/if}
 							</div>
@@ -453,6 +535,26 @@
 						}
 					}
 				}
+
+				&.highlight-accent {
+					color: var(--accent);
+					border: 1px dashed var(--accent);
+					margin-top: var(--space-1);
+
+					&[data-highlighted],
+					&:hover {
+						background-color: var(--accent) !important;
+						color: white !important;
+
+						.icon-container {
+							color: white;
+						}
+					}
+				}
+			}
+
+			.font-bold {
+				font-weight: 600;
 			}
 
 			.icon-container {

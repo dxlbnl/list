@@ -51,7 +51,7 @@ export const GET: RequestHandler = async ({ params, cookies }) => {
 					.update(users)
 					.set({
 						email: link.email,
-						emailVerified: true
+						email_verified: true
 					})
 					.where(eq(users.id, targetUserId));
 			} else {
@@ -60,7 +60,7 @@ export const GET: RequestHandler = async ({ params, cookies }) => {
 				await db.insert(users).values({
 					id: targetUserId,
 					email: link.email,
-					emailVerified: true
+					email_verified: true
 				});
 			}
 		}
@@ -92,5 +92,5 @@ export const GET: RequestHandler = async ({ params, cookies }) => {
 		secure: process.env.NODE_ENV === 'production'
 	});
 
-	throw redirect(303, '/');
+	throw redirect(303, '/login/confirmed');
 };

@@ -1,20 +1,19 @@
 <script lang="ts">
 	import { Collapsible, DropdownMenu } from "bits-ui";
-	import { dndzone } from "svelte-dnd-action";
+	import { dndzone, dragHandle } from "svelte-dnd-action";
 	import { flip } from "svelte/animate";
 	import Checkbox from "./Checkbox.svelte";
-	import type { Snippet } from "svelte";
 
-	let { 
-		groupName, 
-		groupItems, 
-		onRename, 
-		onDelete, 
-		onToggleDone, 
+	let {
+		groupName,
+		groupItems,
+		onRename,
+		onDelete,
+		onToggleDone,
 		onDeleteItem,
 		onDndConsider,
 		onDndFinalize,
-		showHeader = true
+		showHeader = true,
 	} = $props();
 
 	let isOpen = $state(true);
@@ -37,7 +36,9 @@
 					class="chevron"
 					class:rotated={isOpen}><path d="m9 18 6-6-6-6" /></svg
 				>
-				<span class="mono tiny uppercase tracking-widest">{groupName}</span>
+				<span class="mono tiny uppercase tracking-widest"
+					>{groupName}</span
+				>
 				<span class="count mono tiny muted">[{groupItems.length}]</span>
 			</Collapsible.Trigger>
 
@@ -89,11 +90,10 @@
 	<Collapsible.Content>
 		<div
 			class="item-stack"
-			use:dndzone={{ 
-				items: groupItems, 
-				flipDurationMs: 200, 
-				type: 'item',
-				dragHandleSelector: ".drag-handle"
+			use:dndzone={{
+				items: groupItems,
+				flipDurationMs: 200,
+				type: "item",
 			}}
 			onconsider={onDndConsider}
 			onfinalize={onDndFinalize}
@@ -101,7 +101,7 @@
 			{#each groupItems as item (item.id)}
 				<div animate:flip={{ duration: 200 }}>
 					<li class="item-row transition-all" class:done={item.done}>
-						<div class="drag-handle muted mono tiny">::</div>
+						<div use:dragHandle class="drag-handle muted mono tiny">::</div>
 						<Checkbox
 							checked={item.done}
 							onCheckedChange={() => onToggleDone(item)}
