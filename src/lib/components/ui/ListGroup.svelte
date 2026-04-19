@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Collapsible } from "bits-ui";
 	import * as Menu from "./Menu";
-	import { dndzone, dragHandle } from "svelte-dnd-action";
+	import { dragHandleZone, dragHandle } from "svelte-dnd-action";
 	import { flip } from "svelte/animate";
 	import Checkbox from "./Checkbox.svelte";
 	import Dialog from "./Dialog.svelte";
@@ -90,11 +90,9 @@
 	<Collapsible.Content>
 		<div
 			class="list-group-item-stack"
-			use:dndzone={{
+			use:dragHandleZone={{
 				items: groupItems,
 				flipDurationMs: 200,
-				type: "item",
-				dropTargetStyle: {},
 			}}
 			onconsider={onDndConsider}
 			onfinalize={onDndFinalize}
@@ -102,16 +100,18 @@
 			{#each groupItems as item (item.id)}
 				<li
 					class="list-group-item-row {item.done ? 'done' : ''}"
+					animate:flip={{ duration: 200 }}
 				>
-					<div use:dragHandle class="list-group-drag-handle">
-						::
-					</div>
+					<div use:dragHandle class="list-group-drag-handle">::</div>
 					<Checkbox
 						checked={item.done}
 						onCheckedChange={() => onToggleDone(item)}
 					/>
 					<span class="list-group-item-name">{item.name}</span>
-					<button class="list-group-btn-delete" onclick={() => onDeleteItem(item)}>
+					<button
+						class="list-group-btn-delete"
+						onclick={() => onDeleteItem(item)}
+					>
 						×
 					</button>
 				</li>
@@ -259,7 +259,7 @@
 			margin-bottom: var(--space-2);
 			box-sizing: border-box;
 			width: 100%;
-			
+
 			&.done .list-group-item-name {
 				text-decoration: line-through;
 				color: var(--fg-3);
@@ -271,7 +271,6 @@
 		}
 
 		.list-group-drag-handle {
-			cursor: grab;
 			padding: var(--space-1);
 			opacity: 0.3;
 			transition: opacity 0.2s;
