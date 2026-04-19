@@ -29,10 +29,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const updatedListIds = new Set<string>();
 	const deletedListMembers = new Map<string, string[]>();
 
-	const results: { id: string | number; status: 'success' | 'error'; message?: string }[] = [];
-	const updatedListIds = new Set<string>();
-	const deletedListMembers = new Map<string, string[]>();
-
 	try {
 		// 1. PRE-FETCH DATA (Batched into 1 HTTP request)
 		const preFetchQueries: any[] = [
