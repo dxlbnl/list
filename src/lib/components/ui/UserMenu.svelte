@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { DropdownMenu } from "bits-ui";
+	import * as Menu from "./Menu";
 	import { syncManager } from "$lib/client/sync.svelte";
 	import { fly } from "svelte/transition";
 	import Dialog from "./Dialog.svelte";
@@ -84,8 +84,8 @@
 </script>
 
 <div class="user-menu-container">
-	<DropdownMenu.Root>
-		<DropdownMenu.Trigger class="user-trigger">
+	<Menu.Root>
+		<Menu.Trigger class="user-trigger">
 			<div class="avatar mono">
 				{getInitial()}
 				<div
@@ -112,207 +112,165 @@
 				stroke-linejoin="round"
 				class="chevron"><path d="m6 9 6 6 6-6" /></svg
 			>
-		</DropdownMenu.Trigger>
+		</Menu.Trigger>
 
-		<DropdownMenu.Portal disabled={true}>
-			<DropdownMenu.Content
-				class="menu-content"
-				sideOffset={8}
-				align="end"
-				forceMount
-			>
-				{#snippet child({ wrapperProps, props, open })}
-					{#if open}
-						<div {...wrapperProps}>
-							<div
-								{...props}
-								transition:fly={{ y: 8, duration: 200 }}
+		<Menu.Content align="end">
+			<div class="menu-status-header">
+				<div
+					class="status-dot"
+					style:background={statusColor}
+					class:pulse={syncManager.isSyncing}
+				></div>
+				<span class="tiny muted mono uppercase tracking-widest"
+					>{statusText}</span
+				>
+			</div>
+
+			<Menu.Separator />
+
+			<Menu.Group>
+				{#if user?.email_verified}
+					<Menu.Item
+						onSelect={() => (window.location.href = "/settings")}
+					>
+						<div class="icon-container">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="16"
+								height="16"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								><path
+									d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.1a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+								/><circle cx="12" cy="12" r="3" /></svg
 							>
-								<div class="menu-status-header">
-									<div
-										class="status-dot"
-										style:background={statusColor}
-										class:pulse={syncManager.isSyncing}
-									></div>
-									<span
-										class="tiny muted mono uppercase tracking-widest"
-										>{statusText}</span
-									>
-								</div>
-
-								<DropdownMenu.Separator class="separator" />
-
-								<DropdownMenu.Group>
-									{#if user?.email_verified}
-										<DropdownMenu.Item
-											class="menu-item"
-											onSelect={() =>
-												(window.location.href =
-													"/settings")}
-										>
-											<div class="icon-container">
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													width="16"
-													height="16"
-													viewBox="0 0 24 24"
-													fill="none"
-													stroke="currentColor"
-													stroke-width="2"
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													><path
-														d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.1a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
-													/><circle
-														cx="12"
-														cy="12"
-														r="3"
-													/></svg
-												>
-											</div>
-											<span>Settings</span>
-										</DropdownMenu.Item>
-									{:else}
-										<DropdownMenu.Item
-											class="menu-item highlight-accent"
-											onSelect={() =>
-												(window.location.href =
-													"/settings")}
-										>
-											<div class="icon-container">
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													width="16"
-													height="16"
-													viewBox="0 0 24 24"
-													fill="none"
-													stroke="currentColor"
-													stroke-width="2"
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													><path
-														d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"
-													/></svg
-												>
-											</div>
-											<span class="font-bold"
-												>Secure Account</span
-											>
-										</DropdownMenu.Item>
-
-										<DropdownMenu.Item
-											class="menu-item muted"
-											onSelect={() =>
-												(window.location.href =
-													"/login")}
-										>
-											<div class="icon-container">
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													width="16"
-													height="16"
-													viewBox="0 0 24 24"
-													fill="none"
-													stroke="currentColor"
-													stroke-width="2"
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													><path
-														d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"
-													/><polyline
-														points="10 17 15 12 10 7"
-													/><line
-														x1="15"
-														y1="12"
-														x2="3"
-														y2="12"
-													/></svg
-												>
-											</div>
-											<span>Login</span>
-										</DropdownMenu.Item>
-									{/if}
-
-									<DropdownMenu.Item
-										class="menu-item"
-										onSelect={() =>
-											(isSyncDialogOpen = true)}
-									>
-										<div class="icon-container">
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="16"
-												height="16"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												><rect
-													width="14"
-													height="20"
-													x="5"
-													y="2"
-													rx="2"
-													ry="2"
-												/><path d="M12 18h.01" /></svg
-											>
-										</div>
-										<span>Sync Device</span>
-									</DropdownMenu.Item>
-								</DropdownMenu.Group>
-
-								{#if menuState.contextualSnippet}
-									<DropdownMenu.Separator class="separator" />
-									<DropdownMenu.Group>
-										{@render menuState.contextualSnippet()}
-									</DropdownMenu.Group>
-								{/if}
-
-								{#if user?.email_verified}
-									<DropdownMenu.Separator class="separator" />
-									<DropdownMenu.Group>
-										<DropdownMenu.Item
-											class="menu-item danger"
-											onSelect={() =>
-												(window.location.href =
-													"/logout")}
-										>
-											<div class="icon-container">
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													width="16"
-													height="16"
-													viewBox="0 0 24 24"
-													fill="none"
-													stroke="currentColor"
-													stroke-width="2"
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													><path
-														d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
-													/><polyline
-														points="16 17 21 12 16 7"
-													/><line
-														x1="21"
-														y1="12"
-														x2="9"
-														y2="12"
-													/></svg
-												>
-											</div>
-											<span>Logout</span>
-										</DropdownMenu.Item>
-									</DropdownMenu.Group>
-								{/if}
-							</div>
 						</div>
-					{/if}
-				{/snippet}
-			</DropdownMenu.Content>
-		</DropdownMenu.Portal>
-	</DropdownMenu.Root>
+						<span>Settings</span>
+					</Menu.Item>
+				{:else}
+					<Menu.Item
+						highlightAccent
+						onSelect={() => (window.location.href = "/settings")}
+					>
+						<div class="icon-container">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="16"
+								height="16"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								><path
+									d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"
+								/></svg
+							>
+						</div>
+						<span class="font-bold">Secure Account</span>
+					</Menu.Item>
+
+					<Menu.Item
+						class="muted"
+						onSelect={() => (window.location.href = "/login")}
+					>
+						<div class="icon-container">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="16"
+								height="16"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								><path
+									d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"
+								/><polyline points="10 17 15 12 10 7" /><line
+									x1="15"
+									y1="12"
+									x2="3"
+									y2="12"
+								/></svg
+							>
+						</div>
+						<span>Login</span>
+					</Menu.Item>
+				{/if}
+
+				<Menu.Item onSelect={() => (isSyncDialogOpen = true)}>
+					<div class="icon-container">
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="16"
+							height="16"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							><rect
+								width="14"
+								height="20"
+								x="5"
+								y="2"
+								rx="2"
+								ry="2"
+							/><path d="M12 18h.01" /></svg
+						>
+					</div>
+					<span>Sync Device</span>
+				</Menu.Item>
+			</Menu.Group>
+
+			{#if menuState.contextualSnippet}
+				<Menu.Separator />
+				<Menu.Group>
+					{@render menuState.contextualSnippet()}
+				</Menu.Group>
+			{/if}
+
+			{#if user?.email_verified}
+				<Menu.Separator />
+				<Menu.Group>
+					<Menu.Item
+						danger
+						onSelect={() => (window.location.href = "/logout")}
+					>
+						<div class="icon-container">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="16"
+								height="16"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								><path
+									d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
+								/><polyline points="16 17 21 12 16 7" /><line
+									x1="21"
+									y1="12"
+									x2="9"
+									y2="12"
+								/></svg
+							>
+						</div>
+						<span>Logout</span>
+					</Menu.Item>
+				</Menu.Group>
+			{/if}
+		</Menu.Content>
+	</Menu.Root>
 
 	<Dialog
 		bind:open={isSyncDialogOpen}
@@ -481,120 +439,7 @@
 				margin-right: var(--space-2);
 			}
 
-			.menu-content {
-				position: absolute;
-				top: calc(100% + 8px);
-				right: 0;
-				background: rgba(20, 20, 20, 0.85);
-				border: 1px solid var(--border);
-				border-radius: var(--radius-lg);
-				padding: var(--space-2);
-				min-width: 260px;
-				box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-				backdrop-filter: blur(20px) saturate(180%);
-				outline: none;
-				z-index: 1000;
-			}
 
-			.separator {
-				height: 1px;
-				background: var(--border);
-				margin: var(--space-1) 0;
-			}
-
-			.menu-item {
-				display: flex;
-				align-items: center;
-				gap: var(--space-3);
-				padding: var(--space-2) var(--space-3);
-				border-radius: var(--radius-md);
-				cursor: pointer;
-				font-size: 0.875rem;
-				color: var(--fg-2);
-				transition:
-					background 0.1s ease,
-					color 0.1s ease;
-				outline: none;
-				position: relative;
-				user-select: none;
-
-				&[data-highlighted],
-				&:hover {
-					background-color: var(--bg-2) !important;
-					color: var(--fg-1) !important;
-
-					&::before {
-						content: "";
-						position: absolute;
-						left: 0;
-						top: var(--space-2);
-						bottom: var(--space-2);
-						width: 2px;
-						background: var(--accent);
-						border-radius: 0 2px 2px 0;
-					}
-
-					.icon-container {
-						opacity: 1;
-						color: var(--accent);
-					}
-				}
-
-				&:active {
-					transform: scale(0.98);
-				}
-
-				&.danger {
-					color: var(--danger);
-
-					&[data-highlighted],
-					&:hover {
-						background-color: var(--danger) !important;
-						color: white !important;
-
-						.icon-container {
-							opacity: 1;
-							color: white;
-						}
-					}
-				}
-
-				&.highlight-accent {
-					color: var(--accent);
-					border: 1px dashed var(--accent);
-					margin-top: var(--space-1);
-
-					&[data-highlighted],
-					&:hover {
-						background-color: var(--accent) !important;
-						color: white !important;
-
-						.icon-container {
-							color: white;
-						}
-					}
-				}
-			}
-
-			.font-bold {
-				font-weight: 600;
-			}
-
-			.icon-container {
-				display: flex;
-				align-items: center;
-				justify-content: center;
-				width: 20px;
-				opacity: 0.7;
-			}
-
-			.menu-status-header {
-				display: flex;
-				align-items: center;
-				gap: var(--space-2);
-				padding: var(--space-2) var(--space-3);
-				opacity: 0.8;
-			}
 
 		}
 	}

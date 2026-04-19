@@ -36,7 +36,7 @@ export async function createList(name: string, userId: string) {
 	return id;
 }
 
-export async function addItem(listId: string, name: string, groupName: string | null = null) {
+export async function addItem(listId: string, name: string, groupName: string = "") {
 	const id = nanoid();
 	const newItem = {
 		id,

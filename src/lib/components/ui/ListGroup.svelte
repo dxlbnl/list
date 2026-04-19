@@ -1,8 +1,10 @@
 <script lang="ts">
-	import { Collapsible, DropdownMenu } from "bits-ui";
+	import { Collapsible } from "bits-ui";
+	import * as Menu from "./Menu";
 	import { dndzone, dragHandle } from "svelte-dnd-action";
 	import { flip } from "svelte/animate";
 	import Checkbox from "./Checkbox.svelte";
+	import Dialog from "./Dialog.svelte";
 
 	let {
 		groupName,
@@ -17,6 +19,13 @@
 	} = $props();
 
 	let isOpen = $state(true);
+	let isRenameDialogOpen = $state(false);
+	let isDeleteDialogOpen = $state(false);
+	let editName = $state("");
+
+	$effect(() => {
+		if (isRenameDialogOpen) editName = groupName;
+	});
 </script>
 
 <Collapsible.Root class="group-wrapper" bind:open={isOpen}>
@@ -43,8 +52,8 @@
 			</Collapsible.Trigger>
 
 			<div class="group-actions">
-				<DropdownMenu.Root>
-					<DropdownMenu.Trigger class="btn-icon-tiny">
+				<Menu.Root>
+					<Menu.Trigger class="btn-icon-tiny">
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
 							width="14"
@@ -61,28 +70,19 @@
 								r="1"
 							/><circle cx="12" cy="19" r="1" /></svg
 						>
-					</DropdownMenu.Trigger>
-					<DropdownMenu.Portal disabled={true}>
-						<DropdownMenu.Content
-							class="menu-content mini"
-							sideOffset={4}
-							align="end"
+					</Menu.Trigger>
+					<Menu.Content class="mini" sideOffset={4} align="end">
+						<Menu.Item onSelect={() => (isRenameDialogOpen = true)}>
+							<span>Rename Group</span>
+						</Menu.Item>
+						<Menu.Item
+							danger
+							onSelect={() => (isDeleteDialogOpen = true)}
 						>
-							<DropdownMenu.Item
-								class="menu-item"
-								onSelect={onRename}
-							>
-								<span>Rename Group</span>
-							</DropdownMenu.Item>
-							<DropdownMenu.Item
-								class="menu-item danger"
-								onSelect={onDelete}
-							>
-								<span>Delete Group</span>
-							</DropdownMenu.Item>
-						</DropdownMenu.Content>
-					</DropdownMenu.Portal>
-				</DropdownMenu.Root>
+							<span>Delete Group</span>
+						</Menu.Item>
+					</Menu.Content>
+				</Menu.Root>
 			</div>
 		</div>
 	{/if}
@@ -101,7 +101,9 @@
 			{#each groupItems as item (item.id)}
 				<div animate:flip={{ duration: 200 }}>
 					<li class="item-row transition-all" class:done={item.done}>
-						<div use:dragHandle class="drag-handle muted mono tiny">::</div>
+						<div use:dragHandle class="drag-handle muted mono tiny">
+							::
+						</div>
 						<Checkbox
 							checked={item.done}
 							onCheckedChange={() => onToggleDone(item)}
@@ -119,6 +121,55 @@
 		</div>
 	</Collapsible.Content>
 </Collapsible.Root>
+
+<Dialog
+	bind:open={isRenameDialogOpen}
+	title="Rename Group"
+	description="Enter a new name for this group."
+>
+	<div class="input-group">
+		<div class="input-prefix">&gt;</div>
+		<input
+			type="text"
+			placeholder="GROUP_NAME"
+			bind:value={editName}
+			onkeydown={(e) => {
+				if (e.key === "Enter" && editName && editName !== groupName) {
+					onRename(editName);
+					isRenameDialogOpen = false;
+				}
+			}}
+		/>
+		<button
+			class="input-action-btn"
+			onclick={() => {
+				onRename(editName);
+				isRenameDialogOpen = false;
+			}}
+			disabled={!editName || editName === groupName}
+		>
+			RENAME
+		</button>
+	</div>
+</Dialog>
+
+<Dialog
+	bind:open={isDeleteDialogOpen}
+	title="Delete Group"
+	description="Are you sure you want to delete '{groupName}'? All items in this group will be permanently removed."
+>
+	<div class="dialog-actions">
+		<button
+			class="btn-primary danger"
+			onclick={() => {
+				onDelete();
+				isDeleteDialogOpen = false;
+			}}
+		>
+			DELETE_GROUP
+		</button>
+	</div>
+</Dialog>
 
 <style>
 	:global {
@@ -168,7 +219,7 @@
 		}
 
 		.group-actions {
-			opacity: 0;
+			opacity: 0.7;
 			transition: opacity 0.2s;
 		}
 
@@ -235,7 +286,7 @@
 		}
 
 		.btn-delete {
-			opacity: 0;
+			opacity: 0.5;
 			font-family: var(--font-mono);
 			font-size: 0.75rem;
 			color: var(--danger);
@@ -246,7 +297,7 @@
 		}
 
 		.item-row:hover .btn-delete {
-			opacity: 0.6;
+			opacity: 1;
 		}
 
 		.btn-delete:hover {
@@ -276,6 +327,24 @@
 			opacity: 0.3 !important;
 			background: var(--bg-2) !important;
 			border-style: dashed !important;
+		}
+
+		.dialog-actions {
+			display: flex;
+			justify-content: flex-end;
+			gap: var(--space-4);
+			margin-top: var(--space-2);
+		}
+
+		.btn-primary.danger {
+			background: var(--danger);
+			color: white;
+
+			&:hover {
+				background: var(--bg-0);
+				color: var(--danger);
+				border-color: var(--danger);
+			}
 		}
 	}
 </style>

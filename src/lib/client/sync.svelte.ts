@@ -174,6 +174,7 @@ class SyncManager {
 				if (!pendingItemIds.has(item.id)) {
 					await db.items.put({
 						...item,
+						groupName: item.groupName || "",
 						deletedAt: item.deletedAt ? new Date(item.deletedAt) : null,
 						updatedAt: new Date(item.updatedAt)
 					});

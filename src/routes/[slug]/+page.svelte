@@ -102,7 +102,7 @@
 		const updates: { id: string; data: any }[] = [];
 
 		Object.entries(localGroups).forEach(([gName, items]) => {
-			const actualGroupName = gName === "GENERAL" ? null : gName;
+			const actualGroupName = gName === "GENERAL" ? "" : gName;
 			items.forEach((item, index) => {
 				if (item.rank !== index || item.groupName !== actualGroupName) {
 					updates.push({
@@ -124,26 +124,18 @@
 		}, 100);
 	}
 
-	async function handleRenameGroup(oldName: string) {
-		const newName = prompt("New group name:", oldName);
-		if (newName && newName !== oldName) {
-			await renameGroup(
-				data.listId,
-				oldName === "GENERAL" ? null : oldName,
-				newName,
-			);
+	async function handleRenameGroup(oldName: string, newName: string) {
+		if (newName && newName !== oldName && data.listId) {
+			const actualOldName = oldName === "GENERAL" ? "" : oldName;
+			await renameGroup(data.listId, actualOldName, newName);
 		}
 	}
 
 	async function handleDeleteGroup(groupName: string) {
-		setTimeout(async () => {
-			if (confirm(`Delete all items in group "${groupName}"?`)) {
-				await deleteGroup(
-					data.listId,
-					groupName === "GENERAL" ? null : groupName,
-				);
-			}
-		}, 100);
+		if (data.listId) {
+			const actualGroupName = groupName === "GENERAL" ? "" : groupName;
+			await deleteGroup(data.listId, actualGroupName);
+		}
 	}
 
 	let isDeleteDialogOpen = $state(false);
@@ -196,7 +188,8 @@
 					{groupName}
 					groupItems={localGroups[groupName]}
 					showHeader={sortedGroupNames.length > 1}
-					onRename={() => handleRenameGroup(groupName)}
+					onRename={(newName: string) =>
+						handleRenameGroup(groupName, newName)}
 					onDelete={() => handleDeleteGroup(groupName)}
 					onToggleDone={toggleDone}
 					onDeleteItem={deleteItem}

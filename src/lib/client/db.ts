@@ -13,7 +13,7 @@ export interface LocalItem {
 	id: string;
 	listId: string;
 	name: string;
-	groupName: string | null;
+	groupName: string; // Use "" for General/None
 	rank: number;
 	done: boolean;
 	deletedAt: Date | null;
@@ -37,9 +37,9 @@ export class ListDatabase extends Dexie {
 
 	constructor() {
 		super('ListAppDB');
-		this.version(2).stores({
+		this.version(4).stores({
 			lists: 'id, slug, createdBy, [createdBy+slug], createdAt',
-			items: 'id, listId, name, groupName, rank, done, deletedAt, updatedAt',
+			items: 'id, listId, name, groupName, rank, done, deletedAt, updatedAt, [listId+groupName]',
 			syncQueue: '++id, entityId, entity, timestamp'
 		});
 	}
