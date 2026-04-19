@@ -1,6 +1,7 @@
 import { db } from '$lib/server/db';
 import { rateLimits } from '$lib/server/db/schema';
 import { eq, sql } from 'drizzle-orm';
+import { logger } from '$lib/logger';
 
 /**
  * Checks if a request should be rate limited.
@@ -37,6 +38,7 @@ export async function checkRateLimit(key: string, limit: number, windowMinutes: 
 	}
 
 	if (record.count >= limit) {
+		logger.warn('Rate limit exceeded', { key, limit, count: record.count });
 		return false;
 	}
 

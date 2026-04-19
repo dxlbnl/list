@@ -2,6 +2,9 @@ import { render } from 'svelte/server';
 import MagicLinkEmail from './templates/MagicLinkEmail.svelte';
 import { resend } from './client';
 import { env } from '$env/dynamic/private';
+import { logger } from '$lib/logger';
+
+const emailLogger = logger.child({ module: 'email' });
 
 export async function sendMagicLink(email: string, url: string, type: 'secure' | 'login' = 'login') {
 	const result = render(MagicLinkEmail, {
@@ -16,12 +19,12 @@ export async function sendMagicLink(email: string, url: string, type: 'secure' |
 	const subject = type === 'secure' ? 'Secure Your Lists Account' : 'Sign in to Lists';
 
 	if (!env.RESEND_API_KEY) {
-		console.warn('RESEND_API_KEY not set. Email will only be logged to console.');
-		console.log('--- EMAIL SIMULATION ---');
-		console.log(`To: ${email}`);
-		console.log(`Subject: ${subject}`);
-		console.log(`Link: ${url}`);
-		console.log('-----------------------');
+		emailLogger.warn('RESEND_API_KEY not set. Email will only be logged to console.');
+		emailLogger.info('EMAIL SIMULATION', {
+			to: email,
+			subject,
+			link: url
+		});
 		return { success: true, simulated: true };
 	}
 
@@ -34,13 +37,14 @@ export async function sendMagicLink(email: string, url: string, type: 'secure' |
 		});
 
 		if (error) {
-			console.error('Resend error:', error);
+			emailLogger.error('Resend error', { error, to: email });
 			return { success: false, error };
 		}
 
+		emailLogger.info('Email sent successfully', { to: email, messageId: (data as any)?.id });
 		return { success: true, data };
 	} catch (e) {
-		console.error('Email sending exception:', e);
+		emailLogger.error('Email sending exception', { to: email }, e);
 		return { success: false, error: e };
 	}
 }

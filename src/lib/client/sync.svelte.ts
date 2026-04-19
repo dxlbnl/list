@@ -1,4 +1,7 @@
 import { db } from '$lib/client/db';
+import { logger } from '$lib/logger';
+
+const syncLogger = logger.child({ module: 'client-sync' });
 
 class SyncManager {
 	isSyncing = $state(false);
@@ -14,7 +17,7 @@ class SyncManager {
 
 			window.addEventListener('online', () => {
 				this.isOnline = true;
-				console.log('Network online: triggering sync...');
+				syncLogger.info('Network online: triggering sync...');
 				this.connectSSE();
 				this.processQueue();
 				this.reconcileAllLists();
@@ -22,7 +25,7 @@ class SyncManager {
 
 			window.addEventListener('offline', () => {
 				this.isOnline = false;
-				console.log('Network offline');
+				syncLogger.info('Network offline');
 			});
 
 			this.startLoop();
@@ -46,14 +49,14 @@ class SyncManager {
 				const data = JSON.parse(event.data);
 				if (data.type === 'update' && data.listId) {
 					if (data.listId === 'global') {
-						console.log('Global refresh triggered');
+						syncLogger.debug('Global refresh triggered');
 						this.reconcileAllLists();
 					} else if (data.deleted) {
-						console.log(`List ${data.listId} deleted, removing locally...`);
+						syncLogger.info(`List deleted, removing locally`, { listId: data.listId });
 						await db.lists.delete(data.listId);
 						await db.items.where('listId').equals(data.listId).delete();
 					} else if (data.list && data.items) {
-						console.log(`Instant update received for ${data.listId}`);
+						syncLogger.debug(`Instant update received`, { listId: data.listId });
 						await this.pull(data.listId, { list: data.list, items: data.items });
 					} else if (this.activeListIds.has(data.listId)) {
 						await this.pull(data.listId);
@@ -62,13 +65,13 @@ class SyncManager {
 					}
 				}
 			} catch (e) {
-				console.error('SSE message error:', e);
+				syncLogger.error('SSE message parse error', {}, e);
 			}
 		};
 
 		this.eventSource.onerror = (e) => {
 			this.isOnline = false;
-			console.error('SSE connection lost. Browser will retry automatically.', e);
+			syncLogger.warn('SSE connection lost. Browser will retry automatically.');
 		};
 	}
 
@@ -87,7 +90,7 @@ class SyncManager {
 			try {
 				await this.processQueue();
 			} catch (e) {
-				console.error('Sync loop error:', e);
+				syncLogger.error('Sync loop error', {}, e);
 			}
 			// Wait 10 seconds before next check (SSE handles real-time)
 			await new Promise(resolve => setTimeout(resolve, 10000));
@@ -129,7 +132,7 @@ class SyncManager {
 
 			const errors = results.filter((r: any) => r.status === 'error');
 			if (errors.length > 0) {
-				console.warn('Some operations failed to sync:', errors);
+				syncLogger.warn('Some operations failed to sync', { errors });
 			}
 		} catch (e) {
 			this.lastSyncError = (e as Error).message;
@@ -204,7 +207,7 @@ class SyncManager {
 				}
 			}
 		} catch (e) {
-			console.error(`Pull error for list ${listId}:`, e);
+			syncLogger.error(`Pull error for list`, { listId }, e);
 		}
 	}
 
@@ -240,7 +243,7 @@ class SyncManager {
 				}
 			}
 		} catch (e) {
-			console.error('Reconcile all lists error:', e);
+			syncLogger.error('Reconcile all lists error', {}, e);
 		} finally {
 			this.isSyncing = false;
 		}

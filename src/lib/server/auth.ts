@@ -3,6 +3,7 @@ import { users, sessions } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import type { RequestEvent } from '@sveltejs/kit';
 import { dev } from '$app/environment';
+import { logger } from '$lib/logger';
 
 const SESSION_COOKIE_NAME = 'auth_session';
 
@@ -19,7 +20,10 @@ export async function getSession(event: RequestEvent) {
 		.innerJoin(users, eq(sessions.userId, users.id))
 		.where(eq(sessions.id, sessionId));
 
-	if (result.length === 0) return null;
+	if (result.length === 0) {
+		logger.warn('Session cookie present but session not found in DB', { sessionId });
+		return null;
+	}
 
 	const { session, user } = result[0];
 
@@ -52,6 +56,8 @@ export async function createAnonymousSession(event: RequestEvent) {
 		sameSite: 'lax',
 		secure: !dev
 	});
+
+	logger.info('Created anonymous session', { userId, sessionId });
 
 	return {
 		session: { id: sessionId, userId },

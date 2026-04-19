@@ -6,6 +6,9 @@ import { MESSAGES } from '$lib/constants/messages';
 import type { RequestHandler } from './$types';
 import { syncHub } from '$lib/server/sync';
 import { syncRequestSchema } from '$lib/validations';
+import { logger } from '$lib/logger';
+
+const syncLogger = logger.child({ module: 'sync' });
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const user = locals.user;
@@ -15,11 +18,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const validation = syncRequestSchema.safeParse(body);
 
 	if (!validation.success) {
-		console.error('Sync validation failed:', validation.error.format());
+		syncLogger.error('Sync validation failed', { error: validation.error.format(), userId: user.id });
 		throw error(400, `${MESSAGES.DATA.PROCESS_ERROR}: ${validation.error.message}`);
 	}
 
 	const { operations } = validation.data;
+	syncLogger.info(`Processing ${operations.length} operations`, { userId: user.id, count: operations.length });
 
 	const results = [];
 	const updatedListIds = new Set<string>();
@@ -167,12 +171,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					if (itemRecord[0]) listIdToNotify = itemRecord[0].listId;
 				}
 				if (listIdToNotify) {
-					console.log(`Queueing notification for list: ${listIdToNotify} due to ${op.entity} ${op.type}`);
+					syncLogger.debug(`Queueing notification for list: ${listIdToNotify}`, { entity: op.entity, type: op.type });
 					updatedListIds.add(listIdToNotify);
 				}
 			}
 		} catch (e) {
-			console.error(`Sync error for op ${op.id}:`, e);
+			syncLogger.error(`Sync operation error`, { opId: op.id, entity: op.entity, type: op.type, userId: user.id }, e);
 			results.push({ id: op.id, status: 'error', message: (e as Error).message });
 		}
 	}
@@ -211,7 +215,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	// Emit all notifications in order
 	for (const { channel, payload } of notifications) {
-		console.log(`Pushing update to channel ${channel}`);
+		syncLogger.debug(`Pushing update to channel ${channel}`, { channel, listId: payload.listId });
 		syncHub.emit(channel, payload);
 	}
 
@@ -227,10 +231,10 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 	const stream = new ReadableStream({
 		start(controller) {
-			console.log(`[${connectionId}] SSE starting for user: ${user.id}`);
+			syncLogger.info(`SSE connection started`, { connectionId, userId: user.id });
 			
 			const onUpdate = (payload: any) => {
-				console.log(`[${connectionId}] SSE sending update:`, payload.listId || 'global');
+				syncLogger.debug(`SSE sending update`, { connectionId, listId: payload.listId || 'global' });
 				try {
 					controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'update', ...payload })}\n\n`));
 				} catch (e) {
@@ -239,7 +243,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 			};
 
 			const cleanup = () => {
-				console.log(`[${connectionId}] SSE cleaning up`);
+				syncLogger.info(`SSE connection cleanup`, { connectionId, userId: user.id });
 				syncHub.off(`user:${user.id}`, onUpdate);
 				try { controller.close(); } catch (e) {}
 			};
@@ -259,7 +263,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 			return cleanup;
 		},
 		cancel() {
-			console.log(`[${connectionId}] SSE cancelled by client`);
+			syncLogger.info(`SSE connection cancelled by client`, { connectionId, userId: user.id });
 		}
 	});
 
