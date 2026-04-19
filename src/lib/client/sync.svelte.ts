@@ -107,16 +107,22 @@ class SyncManager {
 		this.isSyncing = true;
 		this.lastSyncError = null;
 
+		const startTime = performance.now();
+		syncLogger.info(`Pushing ${count} operations to server...`);
+
 		try {
 			const ops = await db.syncQueue.toArray();
+			
+			const fetchStart = performance.now();
 			const response = await fetch('/api/sync', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ operations: ops })
 			});
+			const fetchDuration = (performance.now() - fetchStart).toFixed(2);
 
 			if (!response.ok) {
-				throw new Error(`Sync failed: ${response.statusText}`);
+				throw new Error(`Sync failed: ${response.statusText} (${response.status})`);
 			}
 
 			const { results } = await response.json();
@@ -131,10 +137,20 @@ class SyncManager {
 			}
 
 			const errors = results.filter((r: any) => r.status === 'error');
+			const totalDuration = (performance.now() - startTime).toFixed(2);
+
+			syncLogger.info(`Sync batch complete in ${totalDuration}ms (Network: ${fetchDuration}ms)`, {
+				processed: successfulIds.length,
+				failed: errors.length,
+				remaining: count - successfulIds.length
+			});
+
 			if (errors.length > 0) {
 				syncLogger.warn('Some operations failed to sync', { errors });
 			}
 		} catch (e) {
+			const duration = (performance.now() - startTime).toFixed(2);
+			syncLogger.error(`Sync failed after ${duration}ms`, { count }, e);
 			this.lastSyncError = (e as Error).message;
 			throw e;
 		} finally {
@@ -143,18 +159,24 @@ class SyncManager {
 	}
 
 	async pull(listId: string, snapshot?: { list: any, items: any[] }) {
+		const startTime = performance.now();
 		try {
 			let list, items;
 
 			if (snapshot) {
 				list = snapshot.list;
 				items = snapshot.items;
+				syncLogger.debug(`Reconciling list ${listId} from snapshot`);
 			} else {
+				const fetchStart = performance.now();
 				const response = await fetch(`/api/lists/${listId}`);
+				const fetchDuration = (performance.now() - fetchStart).toFixed(2);
+
 				if (!response.ok) return;
 				const data = await response.json();
 				list = data.list;
 				items = data.items;
+				syncLogger.debug(`Fetched list ${listId} in ${fetchDuration}ms`);
 			}
 
 			// Reconciliation: Only update if not pending local changes AND server is newer
@@ -206,8 +228,12 @@ class SyncManager {
 					await db.items.delete(localItem.id);
 				}
 			}
+
+			const totalDuration = (performance.now() - startTime).toFixed(2);
+			syncLogger.info(`Pull/Reconcile for ${listId} complete in ${totalDuration}ms`, { items: items.length });
 		} catch (e) {
-			syncLogger.error(`Pull error for list`, { listId }, e);
+			const duration = (performance.now() - startTime).toFixed(2);
+			syncLogger.error(`Pull error for list ${listId} after ${duration}ms`, {}, e);
 		}
 	}
 
