@@ -37,6 +37,13 @@ self.addEventListener('fetch', (event) => {
 
 	async function respond() {
 		const url = new URL(event.request.url);
+		
+		// Don't intercept API calls - they should always go to the network
+		// and cannot be cached as they may be long-running streams (SSE)
+		if (url.pathname.startsWith('/api/')) {
+			return fetch(event.request);
+		}
+
 		const cache = await caches.open(CACHE);
 
 		// `build`/`files` can always be served from the cache
