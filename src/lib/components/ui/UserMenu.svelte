@@ -1,18 +1,19 @@
 <script lang="ts">
 	import * as Menu from "./Menu";
 	import { syncManager } from "$lib/client/sync.svelte";
-	import { fly } from "svelte/transition";
 	import Dialog from "./Dialog.svelte";
-	import QRCode from "qrcode";
 	import { page } from "$app/state";
 	import { deleteList } from "$lib/client/actions";
 	import { goto } from "$app/navigation";
 	import { menuState } from "$lib/client/menu.svelte";
+	import { db as dexieDb } from "$lib/client/db";
+	import QRCodeDisplay from "./QRCodeDisplay.svelte";
+	import ConfirmDeleteDialog from "./ConfirmDeleteDialog.svelte";
 	import * as auth from "$lib/client/auth";
 
 	let { user } = $props();
 
-	let qrCodeDataUrl = $state("");
+	let qrCodeUrl = $state("");
 	let isSyncDialogOpen = $state(false);
 	let isDeleteDialogOpen = $state(false);
 	let isLoadingQr = $state(false);
@@ -31,16 +32,9 @@
 
 	async function handleSyncDevice() {
 		isLoadingQr = true;
+		qrCodeUrl = "";
 		try {
-			const url = await auth.getCloneUrl();
-			qrCodeDataUrl = await QRCode.toDataURL(url, {
-				width: 300,
-				margin: 2,
-				color: {
-					dark: "#000000",
-					light: "#ffffff",
-				},
-			});
+			qrCodeUrl = await auth.getCloneUrl();
 		} catch (e) {
 			console.error("Failed to generate sync QR:", e);
 		} finally {
@@ -53,7 +47,6 @@
 			handleSyncDevice();
 		}
 	});
-
 
 	const statusColor = $derived(
 		!syncManager.isOnline
@@ -127,7 +120,9 @@
 						>{statusText}</span
 					>
 					{#if syncManager.lastSyncError}
-						<span class="tiny danger mono error-message">{syncManager.lastSyncError}</span>
+						<span class="tiny danger mono error-message"
+							>{syncManager.lastSyncError}</span
+						>
 					{/if}
 				</div>
 			</div>
@@ -281,56 +276,21 @@
 		description="Scan this QR code with another device to mirror this session. This link expires in 10 minutes."
 	>
 		<div class="user-menu-qr-wrapper">
-			<div class="user-menu-qr-container">
-				{#if isLoadingQr}
-					<div class="qr-placeholder mono small muted">
-						Generating secure key...
-					</div>
-				{:else if qrCodeDataUrl}
-					<img
-						src={qrCodeDataUrl}
-						alt="Sync QR Code"
-						class="user-menu-qr-image"
-					/>
-				{:else}
-					<div class="user-menu-qr-placeholder mono small danger">
-						Failed to generate key
-					</div>
-				{/if}
-			</div>
+			<QRCodeDisplay url={qrCodeUrl} isLoading={isLoadingQr} />
 			<div class="user-menu-qr-footer small muted mono">
 				Sync session active
 			</div>
 		</div>
 	</Dialog>
 
-	<Dialog
+	<ConfirmDeleteDialog
 		bind:open={isDeleteDialogOpen}
 		title="Delete List"
 		description="This action cannot be undone. To confirm, please type the name of the list: {currentList?.name}"
-	>
-		<div class="user-menu-qr-wrapper">
-			<div class="input-group">
-				<div class="input-prefix">&gt;</div>
-				<input
-					type="text"
-					placeholder="Confirm list name"
-					bind:value={confirmDeleteName}
-					onkeydown={(e) => e.key === "Enter" && handleDeleteList()}
-				/>
-				<button
-					class="input-action-btn danger"
-					onclick={handleDeleteList}
-					disabled={confirmDeleteName !== currentList?.name}
-				>
-					Delete
-				</button>
-			</div>
-			<div class="user-menu-qr-footer small muted mono">
-				Warning: permanent action
-			</div>
-		</div>
-	</Dialog>
+		targetName={currentList?.name}
+		onConfirm={handleDeleteList}
+		footerLabel="Warning: permanent action"
+	/>
 </div>
 
 <style>
@@ -454,36 +414,6 @@
 			align-items: center;
 			gap: var(--space-4);
 			width: 100%;
-		}
-
-		.user-menu-qr-container {
-			display: flex;
-			flex-direction: column;
-			align-items: center;
-			justify-content: center;
-			width: 100%;
-			max-width: 280px;
-			aspect-ratio: 1 / 1;
-			background: white;
-			border-radius: var(--radius-md);
-			padding: var(--space-4);
-			box-shadow: 0 0 40px rgba(0, 0, 0, 0.3);
-		}
-
-		.user-menu-qr-image {
-			width: 100%;
-			max-width: 250px;
-			image-rendering: pixelated;
-		}
-
-		.user-menu-qr-placeholder {
-			color: #000;
-			text-align: center;
-		}
-
-		.user-menu-qr-footer {
-			opacity: 0.5;
-			letter-spacing: 2px;
 		}
 	}
 </style>

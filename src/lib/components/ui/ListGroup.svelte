@@ -5,6 +5,8 @@
 	import { flip } from "svelte/animate";
 	import Checkbox from "./Checkbox.svelte";
 	import Dialog from "./Dialog.svelte";
+	import InputGroup from "./InputGroup.svelte";
+	import ConfirmDeleteDialog from "./ConfirmDeleteDialog.svelte";
 
 	let {
 		groupName,
@@ -125,49 +127,25 @@
 	title="Rename group"
 	description="Enter a new name for this group."
 >
-	<div class="input-group">
-		<div class="input-prefix">&gt;</div>
-		<input
-			type="text"
-			placeholder="group name"
-			bind:value={editName}
-			onkeydown={(e) => {
-				if (e.key === "Enter" && editName && editName !== groupName) {
-					onRename(editName);
-					isRenameDialogOpen = false;
-				}
-			}}
-		/>
-		<button
-			class="input-action-btn"
-			onclick={() => {
-				onRename(editName);
-				isRenameDialogOpen = false;
-			}}
-			disabled={!editName || editName === groupName}
-		>
-			Rename
-		</button>
-	</div>
+	<InputGroup
+		placeholder="group name"
+		bind:value={editName}
+		onAction={() => {
+			onRename(editName);
+			isRenameDialogOpen = false;
+		}}
+		actionLabel="Rename"
+		disabled={!editName || editName === groupName}
+	/>
 </Dialog>
 
-<Dialog
+<ConfirmDeleteDialog
 	bind:open={isDeleteDialogOpen}
 	title="Delete group"
 	description="Are you sure you want to delete '{groupName}'? All items in this group will be permanently removed."
->
-	<div class="list-group-dialog-actions">
-		<button
-			class="btn-primary danger"
-			onclick={() => {
-				onDelete();
-				isDeleteDialogOpen = false;
-			}}
-		>
-			Delete group
-		</button>
-	</div>
-</Dialog>
+	targetName={groupName}
+	onConfirm={onDelete}
+/>
 
 <style>
 	:global {
@@ -320,23 +298,5 @@
 			gap: var(--space-4) !important;
 		}
 
-		/* Dialog specific actions for ListGroup */
-		.list-group-dialog-actions {
-			display: flex;
-			justify-content: flex-end;
-			gap: var(--space-4);
-			margin-top: var(--space-2);
-
-			.btn-primary.danger {
-				background: var(--danger);
-				color: white;
-
-				&:hover {
-					background: var(--bg-0);
-					color: var(--danger);
-					border-color: var(--danger);
-				}
-			}
-		}
 	}
 </style>

@@ -4,6 +4,8 @@
 	import { liveQuery } from "dexie";
 	import { syncManager } from "$lib/client/sync.svelte";
 	import { onMount } from "svelte";
+	import InputGroup from "$lib/components/ui/InputGroup.svelte";
+	import EmptyState from "$lib/components/ui/EmptyState.svelte";
 
 	let { data } = $props();
 
@@ -67,30 +69,20 @@
 				{/each}
 			</div>
 		{:else}
-			<div class="empty-state">
-				<p>No lists yet.</p>
-				<p class="muted small">Create one below to get started.</p>
-			</div>
+			<EmptyState 
+				title="No lists yet" 
+				message="Create one below to get started." 
+			/>
 		{/if}
 	</section>
 
 	<section class="create-section">
-		<div class="input-group">
-			<div class="input-prefix">&gt;</div>
-			<input
-				type="text"
-				placeholder="CREATE NEW LIST"
-				bind:value={newListName}
-				onkeydown={(e) => e.key === "Enter" && handleCreate()}
-			/>
-			<button
-				class="input-action-btn"
-				onclick={handleCreate}
-				disabled={!newListName.trim()}
-			>
-				CREATE
-			</button>
-		</div>
+		<InputGroup
+			placeholder="CREATE NEW LIST"
+			bind:value={newListName}
+			onAction={handleCreate}
+			actionLabel="CREATE"
+		/>
 	</section>
 </div>
 
@@ -177,13 +169,6 @@
 				}
 			}
 
-			.empty-state {
-				text-align: center;
-				padding: var(--space-8) 0;
-				display: flex;
-				flex-direction: column;
-				gap: var(--space-4);
-			}
 
 			.create-section {
 				border-top: 1px solid var(--border);

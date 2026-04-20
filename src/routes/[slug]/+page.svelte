@@ -19,7 +19,10 @@
 	import { menuState } from "$lib/client/menu.svelte";
 	import ListGroup from "$lib/components/ui/ListGroup.svelte";
 	import { fade } from "svelte/transition";
-	import QRCode from "qrcode";
+	import InputGroup from "$lib/components/ui/InputGroup.svelte";
+	import EmptyState from "$lib/components/ui/EmptyState.svelte";
+	import QRCodeDisplay from "$lib/components/ui/QRCodeDisplay.svelte";
+	import ConfirmDeleteDialog from "$lib/components/ui/ConfirmDeleteDialog.svelte";
 
 	let { data } = $props();
 
@@ -166,7 +169,6 @@
 	// Share state
 	let isShareDialogOpen = $state(false);
 	let shareUrl = $state("");
-	let shareQrDataUrl = $state("");
 	let isShareLoading = $state(false);
 	let shareCopied = $state(false);
 	let sharePermanent = $state(true);
@@ -185,7 +187,6 @@
 		if (!data.listId) return;
 		isShareLoading = true;
 		shareUrl = "";
-		shareQrDataUrl = "";
 		shareCopied = false;
 		try {
 			const expiresAt = sharePermanent
@@ -193,13 +194,7 @@
 				: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 			
 			const result = await shareList(data.listId, expiresAt);
-			
 			shareUrl = result.url;
-			shareQrDataUrl = await QRCode.toDataURL(result.url, {
-				width: 300,
-				margin: 2,
-				color: { dark: "#000000", light: "#ffffff" },
-			});
 		} catch (e) {
 			console.error("Failed to generate share link:", e);
 		} finally {
@@ -326,22 +321,12 @@
 		use:registerContextualMenu={contextualMenuItems}
 	>
 		<div class="list-controls">
-			<div class="input-group">
-				<div class="input-prefix">&gt;</div>
-				<input
-					type="text"
-					placeholder="Add item or [Group] item"
-					bind:value={newItemName}
-					onkeydown={(e) => e.key === "Enter" && handleAddItem()}
-				/>
-				<button
-					class="input-action-btn"
-					onclick={handleAddItem}
-					disabled={!newItemName.trim()}
-				>
-					Add
-				</button>
-			</div>
+			<InputGroup
+				placeholder="Add item or [Group] item"
+				bind:value={newItemName}
+				onAction={handleAddItem}
+				actionLabel="Add"
+			/>
 		</div>
 
 		<section class="items-section">
@@ -365,9 +350,7 @@
 					{/each}
 				</div>
 			{:else}
-				<div class="empty-state muted">
-					<p>List is empty.</p>
-				</div>
+				<EmptyState title="List is empty" />
 			{/if}
 		</section>
 
@@ -377,23 +360,7 @@
 			description="Share this list with others. Anyone with the link can join and collaborate."
 		>
 			<div class="share-dialog-wrapper">
-				<div class="share-qr-container">
-					{#if isShareLoading}
-						<div class="share-qr-placeholder mono small muted">
-							Generating invite link...
-						</div>
-					{:else if shareQrDataUrl}
-						<img
-							src={shareQrDataUrl}
-							alt="Share QR Code"
-							class="share-qr-image"
-						/>
-					{:else}
-						<div class="share-qr-placeholder mono small danger">
-							Failed to generate link
-						</div>
-					{/if}
-				</div>
+				<QRCodeDisplay url={shareUrl} isLoading={isShareLoading} />
 
 				<div class="share-options">
 					<button
@@ -420,21 +387,13 @@
 
 				{#if shareUrl}
 					<div class="share-link-row">
-						<div class="input-group">
-							<div class="input-prefix">🔗</div>
-							<input
-								type="text"
-								readonly
-								value={shareUrl}
-								onclick={(e) => e.currentTarget.select()}
-							/>
-							<button
-								class="input-action-btn"
-								onclick={handleCopyShareUrl}
-							>
-								{shareCopied ? "Copied" : "Copy"}
-							</button>
-						</div>
+						<InputGroup
+							prefix="🔗"
+							readonly
+							value={shareUrl}
+							actionLabel={shareCopied ? "Copied" : "Copy"}
+							onAction={handleCopyShareUrl}
+						/>
 					</div>
 				{/if}
 				<div class="share-dialog-footer small muted mono">
@@ -444,34 +403,13 @@
 			</div>
 		</Dialog>
 
-		<Dialog
+		<ConfirmDeleteDialog
 			bind:open={isDeleteDialogOpen}
 			title="Delete list"
 			description="This action cannot be undone. To confirm, please type the name of the list: '{$list?.name}'"
-		>
-			<div class="list-page-dialog-wrapper">
-				<div class="input-group">
-					<div class="input-prefix">&gt;</div>
-					<input
-						type="text"
-						placeholder="Confirm list name"
-						bind:value={confirmDeleteName}
-						onkeydown={(e) =>
-							e.key === "Enter" && handleDeleteList()}
-					/>
-					<button
-						class="input-action-btn danger"
-						onclick={handleDeleteList}
-						disabled={confirmDeleteName !== $list?.name}
-					>
-						Delete
-					</button>
-				</div>
-				<div class="list-page-dialog-footer small muted mono">
-					Permanent action
-				</div>
-			</div>
-		</Dialog>
+			targetName={$list?.name}
+			onConfirm={handleDeleteList}
+		/>
 	</div>
 {/if}
 
@@ -529,56 +467,10 @@
 				gap: var(--space-6);
 			}
 
-			.empty-state {
-				text-align: center;
-				padding: var(--space-12);
-				border: 1px dashed var(--border);
-				border-radius: var(--radius-lg);
-				font-family: var(--font-mono);
-				text-transform: uppercase;
-				letter-spacing: 0.1em;
-			}
 		}
 
 		/* Portaled Dialog Elements */
-		.list-page-dialog-wrapper {
-			display: flex;
-			flex-direction: column;
-			gap: var(--space-6);
-			margin-top: var(--space-2);
 
-			.input-prefix {
-				color: var(--danger);
-			}
-
-			.input-action-btn.danger {
-				background: var(--danger) !important;
-				color: white !important;
-				border-left: 1px solid var(--border) !important;
-				letter-spacing: 0.05em;
-				padding: 0 var(--space-8) !important;
-
-				&:hover:not(:disabled) {
-					background: var(--danger) !important;
-					box-shadow: 0 0 20px var(--danger-muted);
-				}
-
-				&:disabled {
-					background: var(--bg-2) !important;
-					color: var(--fg-3) !important;
-					opacity: 0.5;
-				}
-			}
-		}
-
-		.list-page-dialog-footer {
-			margin-top: var(--space-2);
-			padding-top: var(--space-4);
-			border-top: 1px dashed var(--border);
-			opacity: 0.4;
-			letter-spacing: 0.2em;
-			font-size: 0.65rem;
-		}
 
 		/* Share Dialog */
 		.share-dialog-wrapper {
@@ -589,30 +481,6 @@
 			width: 100%;
 		}
 
-		.share-qr-container {
-			display: flex;
-			flex-direction: column;
-			align-items: center;
-			justify-content: center;
-			width: 100%;
-			max-width: 280px;
-			aspect-ratio: 1 / 1;
-			background: white;
-			border-radius: var(--radius-md);
-			padding: var(--space-4);
-			box-shadow: 0 0 40px rgba(0, 0, 0, 0.3);
-		}
-
-		.share-qr-image {
-			width: 100%;
-			max-width: 250px;
-			image-rendering: pixelated;
-		}
-
-		.share-qr-placeholder {
-			color: #000;
-			text-align: center;
-		}
 
 		.share-options {
 			display: flex;
