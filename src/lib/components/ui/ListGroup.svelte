@@ -135,7 +135,7 @@
 			isRenameDialogOpen = false;
 		}}
 		actionLabel="Rename"
-		disabled={!editName || editName === groupName}
+		actionDisabled={!editName || editName === groupName}
 	/>
 </Dialog>
 

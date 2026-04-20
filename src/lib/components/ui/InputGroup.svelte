@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { HTMLInputAttributes } from 'svelte/elements';
+	import type { HTMLInputAttributes } from "svelte/elements";
 
 	interface Props extends HTMLInputAttributes {
 		value: string;
@@ -14,18 +14,24 @@
 
 	let {
 		value = $bindable(),
-		prefix = '>',
+		prefix = ">",
 		actionLabel,
 		onAction,
 		danger = false,
 		disabled = false,
 		placeholder = undefined,
 		actionDisabled = false,
-		...rest
+		...restInputGro
 	} = $props();
 
 	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter' && onAction && !disabled && !actionDisabled && value.trim()) {
+		if (
+			e.key === "Enter" &&
+			onAction &&
+			!disabled &&
+			!actionDisabled &&
+			value.trim()
+		) {
 			onAction();
 		}
 	}
@@ -35,7 +41,7 @@
 	{#if prefix}
 		<div class="input-prefix">{prefix}</div>
 	{/if}
-	
+
 	<input
 		type="text"
 		{placeholder}
@@ -60,7 +66,7 @@
 <style>
 	:global {
 		/* Inherit core styles from app.css .input-group */
-		
+
 		.input-group.danger {
 			&:focus-within {
 				border-color: var(--danger) !important;

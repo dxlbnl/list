@@ -17,15 +17,13 @@
 	let isSyncDialogOpen = $state(false);
 	let isDeleteDialogOpen = $state(false);
 	let isLoadingQr = $state(false);
-	let confirmDeleteName = $state("");
 
 	const currentList = $derived(page.data.initialList);
 
 	async function handleDeleteList() {
-		if (confirmDeleteName === currentList?.name) {
+		if (currentList?.id) {
 			await deleteList(currentList.id);
 			isDeleteDialogOpen = false;
-			confirmDeleteName = "";
 			goto("/");
 		}
 	}

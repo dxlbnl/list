@@ -164,7 +164,6 @@
 	}
 
 	let isDeleteDialogOpen = $state(false);
-	let confirmDeleteName = $state("");
 
 	// Share state
 	let isShareDialogOpen = $state(false);
@@ -175,12 +174,9 @@
 
 	async function handleDeleteList() {
 		if (!data.listId) return;
-		const currentList = await dexieDb.lists.get(data.listId);
-		if (confirmDeleteName === currentList?.name) {
-			await deleteList(data.listId);
-			isDeleteDialogOpen = false;
-			goto("/");
-		}
+		await deleteList(data.listId);
+		isDeleteDialogOpen = false;
+		goto("/");
 	}
 
 	async function handleShareList() {
