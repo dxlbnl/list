@@ -37,3 +37,4 @@
 - [x] Fixed UserMenu Bits UI scoping and Portal issues
 - [x] Fixed Dialog centering and QRCode generation imports
 - [x] Moved context-aware actions to UserMenu
+- [ ] Totally offline app (even offline reloading)

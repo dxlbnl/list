@@ -13,3 +13,10 @@ Chronological record of major events, decisions, and wiki updates.
 - Refactored `ListGroup.svelte` to use `:global` for Bits UI component classes to prevent Svelte purging.
 - Created `bits-ui-styling.md` to document the headless styling pattern.
 - Implemented "Hide Single Group" logic for cleaner UI on non-categorized lists.
+
+- [2026-04-20] update | Codebase Audit & Wiki Synchronization
+- Ran `analyze-sveltekit-app` skill to audit the current state of the app.
+- Updated `codebase.md` with refined route tree and API endpoints.
+- Updated `server-modules.md` to reflect the per-user channel broadcasting logic in `SyncHub`.
+- Documented pattern violations (direct DB access, raw fetch) in `issues.md`.
+- Verified alignment of Data Model with current Svelte 5 and Drizzle schemas.

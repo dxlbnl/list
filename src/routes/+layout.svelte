@@ -1,7 +1,6 @@
 <script lang="ts">
 	import "../app.css";
 	import { syncManager } from "$lib/client/sync.svelte";
-	import favicon from "$lib/assets/favicon.svg";
 	import { page } from '$app/state';
 	import Header from "./Header.svelte";
 	import { themeManager } from "$lib/client/theme.svelte";
@@ -13,7 +12,7 @@
 
 <svelte:head>
 	<title>{pageTitle}</title>
-	<link rel="icon" href={favicon} />
+	<link rel="icon" href="/icon-192.png" />
 </svelte:head>
 
 <main class="container">
