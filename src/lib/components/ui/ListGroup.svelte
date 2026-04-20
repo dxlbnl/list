@@ -256,6 +256,7 @@
 			font-family: var(--font-mono);
 			font-size: 0.7rem;
 			color: var(--fg-3);
+			touch-action: none; /* Prevent scrolling/refresh on drag handle */
 
 			&:hover {
 				opacity: 1;

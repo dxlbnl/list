@@ -119,6 +119,7 @@ body {
 	-moz-osx-font-smoothing: grayscale;
 	line-height: 1.5;
 	overflow-x: hidden;
+	overscroll-behavior-y: contain; /* Prevent pull-to-refresh */
 }
 
 img, picture, svg, video {

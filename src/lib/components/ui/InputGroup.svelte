@@ -21,7 +21,7 @@
 		disabled = false,
 		placeholder = undefined,
 		actionDisabled = false,
-		...restInputGro
+		...rest
 	} = $props();
 
 	function handleKeydown(e: KeyboardEvent) {

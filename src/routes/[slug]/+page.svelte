@@ -188,7 +188,7 @@
 			const expiresAt = sharePermanent
 				? null
 				: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-			
+
 			const result = await shareList(data.listId, expiresAt);
 			shareUrl = result.url;
 		} catch (e) {
@@ -462,11 +462,9 @@
 				flex-direction: column;
 				gap: var(--space-6);
 			}
-
 		}
 
 		/* Portaled Dialog Elements */
-
 
 		/* Share Dialog */
 		.share-dialog-wrapper {
@@ -476,7 +474,6 @@
 			gap: var(--space-6);
 			width: 100%;
 		}
-
 
 		.share-options {
 			display: flex;
