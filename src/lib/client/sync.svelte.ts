@@ -6,6 +6,7 @@ const syncLogger = logger.child({ module: 'client-sync' });
 class SyncManager {
 	isSyncing = $state(false);
 	isOnline = $state(true);
+	sseStatus = $state<'connected' | 'connecting' | 'disconnected'>('connecting');
 	lastSyncError = $state<string | null>(null);
 	private eventSource: EventSource | null = null;
 	private activeListIds = new Set<string>();
@@ -46,6 +47,8 @@ class SyncManager {
 		
 		this.eventSource.onopen = () => {
 			this.isOnline = true;
+			this.sseStatus = 'connected';
+			this.lastSyncError = null;
 		};
 
 		this.eventSource.onmessage = async (event) => {
@@ -77,6 +80,8 @@ class SyncManager {
 
 		this.eventSource.onerror = (e) => {
 			this.isOnline = false;
+			this.sseStatus = 'disconnected';
+			this.lastSyncError = "Live sync connection lost. Browser will retry automatically.";
 			syncLogger.warn('SSE connection lost. Browser will retry automatically.');
 		};
 	}

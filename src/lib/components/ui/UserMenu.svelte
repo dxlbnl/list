@@ -8,7 +8,7 @@
 	import { deleteList } from "$lib/client/actions";
 	import { goto } from "$app/navigation";
 	import { menuState } from "$lib/client/menu.svelte";
-	import { db as dexieDb } from "$lib/client/db";
+	import * as auth from "$lib/client/auth";
 
 	let { user } = $props();
 
@@ -32,8 +32,7 @@
 	async function handleSyncDevice() {
 		isLoadingQr = true;
 		try {
-			const res = await fetch("/api/auth/clone", { method: "POST" });
-			const { url } = await res.json();
+			const url = await auth.getCloneUrl();
 			qrCodeDataUrl = await QRCode.toDataURL(url, {
 				width: 300,
 				margin: 2,
@@ -55,12 +54,6 @@
 		}
 	});
 
-	async function handleLogout() {
-		// Clear local database to prevent data leaking
-		await dexieDb.delete();
-		// Redirect to server-side logout
-		window.location.href = "/logout";
-	}
 
 	const statusColor = $derived(
 		!syncManager.isOnline
@@ -129,9 +122,14 @@
 					style:background={statusColor}
 					class:pulse={syncManager.isSyncing}
 				></div>
-				<span class="tiny muted mono uppercase tracking-widest"
-					>{statusText}</span
-				>
+				<div class="status-header-text">
+					<span class="tiny muted mono uppercase tracking-widest"
+						>{statusText}</span
+					>
+					{#if syncManager.lastSyncError}
+						<span class="tiny danger mono error-message">{syncManager.lastSyncError}</span>
+					{/if}
+				</div>
 			</div>
 
 			<Menu.Separator />
@@ -248,7 +246,7 @@
 			{#if user?.email_verified}
 				<Menu.Separator />
 				<Menu.Group>
-					<Menu.Item danger onSelect={handleLogout}>
+					<Menu.Item danger onSelect={auth.logout}>
 						<div class="icon-container">
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
@@ -421,6 +419,20 @@
 			.chevron {
 				opacity: 0.3;
 				margin-right: var(--space-2);
+			}
+
+			.status-header-text {
+				display: flex;
+				flex-direction: column;
+				gap: 2px;
+			}
+
+			.error-message {
+				color: var(--danger);
+				font-size: 0.6rem;
+				opacity: 0.8;
+				max-width: 200px;
+				line-height: 1.2;
 			}
 
 			@media (max-width: 250px) {

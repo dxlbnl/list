@@ -7,6 +7,7 @@
 		deleteItem as deleteItemAction,
 		renameGroup,
 		deleteGroup,
+		shareList,
 	} from "$lib/client/actions";
 	import { db as dexieDb } from "$lib/client/db";
 	import { liveQuery } from "dexie";
@@ -190,12 +191,9 @@
 			const expiresAt = sharePermanent
 				? null
 				: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-			const res = await fetch(`/api/lists/${data.listId}/share`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ expiresAt }),
-			});
-			const result = await res.json();
+			
+			const result = await shareList(data.listId, expiresAt);
+			
 			shareUrl = result.url;
 			shareQrDataUrl = await QRCode.toDataURL(result.url, {
 				width: 300,

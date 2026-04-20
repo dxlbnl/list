@@ -168,3 +168,18 @@ export async function deleteGroup(listId: string, groupName: string) {
 		await deleteItem(item.id);
 	}
 }
+
+export async function shareList(listId: string, expiresAt: string | null) {
+	const res = await fetch(`/api/lists/${listId}/share`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ expiresAt }),
+	});
+	
+	if (!res.ok) {
+		throw new Error(`Failed to generate share link: ${res.statusText}`);
+	}
+	
+	return await res.json();
+}
+
