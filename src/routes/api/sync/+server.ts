@@ -235,7 +235,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					for (const userId of authorizedUsers) notifications.push({ channel: `user:${userId}`, payload });
 				} else {
 					const memberIds = deletedListMembers.get(listId) || [];
-					for (const userId of memberIds) notifications.push({ channel: `user:${userId}`, payload: { listId, deleted: true } });
+					for (const userId of memberIds) {
+						notifications.push({ channel: `user:${userId}`, payload: { listId, deleted: true } });
+						// Force a global refresh for all members to ensure their dashboard grid is updated
+						notifications.push({ channel: `user:${userId}`, payload: { listId: 'global' } });
+					}
 				}
 			}
 		}

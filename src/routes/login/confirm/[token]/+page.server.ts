@@ -1,7 +1,8 @@
 import { db } from '$lib/server/db';
-import { users, sessions, magicLinks, lists, listUsers } from '$lib/server/db/schema';
+import { users, sessions, magicLinks } from '$lib/server/db/schema';
+import { mergeUsers } from '$lib/server/auth';
 import { nanoid } from '$lib/utils';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { error, redirect } from '@sveltejs/kit';
 import { MESSAGES } from '$lib/constants/messages';
 import { dev } from '$app/environment';
@@ -29,7 +30,7 @@ export const load: PageServerLoad = async ({ params }) => {
 };
 
 export const actions: Actions = {
-	default: async ({ params, cookies }) => {
+	default: async ({ params, cookies, locals }) => {
 		const { token } = params;
 
 		const result = await db
@@ -48,6 +49,7 @@ export const actions: Actions = {
 		}
 
 		let targetUserId: string;
+		const currentUserId = locals.user?.id;
 		
 		if (link.email) {
 			// 1. Check if user with this email already exists
@@ -60,61 +62,8 @@ export const actions: Actions = {
 				targetUserId = existingUser[0].id;
 
 				// 2. Merge anonymous data if applicable
-				if (link.userIdToMerge && link.userIdToMerge !== targetUserId) {
-					const anonLists = await db
-						.select()
-						.from(lists)
-						.where(eq(lists.createdBy, link.userIdToMerge));
-
-					for (const listRecord of anonLists) {
-						let newSlug = listRecord.slug;
-						
-						// Check for slug collision for the target user
-						const collision = await db
-							.select()
-							.from(lists)
-							.where(
-								and(
-									eq(lists.createdBy, targetUserId), 
-									eq(lists.slug, newSlug)
-								)
-							);
-
-						if (collision.length > 0) {
-							newSlug = `${newSlug}-${nanoid(4)}`;
-						}
-
-						// Update list ownership and slug
-						await db
-							.update(lists)
-							.set({ createdBy: targetUserId, slug: newSlug })
-							.where(eq(lists.id, listRecord.id));
-					}
-
-					// Transfer shared list access
-					// 1. Delete anonymous access where the target user already has access
-					const anonAccessSubquery = db
-						.select({ listId: listUsers.listId })
-						.from(listUsers)
-						.where(eq(listUsers.userId, targetUserId));
-
-					await db
-						.delete(listUsers)
-						.where(
-							and(
-								eq(listUsers.userId, link.userIdToMerge),
-								inArray(listUsers.listId, anonAccessSubquery)
-							)
-						);
-
-					// 2. Transfer remaining access
-					await db
-						.update(listUsers)
-						.set({ userId: targetUserId })
-						.where(eq(listUsers.userId, link.userIdToMerge));
-
-					// 3. Finally, delete the anonymous user
-					await db.delete(users).where(eq(users.id, link.userIdToMerge));
+				if (link.userIdToMerge) {
+					await mergeUsers(link.userIdToMerge, targetUserId);
 				}
 			} else {
 				// 3. Convert anonymous user to registered user
@@ -140,6 +89,11 @@ export const actions: Actions = {
 		} else if (link.userIdToMerge) {
 			// Session Cloning Case: No email, just a userId to clone
 			targetUserId = link.userIdToMerge;
+			
+			// If the scanning device has an anonymous session, merge its data into the cloned account
+			if (currentUserId && currentUserId !== targetUserId) {
+				await mergeUsers(currentUserId, targetUserId);
+			}
 		} else {
 			throw error(400, MESSAGES.AUTH.CONTEXT_MISSING);
 		}

@@ -50,8 +50,8 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 
 	let redirectSlug = list.slug;
 	if (myOwnListWithSameSlug && myOwnListWithSameSlug.id !== list.id) {
-		// Collision! Redirect to disambiguated slug
-		redirectSlug = `${list.slug}--${nanoid(4)}`;
+		// Collision! Redirect to disambiguated slug using the owner's prefix (matches logic in +page.ts and +page.svelte)
+		redirectSlug = `${list.slug}--${list.createdBy.slice(0, 8)}`;
 	}
 
 	throw redirect(303, `/${redirectSlug}`);

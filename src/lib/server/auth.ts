@@ -67,3 +67,69 @@ export async function createAnonymousSession(event: RequestEvent) {
 		user: userValues
 	};
 }
+import { lists, listUsers } from '$lib/server/db/schema';
+import { and, inArray } from 'drizzle-orm';
+
+export async function mergeUsers(sourceUserId: string, targetUserId: string) {
+	if (sourceUserId === targetUserId) return;
+
+	logger.info('Merging users', { sourceUserId, targetUserId });
+
+	// 1. Transfer list ownership
+	const anonLists = await db
+		.select()
+		.from(lists)
+		.where(eq(lists.createdBy, sourceUserId));
+
+	for (const listRecord of anonLists) {
+		let newSlug = listRecord.slug;
+		
+		// Check for slug collision for the target user
+		const collision = await db
+			.select()
+			.from(lists)
+			.where(
+				and(
+					eq(lists.createdBy, targetUserId), 
+					eq(lists.slug, newSlug)
+				)
+			);
+
+		if (collision.length > 0) {
+			newSlug = `${newSlug}-${nanoid(4)}`;
+		}
+
+		// Update list ownership and slug
+		await db
+			.update(lists)
+			.set({ createdBy: targetUserId, slug: newSlug })
+			.where(eq(lists.id, listRecord.id));
+	}
+
+	// 2. Transfer shared list access
+	// Delete source access where the target user already has access
+	const targetAccessSubquery = db
+		.select({ listId: listUsers.listId })
+		.from(listUsers)
+		.where(eq(listUsers.userId, targetUserId));
+
+	await db
+		.delete(listUsers)
+		.where(
+			and(
+				eq(listUsers.userId, sourceUserId),
+				inArray(listUsers.listId, targetAccessSubquery)
+			)
+		);
+
+	// Transfer remaining access
+	await db
+		.update(listUsers)
+		.set({ userId: targetUserId })
+		.where(eq(listUsers.userId, sourceUserId));
+
+	// 3. Finally, delete the source user
+	await db.delete(users).where(eq(users.id, sourceUserId));
+	
+	logger.info('User merge complete', { sourceUserId, targetUserId, listsMerged: anonLists.length });
+}

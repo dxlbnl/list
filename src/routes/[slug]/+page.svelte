@@ -51,6 +51,7 @@
 			.equals(data.listId)
 			.and((item) => item.deletedAt === null)
 			.toArray();
+		
 		return all.sort((a, b) => a.rank - b.rank);
 	});
 
@@ -116,12 +117,30 @@
 	function handleDndConsider(groupName: string, e: CustomEvent<any>) {
 		const { items: newItems } = e.detail;
 		dragInProgress = true;
+		
+		// Ensure atomic movement: if items are in newItems, remove them from all other groups
+		const newItemIds = new Set(newItems.map((i: any) => i.id));
+		Object.keys(localGroups).forEach(g => {
+			if (g !== groupName) {
+				localGroups[g] = localGroups[g].filter(i => !newItemIds.has(i.id));
+			}
+		});
+		
 		localGroups[groupName] = newItems;
 	}
 
 	let finalizeTimeout: any;
 	async function handleDndFinalize(groupName: string, e: CustomEvent<any>) {
 		const { items: newItems } = e.detail;
+		
+		// Ensure atomic movement on finalize as well
+		const newItemIds = new Set(newItems.map((i: any) => i.id));
+		Object.keys(localGroups).forEach(g => {
+			if (g !== groupName) {
+				localGroups[g] = localGroups[g].filter(i => !newItemIds.has(i.id));
+			}
+		});
+		
 		localGroups[groupName] = newItems;
 
 		const updates: { id: string; data: any }[] = [];
