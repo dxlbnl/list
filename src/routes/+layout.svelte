@@ -7,6 +7,10 @@
 
 	let { data, children } = $props();
 
+	$effect(() => {
+		syncManager.init(data.supabaseToken);
+	});
+
 	const pageTitle = $derived(page.data.title || "Lists");
 </script>
 

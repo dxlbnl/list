@@ -84,15 +84,47 @@ class Logger {
 				// Structured JSON for Vercel Logs (if user looks at them)
 				console.log(JSON.stringify(logPayload));
 			} else {
-				const prefix = `[${level.toUpperCase()}]`;
-				const args: any[] = [`${prefix} ${message}`];
-				if (hasCtx) args.push(ctx);
+				const colors = {
+					reset: "\x1b[0m",
+					bright: "\x1b[1m",
+					dim: "\x1b[2m",
+					cyan: "\x1b[36m",
+					yellow: "\x1b[33m",
+					red: "\x1b[31m",
+					green: "\x1b[32m",
+					magenta: "\x1b[35m"
+				};
 
-				switch (level) {
-					case 'debug': console.debug(...args); break;
-					case 'info': console.info(...args); break;
-					case 'warn': console.warn(...args); break;
-					case 'error': console.error(...args); break;
+				const colorMap: Record<LogLevel, string> = {
+					debug: colors.dim,
+					info: colors.cyan,
+					warn: colors.yellow,
+					error: colors.red
+				};
+
+				const statusColor = (s?: number) => {
+					if (!s) return colors.reset;
+					if (s >= 500) return colors.red;
+					if (s >= 400) return colors.yellow;
+					if (s >= 200) return colors.green;
+					return colors.reset;
+				};
+
+				const prefix = `${colorMap[level]}[${level.toUpperCase()}]${colors.reset}`;
+				
+				// Special formatting for request logs
+				if (ctx.method && ctx.path) {
+					const status = ctx.status ? `${statusColor(ctx.status)}${ctx.status}${colors.reset}` : '';
+					const duration = ctx.duration ? `${colors.dim}${ctx.duration}ms${colors.reset}` : '';
+					const user = ctx.userId ? `${colors.magenta}@${ctx.userId.slice(0, 5)}${colors.reset}` : '';
+					
+					const { method, path, status: s, duration: d, userId, ...remaining } = ctx;
+					const remainingStr = Object.keys(remaining).length > 0 ? ` ${colors.dim}${JSON.stringify(remaining)}${colors.reset}` : '';
+					
+					console.log(`${prefix} ${colors.bright}${ctx.method}${colors.reset} ${ctx.path} ${status} ${duration} ${user}${remainingStr}`);
+				} else {
+					const ctxStr = hasCtx ? ` ${colors.dim}${JSON.stringify(ctx)}${colors.reset}` : '';
+					console.log(`${prefix} ${message}${ctxStr}`);
 				}
 			}
 		}

@@ -26,7 +26,7 @@ export interface SyncOperation {
 	type: 'INSERT' | 'UPDATE' | 'DELETE';
 	entity: 'list' | 'item';
 	entityId: string;
-	data: any;
+	data: Partial<LocalList> | Partial<LocalItem>;
 	timestamp: number;
 }
 

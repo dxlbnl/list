@@ -14,9 +14,11 @@ declare global {
 				id: string;
 				userId: string;
 			} | null;
+			supabaseToken?: string;
 		}
 		interface PageData {
 			user: Locals['user'];
+			supabaseToken?: string;
 		}
 		// interface PageState {}
 		// interface Platform {}

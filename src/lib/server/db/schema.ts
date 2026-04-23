@@ -4,7 +4,7 @@ export const users = pgTable('users', {
 	id: text('id').primaryKey(),
 	email: text('email').unique(),
 	email_verified: boolean('email_verified').notNull().default(false),
-	createdAt: timestamp('created_at').notNull().defaultNow()
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 
 export const sessions = pgTable('sessions', {
@@ -20,8 +20,10 @@ export const magicLinks = pgTable('magic_links', {
 	token: text('token').primaryKey(),
 	email: text('email'), // Nullable for session cloning
 	userIdToMerge: text('user_id_to_merge').references(() => users.id, { onDelete: 'cascade' }),
-	expiresAt: timestamp('expires_at').notNull()
-});
+	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull()
+}, (t) => ({
+	userIdToMergeIdx: index('magic_links_user_id_to_merge_idx').on(t.userIdToMerge)
+}));
 
 export const lists = pgTable(
 	'lists',
@@ -32,7 +34,7 @@ export const lists = pgTable(
 		createdBy: text('created_by')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
-		createdAt: timestamp('created_at').notNull().defaultNow()
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(t) => ({
 		unq: unique().on(t.createdBy, t.slug),
@@ -61,8 +63,10 @@ export const listInvites = pgTable('list_invites', {
 	listId: text('list_id')
 		.notNull()
 		.references(() => lists.id, { onDelete: 'cascade' }),
-	expiresAt: timestamp('expires_at') // Nullable for permanent links
-});
+	expiresAt: timestamp('expires_at', { withTimezone: true }) // Nullable for permanent links
+}, (t) => ({
+	listIdIdx: index('list_invites_list_id_idx').on(t.listId)
+}));
 
 export const items = pgTable('items', {
 	id: text('id').primaryKey(),
@@ -73,8 +77,8 @@ export const items = pgTable('items', {
 	groupName: text('group_name'),
 	rank: doublePrecision('rank').notNull(),
 	done: boolean('done').notNull().default(false),
-	deletedAt: timestamp('deleted_at'),
-	updatedAt: timestamp('updated_at').notNull().defaultNow()
+	deletedAt: timestamp('deleted_at', { withTimezone: true }),
+	updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 }, (t) => ({
 	listIdIdx: index('items_list_id_idx').on(t.listId)
 }));
@@ -82,5 +86,5 @@ export const items = pgTable('items', {
 export const rateLimits = pgTable('rate_limits', {
 	key: text('key').primaryKey(),
 	count: integer('count').notNull().default(0),
-	resetAt: timestamp('reset_at').notNull()
+	resetAt: timestamp('reset_at', { withTimezone: true }).notNull()
 });

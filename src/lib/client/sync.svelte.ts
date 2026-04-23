@@ -1,16 +1,65 @@
-import { db } from '$lib/client/db';
+import { db, type LocalList, type LocalItem } from '$lib/client/db';
 import { logger } from '$lib/logger';
+import { supabase } from '$lib/client/supabase';
+import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 const syncLogger = logger.child({ module: 'client-sync' });
+
+// Raw data from Supabase Realtime (Postgres snake_case)
+interface RealtimeList {
+	id: string;
+	slug: string;
+	name: string;
+	created_by: string;
+	created_at: string;
+}
+
+interface RealtimeItem {
+	id: string;
+	list_id: string;
+	name: string;
+	group_name: string | null;
+	rank: number;
+	done: boolean;
+	deleted_at: string | null;
+	updated_at: string;
+}
+
+// Data from our API (Drizzle camelCase)
+interface ApiList {
+	id: string;
+	slug: string;
+	name: string;
+	createdBy: string;
+	createdAt: string;
+}
+
+interface ApiItem {
+	id: string;
+	listId: string;
+	name: string;
+	groupName: string | null;
+	rank: number;
+	done: boolean;
+	deletedAt: string | null;
+	updatedAt: string;
+}
+
+interface SyncResult {
+	id: string;
+	status: 'success' | 'error';
+	message?: string;
+}
 
 class SyncManager {
 	isSyncing = $state(false);
 	isOnline = $state(true);
-	sseStatus = $state<'connected' | 'connecting' | 'disconnected'>('connecting');
+	syncStatus = $state<'connected' | 'connecting' | 'disconnected'>('disconnected');
 	lastSyncError = $state<string | null>(null);
-	private eventSource: EventSource | null = null;
+	private channel: RealtimeChannel | null = null;
 	private activeListIds = new Set<string>();
 	private clientId = Math.random().toString(36).substring(7);
+	private currentToken: string | null = null;
 
 	constructor() {
 		// Start sync loop
@@ -20,7 +69,8 @@ class SyncManager {
 			window.addEventListener('online', async () => {
 				this.isOnline = true;
 				syncLogger.info('Network online: triggering sync...');
-				this.connectSSE();
+				if (this.currentToken) this.connectSupabase(this.currentToken);
+
 				// Run in parallel for faster recovery
 				await Promise.all([
 					this.processQueue(),
@@ -42,64 +92,117 @@ class SyncManager {
 			});
 
 			this.startLoop();
-			this.connectSSE();
 		}
 	}
 
-	connectSSE() {
-		if (this.eventSource && this.eventSource.readyState !== 2) return;
-		
-		if (this.eventSource) this.eventSource.close();
-		this.eventSource = new EventSource(`/api/sync?clientId=${this.clientId}`);
-		
-		this.eventSource.onopen = () => {
-			this.isOnline = true;
-			this.sseStatus = 'connected';
-			this.lastSyncError = null;
-		};
-
-		this.eventSource.onmessage = async (event) => {
-			this.isOnline = true;
-			try {
-				const data = JSON.parse(event.data);
-				// Support both "update" type and any message with listId/deleted
-				if ((data.type === 'update' || data.deleted || data.listId === 'global') && data.listId) {
-					if (data.listId === 'global') {
-						syncLogger.info('Global refresh triggered via SSE');
-						this.reconcileAllLists();
-					} else if (data.deleted) {
-						syncLogger.info(`List ${data.listId} deleted on another device, removing locally`);
-						await db.lists.delete(data.listId);
-						await db.items.where('listId').equals(data.listId).delete();
-						// Trigger reconcile to clean up dashboard
-						this.reconcileAllLists();
-					} else if (data.list && data.items) {
-						syncLogger.debug(`Instant update for list ${data.listId} received via SSE`);
-						await this.pull(data.listId, { list: data.list, items: data.items });
-					} else if (this.activePulls.has(data.listId) || this.activeListIds.has(data.listId)) {
-						syncLogger.debug(`Refreshing list ${data.listId} due to SSE message`);
-						await this.pull(data.listId);
-					} else {
-						// Fallback: something changed in a list we have but aren't currently viewing
-						this.reconcileAllLists();
-					}
-				}
-			} catch (e) {
-				syncLogger.error('SSE message parse error', {}, e);
+	/**
+	 * Initialize the sync manager with a bridged Supabase JWT.
+	 */
+	init(token?: string) {
+		if (!token) {
+			this.syncStatus = 'disconnected';
+			if (this.channel) {
+				console.log("Unsubscribing from channel")
+				this.channel.unsubscribe();
+				this.channel = null;
 			}
-		};
+			return;
+		}
 
-		this.eventSource.onerror = (e) => {
-			this.isOnline = false;
-			this.sseStatus = 'disconnected';
-			this.lastSyncError = "Live sync connection lost. Browser will retry automatically.";
-			syncLogger.warn('SSE connection lost. Browser will retry automatically.');
-		};
+		// Debug: Log the identity we are using
+		try {
+			const payload = JSON.parse(atob(token.split('.')[1]));
+			syncLogger.info(`Realtime Identity: ${payload.sub}`);
+		} catch (e) {
+			syncLogger.error('Failed to decode JWT payload');
+		}
+
+		if (token === this.currentToken && this.syncStatus === 'connected') return;
+
+		this.currentToken = token;
+		this.connectSupabase(token);
+	}
+
+	private connectSupabase(token: string) {
+		// Use a unique channel name per connection to avoid zombie state or naming collisions
+		// when unsubscribing/resubscribing rapidly.
+		const channelId = Math.random().toString(36).substring(7);
+		if (this.channel) {
+			console.log("Unsubscribing from channel")
+			this.channel.unsubscribe();
+		}
+
+		syncLogger.info('Connecting to Supabase Realtime...', { channelId, token });
+		this.syncStatus = 'connecting';
+
+		// 1. Create the channel first
+		this.channel = supabase.channel(`sync:${channelId}`);
+
+		// 2. Set the bridged JWT immediately after creating the channel
+		supabase.realtime.setAuth(token);
+
+		// 3. Define listeners
+		this.channel
+			.on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
+				console.log('REALTIME_EVENT_RECEIVED:', payload);
+			})
+			.on('postgres_changes', { event: '*', schema: 'public', table: 'list_users' }, (payload) => {
+				syncLogger.info('List membership change detected', { event: payload.eventType });
+				this.reconcileAllLists();
+			})
+			.on('postgres_changes', { event: '*', schema: 'public', table: 'lists' }, async (payload: RealtimePostgresChangesPayload<RealtimeList>) => {
+				let listId = ('id' in payload.new ? payload.new.id : null) ||
+					('id' in payload.old ? payload.old.id : null);
+
+				if (!listId) return;
+
+				if (payload.eventType === 'DELETE') {
+					syncLogger.info(`List ${listId} deleted on another device`);
+					await db.lists.delete(listId);
+					await db.items.where('listId').equals(listId).delete();
+					this.reconcileAllLists();
+				} else {
+					syncLogger.debug(`List ${listId} updated metadata`);
+					this.pull(listId);
+				}
+			})
+			.on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, async (payload: RealtimePostgresChangesPayload<RealtimeItem>) => {
+				let listId = ('list_id' in payload.new ? payload.new.list_id : null) ||
+					('list_id' in payload.old ? payload.old.list_id : null);
+
+				// Fallback: If REPLICA IDENTITY FULL is not set, DELETE payloads only have the PK (id)
+				if (!listId && payload.eventType === 'DELETE' && 'id' in payload.old && payload.old.id) {
+					const localItem = await db.items.get(payload.old.id);
+					if (localItem) listId = localItem.listId;
+				}
+
+				if (listId) {
+					syncLogger.debug(`Item change in list ${listId}`, { event: payload.eventType });
+					this.pull(listId);
+				}
+			})
+			.subscribe((status, err) => {
+				this.isOnline = status === 'SUBSCRIBED';
+				this.syncStatus = status === 'SUBSCRIBED' ? 'connected' : 'disconnected';
+
+				if (status === 'SUBSCRIBED') {
+					syncLogger.info('✅ Supabase Realtime connected');
+				} else if (status === 'CHANNEL_ERROR') {
+					syncLogger.error('❌ Realtime Channel Error', {
+						message: err?.message || 'Subscription rejected',
+						details: err,
+						hint: 'Check RLS policies, Publication, and JWT Algorithm'
+					});
+				} else if (status === 'TIMED_OUT') {
+					syncLogger.warn('⏳ Realtime connection timed out');
+				} else {
+					syncLogger.info(`Realtime status: ${status}`, { error: err });
+				}
+			});
 	}
 
 	subscribeToList(listId: string) {
 		this.activeListIds.add(listId);
-		// Trigger initial pull
 		this.pull(listId);
 	}
 
@@ -138,14 +241,14 @@ class SyncManager {
 
 			try {
 				const ops = await db.syncQueue.toArray();
-				
+
 				const fetchStart = performance.now();
 				const response = await fetch('/api/sync', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ 
+					body: JSON.stringify({
 						operations: ops,
-						clientId: this.clientId 
+						clientId: this.clientId
 					})
 				});
 				const fetchDuration = (performance.now() - fetchStart).toFixed(2);
@@ -154,18 +257,19 @@ class SyncManager {
 					throw new Error(`Sync failed: ${response.statusText} (${response.status})`);
 				}
 
-				const { results } = await response.json();
+				const data: { results: SyncResult[] } = await response.json();
+				const results = data.results;
 
 				// Remove successfully processed ops from queue
 				const successfulIds = results
-					.filter((r: any) => r.status === 'success')
-					.map((r: any) => r.id);
-				
+					.filter((r) => r.status === 'success')
+					.map((r) => r.id);
+
 				if (successfulIds.length > 0) {
 					await db.syncQueue.bulkDelete(successfulIds);
 				}
 
-				const errors = results.filter((r: any) => r.status === 'error');
+				const errors = results.filter((r) => r.status === 'error');
 				const totalDuration = (performance.now() - startTime).toFixed(2);
 
 				syncLogger.info(`Sync batch complete in ${totalDuration}ms (Network: ${fetchDuration}ms)`, {
@@ -188,7 +292,7 @@ class SyncManager {
 				if (this.activePulls.size === 0 && !this.reconcilePromise) {
 					this.isSyncing = false;
 				}
-				
+
 				// If more items were added while we were syncing, process them immediately
 				const remaining = await db.syncQueue.count();
 				if (remaining > 0) {
@@ -203,19 +307,19 @@ class SyncManager {
 
 	private activePulls = new Map<string, Promise<void>>();
 
-	async pull(listId: string, snapshot?: { list: any, items: any[] }) {
+	async pull(listId: string, snapshot?: { list: ApiList, items: ApiItem[] }) {
 		if (this.activePulls.has(listId)) return this.activePulls.get(listId);
 
 		const pullPromise = (async () => {
 			this.isSyncing = true;
 			const startTime = performance.now();
 			try {
-				let list, items;
+				let list: ApiList, items: ApiItem[];
 
 				if (snapshot) {
 					list = snapshot.list;
 					items = snapshot.items;
-					syncLogger.debug(`Reconciling ${listId} from SSE snapshot (no network fetch)`);
+					syncLogger.debug(`Reconciling ${listId} from snapshot (no network fetch)`);
 				} else {
 					const fetchStart = performance.now();
 					syncLogger.debug(`Pulling ${listId} via network...`);
@@ -223,7 +327,7 @@ class SyncManager {
 					const fetchDuration = (performance.now() - fetchStart).toFixed(2);
 
 					if (!response.ok) return;
-					const data = await response.json();
+					const data: { list: ApiList, items: ApiItem[] } = await response.json();
 					list = data.list;
 					items = data.items;
 					syncLogger.debug(`Fetched ${listId} in ${fetchDuration}ms`);
@@ -235,12 +339,15 @@ class SyncManager {
 
 				const localList = await db.lists.get(list.id);
 				const serverDate = new Date(list.createdAt);
-				
+
 				if (!pendingListIds.has(list.id)) {
 					// For lists, we just check existence or major changes
 					if (!localList || localList.name !== list.name) {
 						await db.lists.put({
-							...list,
+							id: list.id,
+							slug: list.slug,
+							name: list.name,
+							createdBy: list.createdBy,
 							createdAt: serverDate
 						});
 					}
@@ -253,21 +360,25 @@ class SyncManager {
 				// Fetch all local items for this list once to avoid O(N) queries
 				const localItems = await db.items.where('listId').equals(listId).toArray();
 				const localItemMap = new Map(localItems.map(i => [i.id, i]));
-				
-				const itemsToPut: any[] = [];
+
+				const itemsToPut: LocalItem[] = [];
 				const serverItemIds = new Set();
 
 				for (const item of items) {
 					serverItemIds.add(item.id);
 					const localItem = localItemMap.get(item.id);
 					const serverUpdatedAt = new Date(item.updatedAt);
-					
+
 					const isNewer = !localItem || serverUpdatedAt > new Date(localItem.updatedAt);
 
 					if (!pendingItemIds.has(item.id) && isNewer) {
 						itemsToPut.push({
-							...item,
+							id: item.id,
+							listId: item.listId,
+							name: item.name,
 							groupName: item.groupName || "",
+							rank: item.rank,
+							done: item.done,
 							deletedAt: item.deletedAt ? new Date(item.deletedAt) : null,
 							updatedAt: serverUpdatedAt
 						});
@@ -285,7 +396,7 @@ class SyncManager {
 						idsToDelete.push(localItem.id);
 					}
 				}
-				
+
 				if (idsToDelete.length > 0) {
 					await db.items.bulkDelete(idsToDelete);
 				}
@@ -318,15 +429,19 @@ class SyncManager {
 				const response = await fetch('/api/lists');
 				if (!response.ok) return;
 
-				const { lists } = await response.json();
+				const data: { lists: ApiList[] } = await response.json();
+				const lists = data.lists;
 				const pendingListOps = await db.syncQueue.where('entity').equals('list').toArray();
 				const pendingListIds = new Set(pendingListOps.map(op => op.entityId));
 
-				const listsToPut: any[] = [];
+				const listsToPut: LocalList[] = [];
 				for (const list of lists) {
 					if (!pendingListIds.has(list.id)) {
 						listsToPut.push({
-							...list,
+							id: list.id,
+							slug: list.slug,
+							name: list.name,
+							createdBy: list.createdBy,
 							createdAt: new Date(list.createdAt)
 						});
 					}
@@ -336,7 +451,7 @@ class SyncManager {
 				}
 
 				// Optional: Remove local lists that were deleted on server
-				const serverListIds = new Set(lists.map((l: any) => l.id));
+				const serverListIds = new Set(lists.map((l) => l.id));
 				const localLists = await db.lists.toArray();
 				const listIdsToDelete: string[] = [];
 

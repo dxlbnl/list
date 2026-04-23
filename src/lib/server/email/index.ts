@@ -41,7 +41,7 @@ export async function sendMagicLink(email: string, url: string, type: 'secure' |
 			return { success: false, error };
 		}
 
-		emailLogger.info('Email sent successfully', { to: email, messageId: (data as any)?.id });
+		emailLogger.info('Email sent successfully', { to: email, messageId: data?.id });
 		return { success: true, data };
 	} catch (e) {
 		emailLogger.error('Email sending exception', { to: email }, e);

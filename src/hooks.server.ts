@@ -1,4 +1,5 @@
 import { getSession, createAnonymousSession } from '$lib/server/auth';
+import { createSupabaseToken } from '$lib/server/supabase-auth';
 import type { Handle, HandleServerError } from '@sveltejs/kit';
 import { logger } from '$lib/logger';
 import { dev } from '$app/environment';
@@ -28,6 +29,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	event.locals.user = auth.user;
 	event.locals.session = auth.session;
+	
+	// Provide a Supabase token for real-time sync
+	if (auth.user) {
+		event.locals.supabaseToken = await createSupabaseToken(auth.user.id);
+	}
 
 	const tResolveStart = Date.now();
 	const response = await resolve(event);
