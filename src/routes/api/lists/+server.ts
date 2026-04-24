@@ -20,5 +20,5 @@ export const GET: RequestHandler = async ({ locals }) => {
 		.innerJoin(listUsers, eq(lists.id, listUsers.listId))
 		.where(eq(listUsers.userId, user.id));
 
-	return json({ lists: userLists });
+	return json(userLists);
 };

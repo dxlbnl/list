@@ -1,10 +1,10 @@
 import { db } from '$lib/server/db';
 import { lists, items, listUsers } from '$lib/server/db/schema';
-import { eq, and, inArray, lt, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { error, json } from '@sveltejs/kit';
 import { MESSAGES } from '$lib/constants/messages';
 import type { RequestHandler } from './$types';
-import { syncRequestSchema } from '$lib/validations';
+import { syncRequestSchema, type ItemOperation, type ListOperation } from '$lib/validations';
 import { logger } from '$lib/logger';
 
 const syncLogger = logger.child({ module: 'sync' });
@@ -24,151 +24,107 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const { operations, clientId } = validation.data;
 	syncLogger.info(`Processing ${operations.length} operations`, { userId: user.id, count: operations.length, clientId });
 
-	const results: { id: string | number; status: 'success' | 'error'; message?: string }[] = [];
 	const tStart = performance.now();
 
 	try {
-		// 1. PRE-FETCH AUTH DATA
-		const memberships = await db.select({ 
-			listId: listUsers.listId,
-			createdBy: lists.createdBy 
-		})
-			.from(listUsers)
-			.innerJoin(lists, eq(listUsers.listId, lists.id))
-			.where(eq(listUsers.userId, user.id));
-		
-		const authorizedListIds = new Set(memberships.map(m => m.listId));
-		const ownedListIds = new Set(memberships.filter(m => m.createdBy === user.id).map(m => m.listId));
+		// 1. PREPARE JSON BATCHES
+		// Data is already transformed to database format by Zod
+		const itemUpsertsJson = JSON.stringify(operations
+			.filter((op): op is ItemOperation => 
+				op.entity === 'item' && (op.type === 'INSERT' || op.type === 'UPDATE'))
+			.map(op => op.data)
+		);
 
-		// Prefetch item list IDs if missing
-		const itemIdsToFetch = operations
-			.filter(op => op.entity === 'item' && op.type === 'UPDATE' && !op.data.listId)
-			.map(op => op.entityId);
-		
-		const itemIdToListId = new Map<string, string>();
-		if (itemIdsToFetch.length > 0) {
-			const fetchedItems = await db.select({ id: items.id, listId: items.listId })
-				.from(items)
-				.where(inArray(items.id, itemIdsToFetch));
-			
-			for (const item of fetchedItems) itemIdToListId.set(item.id, item.listId);
-		}
+		const listUpsertsJson = JSON.stringify(operations
+			.filter((op): op is ListOperation => 
+				op.entity === 'list' && (op.type === 'INSERT' || op.type === 'UPDATE'))
+			.map(op => op.data)
+		);
 
-		// 2. EXECUTE OPERATIONS
-		// Note: For simplicity and correct error reporting per-operation, we still loop, 
-		// but we wrap in a single transaction to minimize round trips for COMMIT.
-		await db.transaction(async (tx) => {
-			for (const op of operations) {
-				let success = false;
-				let errorMsg: string | undefined;
+		const listDeletesJson = JSON.stringify(operations.filter(o => o.type === 'DELETE' && o.entity === 'list').map(o => o.data.id));
+		const itemDeletesJson = JSON.stringify(operations.filter(o => o.type === 'DELETE' && o.entity === 'item').map(o => o.data.id));
 
-				try {
-					if (op.entity === 'list') {
-						if (op.type === 'INSERT') {
-							await tx.insert(lists).values({
-								id: op.entityId,
-								slug: op.data.slug,
-								name: op.data.name,
-								createdBy: user.id,
-								createdAt: new Date(op.data.createdAt)
-							}).onConflictDoUpdate({
-								target: lists.id,
-								set: { name: op.data.name }
-							});
+		// 2. EXECUTE THE SINGLE ATOMIC CTE BATCH (Exactly 1 Round Trip)
+		await db.execute(sql`
+			WITH 
+			list_input AS (
+				SELECT DISTINCT ON (id) * 
+				FROM jsonb_populate_recordset(null::${lists}, ${listUpsertsJson}::jsonb)
+				ORDER BY id, created_at DESC
+			),
+			item_input AS (
+				SELECT DISTINCT ON (id) * 
+				FROM jsonb_populate_recordset(null::${items}, ${itemUpsertsJson}::jsonb)
+				ORDER BY id, updated_at DESC
+			),
+			list_deletes AS (SELECT DISTINCT value as id FROM jsonb_array_elements_text(${listDeletesJson}::jsonb)),
+			item_deletes AS (SELECT DISTINCT value as id FROM jsonb_array_elements_text(${itemDeletesJson}::jsonb)),
 
-							await tx.insert(listUsers).values({
-								listId: op.entityId,
-								userId: user.id
-							}).onConflictDoNothing();
-
-							authorizedListIds.add(op.entityId);
-							success = true;
-						} else if (op.type === 'UPDATE') {
-							if (authorizedListIds.has(op.entityId)) {
-								await tx.update(lists).set({ name: op.data.name }).where(eq(lists.id, op.entityId));
-								success = true;
-							} else {
-								errorMsg = 'Unauthorized access to list';
-							}
-						} else if (op.type === 'DELETE') {
-							if (ownedListIds.has(op.entityId)) {
-								// Owner: Delete the entire list (cascades to items and members)
-								await tx.delete(lists).where(eq(lists.id, op.entityId));
-								success = true;
-							} else if (authorizedListIds.has(op.entityId)) {
-								// Member (not owner): Just leave the list
-								await tx.delete(listUsers).where(and(
-									eq(listUsers.listId, op.entityId),
-									eq(listUsers.userId, user.id)
-								));
-								success = true;
-							} else {
-								errorMsg = 'Unauthorized access to list';
-							}
-						}
-					} else if (op.entity === 'item') {
-						const listId = op.data.listId || itemIdToListId.get(op.entityId);
-						if (listId && authorizedListIds.has(listId)) {
-							if (op.type === 'INSERT') {
-								const itemDate = new Date(op.data.updatedAt);
-								await tx.insert(items).values({
-									id: op.entityId,
-									listId: listId,
-									name: op.data.name,
-									groupName: op.data.groupName,
-									rank: op.data.rank,
-									done: op.data.done,
-									deletedAt: op.data.deletedAt ? new Date(op.data.deletedAt) : null,
-									updatedAt: itemDate
-								}).onConflictDoUpdate({
-									target: items.id,
-									set: {
-										name: op.data.name,
-										groupName: op.data.groupName,
-										rank: op.data.rank,
-										done: op.data.done,
-										deletedAt: op.data.deletedAt ? new Date(op.data.deletedAt) : null,
-										updatedAt: itemDate
-									},
-									where: lt(items.updatedAt, itemDate)
-								});
-								success = true;
-							} else if (op.type === 'UPDATE') {
-								const itemDate = op.data.updatedAt ? new Date(op.data.updatedAt) : new Date();
-								const updateData: any = { updatedAt: itemDate };
-								if (op.data.name !== undefined) updateData.name = op.data.name;
-								if (op.data.groupName !== undefined) updateData.groupName = op.data.groupName;
-								if (op.data.rank !== undefined) updateData.rank = op.data.rank;
-								if (op.data.done !== undefined) updateData.done = op.data.done;
-								if (op.data.deletedAt !== undefined) updateData.deletedAt = op.data.deletedAt ? new Date(op.data.deletedAt) : null;
-
-								await tx.update(items)
-									.set(updateData)
-									.where(and(
-										eq(items.id, op.entityId),
-										lt(items.updatedAt, itemDate)
-									));
-								success = true;
-							}
-						} else {
-							errorMsg = 'Unauthorized access to item list';
-						}
-					}
-				} catch (opErr: any) {
-					errorMsg = opErr.message;
-					syncLogger.error('Operation failed', { opId: op.id, error: opErr.message });
-				}
-
-				results.push(success ? { id: op.id, status: 'success' } : { id: op.id, status: 'error', message: errorMsg });
-			}
-		});
+			upsert_lists AS (
+				INSERT INTO ${lists} (id, slug, name, created_by, created_at)
+				SELECT id, slug, name, created_by, created_at FROM list_input d
+				WHERE NOT EXISTS (SELECT 1 FROM ${lists} l WHERE l.id = d.id)
+				   OR EXISTS (SELECT 1 FROM ${lists} l WHERE l.id = d.id AND l.created_by = ${user.id})
+				ON CONFLICT (id) DO UPDATE SET
+					name = COALESCE(EXCLUDED.name, ${lists.name}),
+					slug = COALESCE(EXCLUDED.slug, ${lists.slug})
+				RETURNING id
+			),
+			upsert_members AS (
+				INSERT INTO ${listUsers} (list_id, user_id)
+				SELECT id, ${user.id} FROM list_input
+				ON CONFLICT DO NOTHING
+			),
+			upsert_items AS (
+				INSERT INTO ${items} (id, list_id, name, group_name, rank, done, deleted_at, updated_at)
+				SELECT 
+					d.id, 
+					COALESCE(d.list_id, i.list_id), 
+					COALESCE(d.name, i.name), 
+					COALESCE(d.group_name, i.group_name), 
+					COALESCE(d.rank, i.rank), 
+					COALESCE(d.done, i.done), 
+					COALESCE(d.deleted_at, i.deleted_at), 
+					d.updated_at
+				FROM item_input d
+				LEFT JOIN ${items} i ON d.id = i.id
+				WHERE 
+					(i.id IS NOT NULL AND EXISTS (SELECT 1 FROM ${listUsers} lu WHERE lu.list_id = i.list_id AND lu.user_id = ${user.id}))
+					OR
+					(d.list_id IS NOT NULL AND d.name IS NOT NULL AND EXISTS (SELECT 1 FROM ${listUsers} lu WHERE lu.list_id = d.list_id AND lu.user_id = ${user.id}))
+				ON CONFLICT (id) DO UPDATE SET
+					list_id = COALESCE(EXCLUDED.list_id, ${items.listId}),
+					name = COALESCE(EXCLUDED.name, ${items.name}),
+					group_name = COALESCE(EXCLUDED.group_name, ${items.groupName}),
+					rank = COALESCE(EXCLUDED.rank, ${items.rank}),
+					done = COALESCE(EXCLUDED.done, ${items.done}),
+					deleted_at = COALESCE(EXCLUDED.deleted_at, ${items.deletedAt}),
+					updated_at = EXCLUDED.updated_at
+				WHERE ${items.updatedAt} < EXCLUDED.updated_at
+			),
+			del_lists_owner AS (
+				DELETE FROM ${lists} WHERE id IN (SELECT id FROM list_deletes) AND created_by = ${user.id}
+			),
+			del_members AS (
+				DELETE FROM ${listUsers} WHERE list_id IN (SELECT id FROM list_deletes) AND user_id = ${user.id}
+			),
+			del_items AS (
+				DELETE FROM ${items} WHERE id IN (SELECT id FROM item_deletes) 
+				AND (
+					list_id IN (SELECT list_id FROM ${listUsers} WHERE user_id = ${user.id})
+					OR 
+					list_id IN (SELECT id FROM ${lists} WHERE created_by = ${user.id})
+				)
+			)
+			SELECT 1;
+		`);
 
 		const tTotal = performance.now() - tStart;
-		syncLogger.info(`Sync complete`, { tTotal: tTotal.toFixed(2), opCount: operations.length });
+		syncLogger.info(`Atomic Sync complete`, { tTotal: tTotal.toFixed(2), opCount: operations.length });
 
-		return json({ results });
+		return json({ results: operations.map(op => ({ id: op.id, status: 'success' })) });
 	} catch (e: any) {
-		syncLogger.error('Sync transaction failed', { userId: user.id, error: e.message });
+		syncLogger.error('Sync failed', { userId: user.id, error: e.message });
 		throw error(500, `${MESSAGES.DATA.PROCESS_ERROR}: ${e.message}`);
 	}
 };

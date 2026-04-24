@@ -6,6 +6,7 @@
 	import { onMount } from "svelte";
 	import InputGroup from "$lib/components/ui/InputGroup.svelte";
 	import EmptyState from "$lib/components/ui/EmptyState.svelte";
+	import LoadingState from "$lib/components/ui/LoadingState.svelte";
 
 	let { data } = $props();
 
@@ -52,7 +53,9 @@
 
 <div class="home-page-container">
 	<section class="list-section">
-		{#if $lists && $lists.length > 0}
+		{#if syncManager.isSyncing && (!$lists || $lists.length === 0)}
+			<LoadingState message="SYNCING YOUR LISTS" />
+		{:else if $lists && $lists.length > 0}
 			<div class="list-grid">
 				{#each $lists as list}
 					{@const effectiveSlug = getEffectiveSlug(list, $lists)}

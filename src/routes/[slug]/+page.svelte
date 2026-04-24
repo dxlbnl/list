@@ -23,6 +23,7 @@
 	import EmptyState from "$lib/components/ui/EmptyState.svelte";
 	import QRCodeDisplay from "$lib/components/ui/QRCodeDisplay.svelte";
 	import ConfirmDeleteDialog from "$lib/components/ui/ConfirmDeleteDialog.svelte";
+	import LoadingState from "$lib/components/ui/LoadingState.svelte";
 
 	let { data } = $props();
 
@@ -345,7 +346,9 @@
 		</div>
 
 		<section class="items-section">
-			{#if $items && $items.length > 0}
+			{#if syncManager.activePulls.includes(data.listId) && (!$items || $items.length === 0)}
+				<LoadingState message="FETCHING LIST DATA" />
+			{:else if $items && $items.length > 0}
 				<div class="groups-container">
 					{#each sortedGroupNames as groupName (groupName)}
 						<ListGroup

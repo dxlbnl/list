@@ -1,46 +1,23 @@
 import Dexie, { type Table } from 'dexie';
+import type { SyncOperationInput, LocalList, LocalItem } from '$lib/validations';
 
-export interface LocalList {
-	id: string;
-	slug: string;
-	name: string;
-	createdBy: string;
-	createdAt: Date;
-	isLocalOnly?: boolean; // True if not yet synced to server
-}
+// Export types for use in other files
+export type { LocalList, LocalItem };
 
-export interface LocalItem {
-	id: string;
-	listId: string;
-	name: string;
-	groupName: string; // Use "" for General/None
-	rank: number;
-	done: boolean;
-	deletedAt: Date | null;
-	updatedAt: Date;
-	isLocalOnly?: boolean;
-}
-
-export interface SyncOperation {
-	id?: number;
-	type: 'INSERT' | 'UPDATE' | 'DELETE';
-	entity: 'list' | 'item';
-	entityId: string;
-	data: Partial<LocalList> | Partial<LocalItem>;
-	timestamp: number;
-}
+// We wrap the SyncOperationInput to include Dexie's auto-incrementing local ID
+export type QueuedSyncOperation = SyncOperationInput & { localId?: number };
 
 export class ListDatabase extends Dexie {
 	lists!: Table<LocalList>;
 	items!: Table<LocalItem>;
-	syncQueue!: Table<SyncOperation>;
+	syncQueue!: Table<QueuedSyncOperation>;
 
 	constructor() {
 		super('ListAppDB');
 		this.version(4).stores({
 			lists: 'id, slug, createdBy, [createdBy+slug], createdAt',
 			items: 'id, listId, name, groupName, rank, done, deletedAt, updatedAt, [listId+groupName]',
-			syncQueue: '++id, entityId, entity, timestamp'
+			syncQueue: '++localId, entity, type, timestamp'
 		});
 	}
 }
