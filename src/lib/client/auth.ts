@@ -5,7 +5,12 @@ import { db } from './db';
  */
 export async function logout() {
 	// Clear local database to prevent data leaking
-	await db.delete();
+	try {
+		db.close();
+		await db.delete();
+	} catch (e) {
+		console.error("Failed to purge local database:", e);
+	}
 	// Redirect to server-side logout
 	window.location.href = "/logout";
 }
