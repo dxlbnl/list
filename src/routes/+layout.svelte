@@ -1,14 +1,24 @@
 <script lang="ts">
 	import "../app.css";
 	import { syncManager } from "$lib/client/sync.svelte";
-	import { page } from '$app/state';
+	import { page } from "$app/state";
 	import Header from "./Header.svelte";
-	import { themeManager } from "$lib/client/theme.svelte";
+	import { logout } from "$lib/client/auth";
+
+	import { untrack } from "svelte";
 
 	let { data, children } = $props();
 
 	$effect(() => {
-		syncManager.init(data.supabaseToken);
+		if (data.sessionInvalid) {
+			logout();
+			return;
+		}
+
+		const token = data.supabaseToken;
+		untrack(() => {
+			syncManager.init(token);
+		});
 	});
 
 	const pageTitle = $derived(page.data.title || "Lists");

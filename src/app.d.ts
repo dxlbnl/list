@@ -15,14 +15,16 @@ declare global {
 				userId: string;
 			} | null;
 			supabaseToken?: string;
+			sessionInvalid?: boolean;
 		}
 		interface PageData {
 			user: Locals['user'];
 			supabaseToken?: string;
+			sessionInvalid?: boolean;
 		}
 		// interface PageState {}
 		// interface Platform {}
 	}
 }
 
-export {};
+export { };

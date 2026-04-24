@@ -19,8 +19,14 @@ if (!dev) {
 export const handle: Handle = async ({ event, resolve }) => {
 	const start = Date.now();
 	
+	const sessionId = event.cookies.get('auth_session');
 	const tAuthStart = Date.now();
 	let auth = await getSession(event);
+	let sessionInvalid = false;
+
+	if (!auth && sessionId) {
+		sessionInvalid = true;
+	}
 
 	if (!auth) {
 		auth = await createAnonymousSession(event);
@@ -29,6 +35,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	event.locals.user = auth.user;
 	event.locals.session = auth.session;
+	event.locals.sessionInvalid = sessionInvalid;
 	
 	// Provide a Supabase token for real-time sync
 	if (auth.user) {

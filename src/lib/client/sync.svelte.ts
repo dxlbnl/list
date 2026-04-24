@@ -63,7 +63,7 @@ class SyncManager {
 			}
 			return;
 		}
-		if (token === this.currentToken && this.syncStatus === 'connected') return;
+		if (token === this.currentToken && (this.syncStatus === 'connected' || this.syncStatus === 'connecting')) return;
 		this.currentToken = token;
 		this.connectSupabase(token);
 		this.reconcileAllLists();
@@ -201,6 +201,13 @@ class SyncManager {
 					return;
 				}
 
+				if (response.status === 401 || response.status === 403) {
+					syncLogger.error('Session expired or invalid. Logging out.');
+					const { logout } = await import('$lib/client/auth');
+					await logout();
+					return;
+				}
+
 				if (!response.ok) throw new Error(`Sync failed: ${response.statusText}`);
 
 				const data: { results: SyncResult[] } = await response.json();
@@ -233,6 +240,12 @@ class SyncManager {
 			this.isSyncing = true;
 			try {
 				const res = await fetch('/api/lists');
+				if (res.status === 401 || res.status === 403) {
+					syncLogger.error('Session expired or invalid during reconciliation. Logging out.');
+					const { logout } = await import('$lib/client/auth');
+					await logout();
+					return;
+				}
 				if (!res.ok) throw new Error(`Failed to fetch lists: ${res.statusText}`);
 				
 				const serverLists: ApiList[] = await res.json();
@@ -278,6 +291,12 @@ class SyncManager {
 		this.isSyncing = true;
 		try {
 			const res = await fetch(`/api/lists/${listId}`);
+			if (res.status === 401 || res.status === 403) {
+				syncLogger.error('Session expired or invalid during pull. Logging out.');
+				const { logout } = await import('$lib/client/auth');
+				await logout();
+				return;
+			}
 			if (!res.ok) {
 				if (res.status === 404) {
 					await db.lists.delete(listId);

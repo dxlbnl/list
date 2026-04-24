@@ -25,6 +25,8 @@
 	import ConfirmDeleteDialog from "$lib/components/ui/ConfirmDeleteDialog.svelte";
 	import LoadingState from "$lib/components/ui/LoadingState.svelte";
 
+	import { untrack } from "svelte";
+
 	let { data } = $props();
 
 	// Live query for the list details
@@ -37,9 +39,11 @@
 
 	$effect(() => {
 		const currentList = $list;
+		const alreadyLoaded = untrack(() => wasLoaded);
+		
 		if (currentList) {
 			wasLoaded = true;
-		} else if (wasLoaded && !currentList) {
+		} else if (alreadyLoaded && !currentList) {
 			listDeleted = true;
 		}
 	});
