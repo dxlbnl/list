@@ -16,8 +16,9 @@
 		}
 
 		const token = data.supabaseToken;
+		const userId = data.user?.id;
 		untrack(() => {
-			syncManager.init(token);
+			if (userId) syncManager.init(userId, token);
 		});
 	});
 

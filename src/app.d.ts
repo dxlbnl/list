@@ -20,7 +20,6 @@ declare global {
 		interface PageData {
 			user: Locals['user'];
 			supabaseToken?: string;
-			sessionInvalid?: boolean;
 		}
 		// interface PageState {}
 		// interface Platform {}

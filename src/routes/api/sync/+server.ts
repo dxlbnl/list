@@ -30,13 +30,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		// 1. PREPARE JSON BATCHES
 		// Data is already transformed to database format by Zod
 		const itemUpsertsJson = JSON.stringify(operations
-			.filter((op): op is ItemOperation => 
+			.filter((op): op is ItemOperation =>
 				op.entity === 'item' && (op.type === 'INSERT' || op.type === 'UPDATE'))
 			.map(op => op.data)
 		);
 
 		const listUpsertsJson = JSON.stringify(operations
-			.filter((op): op is ListOperation => 
+			.filter((op): op is ListOperation =>
 				op.entity === 'list' && (op.type === 'INSERT' || op.type === 'UPDATE'))
 			.map(op => op.data)
 		);
