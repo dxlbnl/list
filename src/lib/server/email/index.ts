@@ -33,7 +33,10 @@ export async function sendMagicLink(email: string, url: string, type: 'secure' |
 			from: 'Lists <noreply@lab.dxlb.nl>',
 			to: [email],
 			subject,
-			html
+			html,
+			headers: {
+				'X-Entity-Ref-ID': crypto.randomUUID()
+			}
 		});
 
 		if (error) {
