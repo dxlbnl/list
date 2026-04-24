@@ -10,7 +10,14 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 
 	const listId = params.id;
 
-	// Verify access
+	// 1. Check if list exists at all
+	const listData = await db.query.lists.findFirst({
+		where: eq(lists.id, listId)
+	});
+
+	if (!listData) throw error(404, 'List not found');
+
+	// 2. Verify access
 	const access = await db
 		.select()
 		.from(listUsers)
@@ -19,12 +26,6 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	if (access.length === 0) {
 		throw error(403, 'Forbidden');
 	}
-
-	const listData = await db.query.lists.findFirst({
-		where: eq(lists.id, listId)
-	});
-
-	if (!listData) throw error(404, 'List not found');
 
 	const itemData = await db.query.items.findMany({
 		where: eq(items.listId, listId)

@@ -54,34 +54,7 @@ class SyncManager {
 		}
 	}
 
-	async init(userId: string, token?: string) {
-		if (typeof window !== 'undefined') {
-			const storedUser = await db.metadata.get('currentUserId');
-			
-			// Case 1: Known mismatch
-			if (storedUser && storedUser.value !== userId) {
-				syncLogger.warn('User ID mismatch detected. Purging local data.', {
-					stored: storedUser.value,
-					current: userId
-				});
-				const { logout } = await import('$lib/client/auth');
-				await logout();
-				return;
-			}
-			
-			// Case 2: No metadata but database has content (stale data)
-			if (!storedUser) {
-				const listCount = await db.lists.count();
-				if (listCount > 0) {
-					syncLogger.warn('Stale data found without associated user metadata. Purging.');
-					const { logout } = await import('$lib/client/auth');
-					await logout();
-					return;
-				}
-				await db.metadata.put({ key: 'currentUserId', value: userId });
-			}
-		}
-
+	init(token?: string) {
 		if (!token) {
 			this.syncStatus = 'disconnected';
 			if (this.channel) {

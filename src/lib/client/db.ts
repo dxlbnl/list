@@ -11,15 +11,13 @@ export class ListDatabase extends Dexie {
 	lists!: Table<LocalList>;
 	items!: Table<LocalItem>;
 	syncQueue!: Table<QueuedSyncOperation>;
-	metadata!: Table<{ key: string; value: any }>;
 
 	constructor() {
 		super('ListAppDB');
 		this.version(4).stores({
 			lists: 'id, slug, createdBy, [createdBy+slug], createdAt',
 			items: 'id, listId, name, groupName, rank, done, deletedAt, updatedAt, [listId+groupName]',
-			syncQueue: '++localId, entity, type, timestamp',
-			metadata: 'key'
+			syncQueue: '++localId, entity, type, timestamp'
 		});
 	}
 }
