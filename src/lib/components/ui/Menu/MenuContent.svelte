@@ -1,20 +1,17 @@
 <script lang="ts">
 	import { DropdownMenu as BitsDropdown } from "bits-ui";
+	import type { DropdownMenuContentProps } from "bits-ui";
 	import { fly } from "svelte/transition";
 	import type { Snippet } from "svelte";
 
-	let { 
-		children, 
+	let {
+		children,
 		class: className,
 		sideOffset = 8,
 		align = "center",
-		...rest 
-	}: { 
-		children: Snippet; 
-		class?: string;
-		sideOffset?: number;
-		align?: "start" | "center" | "end";
-		[key: string]: any;
+		...rest
+	}: DropdownMenuContentProps & {
+		children: Snippet;
 	} = $props();
 </script>
 

@@ -26,6 +26,9 @@
 	import LoadingState from "$lib/components/ui/LoadingState.svelte";
 
 	import { untrack } from "svelte";
+	import type { Snippet } from "svelte";
+	import type { DndEvent } from "svelte-dnd-action";
+	import type { LocalItem } from "$lib/client/db";
 
 	let { data } = $props();
 
@@ -86,17 +89,17 @@
 		newItemName = "";
 	}
 
-	async function toggleDone(item: any) {
+	async function toggleDone(item: LocalItem) {
 		await updateItem(item.id, { done: !item.done });
 	}
 
-	async function deleteItem(item: any) {
+	async function deleteItem(item: LocalItem) {
 		await deleteItemAction(item.id);
 	}
 
 	// Grouping logic with local state for DnD
 	let dragInProgress = $state(false);
-	let localGroups = $state<Record<string, any[]>>({});
+	let localGroups = $state<Record<string, LocalItem[]>>({});
 
 	$effect(() => {
 		const allItems = $items;
@@ -119,36 +122,36 @@
 		return names;
 	});
 
-	function handleDndConsider(groupName: string, e: CustomEvent<any>) {
+	function handleDndConsider(groupName: string, e: CustomEvent<DndEvent<LocalItem>>) {
 		const { items: newItems } = e.detail;
 		dragInProgress = true;
-		
+
 		// Ensure atomic movement: if items are in newItems, remove them from all other groups
-		const newItemIds = new Set(newItems.map((i: any) => i.id));
+		const newItemIds = new Set(newItems.map(i => i.id));
 		Object.keys(localGroups).forEach(g => {
 			if (g !== groupName) {
 				localGroups[g] = localGroups[g].filter(i => !newItemIds.has(i.id));
 			}
 		});
-		
+
 		localGroups[groupName] = newItems;
 	}
 
-	let finalizeTimeout: any;
-	async function handleDndFinalize(groupName: string, e: CustomEvent<any>) {
+	let finalizeTimeout: ReturnType<typeof setTimeout>;
+	async function handleDndFinalize(groupName: string, e: CustomEvent<DndEvent<LocalItem>>) {
 		const { items: newItems } = e.detail;
-		
+
 		// Ensure atomic movement on finalize as well
-		const newItemIds = new Set(newItems.map((i: any) => i.id));
+		const newItemIds = new Set(newItems.map(i => i.id));
 		Object.keys(localGroups).forEach(g => {
 			if (g !== groupName) {
 				localGroups[g] = localGroups[g].filter(i => !newItemIds.has(i.id));
 			}
 		});
-		
+
 		localGroups[groupName] = newItems;
 
-		const updates: { id: string; data: any }[] = [];
+		const updates: { id: string; data: Partial<LocalItem> }[] = [];
 
 		Object.entries(localGroups).forEach(([gName, items]) => {
 			const actualGroupName = gName === "GENERAL" ? "" : gName;
@@ -260,7 +263,7 @@
 		}
 	});
 
-	function registerContextualMenu(node: HTMLElement, snippet: any) {
+	function registerContextualMenu(_node: HTMLElement, snippet: Snippet) {
 		menuState.setContextualSnippet(snippet);
 		return {
 			destroy() {
@@ -364,9 +367,9 @@
 							onDelete={() => handleDeleteGroup(groupName)}
 							onToggleDone={toggleDone}
 							onDeleteItem={deleteItem}
-							onDndConsider={(e: CustomEvent<any>) =>
+							onDndConsider={(e: CustomEvent<DndEvent<LocalItem>>) =>
 								handleDndConsider(groupName, e)}
-							onDndFinalize={(e: CustomEvent<any>) =>
+							onDndFinalize={(e: CustomEvent<DndEvent<LocalItem>>) =>
 								handleDndFinalize(groupName, e)}
 						/>
 					{/each}

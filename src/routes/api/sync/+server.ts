@@ -17,7 +17,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const validation = syncRequestSchema.safeParse(body);
 
 	if (!validation.success) {
-		syncLogger.error('Sync validation failed', { error: validation.error.format(), userId: user.id });
+		syncLogger.error('Sync validation failed', { error: validation.error.message, userId: user.id });
 		throw error(400, `${MESSAGES.DATA.PROCESS_ERROR}: ${validation.error.message}`);
 	}
 
@@ -45,15 +45,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const itemDeletesJson = JSON.stringify(operations.filter(o => o.type === 'DELETE' && o.entity === 'item').map(o => o.data.id));
 
 		// 2. EXECUTE THE SINGLE ATOMIC CTE BATCH (Exactly 1 Round Trip)
-		await db.execute(sql`
-			WITH 
+		// Returns the IDs of entities that were actually written so we can report per-op status.
+		const result = await db.execute(sql`
+			WITH
 			list_input AS (
-				SELECT DISTINCT ON (id) * 
+				SELECT DISTINCT ON (id) *
 				FROM jsonb_populate_recordset(null::${lists}, ${listUpsertsJson}::jsonb)
 				ORDER BY id, created_at DESC
 			),
 			item_input AS (
-				SELECT DISTINCT ON (id) * 
+				SELECT DISTINCT ON (id) *
 				FROM jsonb_populate_recordset(null::${items}, ${itemUpsertsJson}::jsonb)
 				ORDER BY id, updated_at DESC
 			),
@@ -77,18 +78,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			),
 			upsert_items AS (
 				INSERT INTO ${items} (id, list_id, name, group_name, rank, done, deleted_at, updated_at)
-				SELECT 
-					d.id, 
-					COALESCE(d.list_id, i.list_id), 
-					COALESCE(d.name, i.name), 
-					COALESCE(d.group_name, i.group_name), 
-					COALESCE(d.rank, i.rank), 
-					COALESCE(d.done, i.done), 
-					COALESCE(d.deleted_at, i.deleted_at), 
+				SELECT
+					d.id,
+					COALESCE(d.list_id, i.list_id),
+					COALESCE(d.name, i.name),
+					COALESCE(d.group_name, i.group_name),
+					COALESCE(d.rank, i.rank),
+					COALESCE(d.done, i.done),
+					COALESCE(d.deleted_at, i.deleted_at),
 					d.updated_at
 				FROM item_input d
 				LEFT JOIN ${items} i ON d.id = i.id
-				WHERE 
+				WHERE
 					(i.id IS NOT NULL AND EXISTS (SELECT 1 FROM ${listUsers} lu WHERE lu.list_id = i.list_id AND lu.user_id = ${user.id}))
 					OR
 					(d.list_id IS NOT NULL AND d.name IS NOT NULL AND EXISTS (SELECT 1 FROM ${listUsers} lu WHERE lu.list_id = d.list_id AND lu.user_id = ${user.id}))
@@ -101,6 +102,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					deleted_at = COALESCE(EXCLUDED.deleted_at, ${items.deletedAt}),
 					updated_at = EXCLUDED.updated_at
 				WHERE ${items.updatedAt} < EXCLUDED.updated_at
+				RETURNING id
 			),
 			del_lists_owner AS (
 				DELETE FROM ${lists} WHERE id IN (SELECT id FROM list_deletes) AND created_by = ${user.id}
@@ -109,22 +111,40 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				DELETE FROM ${listUsers} WHERE list_id IN (SELECT id FROM list_deletes) AND user_id = ${user.id}
 			),
 			del_items AS (
-				DELETE FROM ${items} WHERE id IN (SELECT id FROM item_deletes) 
+				DELETE FROM ${items} WHERE id IN (SELECT id FROM item_deletes)
 				AND (
 					list_id IN (SELECT list_id FROM ${listUsers} WHERE user_id = ${user.id})
-					OR 
+					OR
 					list_id IN (SELECT id FROM ${lists} WHERE created_by = ${user.id})
 				)
 			)
-			SELECT 1;
+			SELECT
+				(SELECT COALESCE(array_agg(id), ARRAY[]::text[]) FROM upsert_lists) AS written_list_ids,
+				(SELECT COALESCE(array_agg(id), ARRAY[]::text[]) FROM upsert_items) AS written_item_ids;
 		`);
 
 		const tTotal = performance.now() - tStart;
-		syncLogger.info(`Atomic Sync complete`, { tTotal: tTotal.toFixed(2), opCount: operations.length });
 
-		return json({ results: operations.map(op => ({ id: op.id, status: 'success' })) });
-	} catch (e: any) {
-		syncLogger.error('Sync failed', { userId: user.id, error: e.message });
-		throw error(500, `${MESSAGES.DATA.PROCESS_ERROR}: ${e.message}`);
+		const row = result[0] as { written_list_ids: string[]; written_item_ids: string[] } | undefined;
+		const writtenListIds = new Set<string>(row?.written_list_ids ?? []);
+		const writtenItemIds = new Set<string>(row?.written_item_ids ?? []);
+
+		const results = operations.map(op => {
+			const entityId = op.data.id as string;
+			if (op.type === 'DELETE') return { id: op.id, status: 'success' as const };
+			if (op.entity === 'list' && writtenListIds.has(entityId)) return { id: op.id, status: 'success' as const };
+			if (op.entity === 'item' && writtenItemIds.has(entityId)) return { id: op.id, status: 'success' as const };
+			syncLogger.warn('Op not written (authorization or stale timestamp)', { opId: op.id, entity: op.entity, entityId });
+			return { id: op.id, status: 'ignored' as const };
+		});
+
+		const ignoredCount = results.filter(r => r.status === 'ignored').length;
+		syncLogger.info(`Atomic Sync complete`, { tTotal: tTotal.toFixed(2), opCount: operations.length, ignoredCount });
+
+		return json({ results });
+	} catch (e) {
+		const message = e instanceof Error ? e.message : String(e);
+		syncLogger.error('Sync failed', { userId: user.id, error: message });
+		throw error(500, `${MESSAGES.DATA.PROCESS_ERROR}: ${message}`);
 	}
 };

@@ -11,7 +11,7 @@
 		placeholder?: string;
 		actionLabel?: string;
 		loadingLabel?: string;
-		form?: any;
+		form?: { success?: boolean; error?: string } | null;
 		action?: string;
 		successTitle?: string;
 		successMessage?: string;

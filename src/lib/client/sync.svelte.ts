@@ -8,7 +8,7 @@ const syncLogger = logger.child({ module: 'client-sync' });
 
 interface SyncResult {
 	id: string | number;
-	status: 'success' | 'error';
+	status: 'success' | 'ignored' | 'error';
 	message?: string;
 }
 
@@ -132,7 +132,6 @@ class SyncManager {
 				}
 			})
 			.subscribe((status, err) => {
-				this.isOnline = status === 'SUBSCRIBED';
 				this.syncStatus = status === 'SUBSCRIBED' ? 'connected' : 'disconnected';
 				if (status === 'CHANNEL_ERROR') {
 					syncLogger.error('Realtime subscription error', { message: err?.message });
@@ -151,18 +150,23 @@ class SyncManager {
 
 	async startLoop() {
 		let loopCount = 0;
+		let backoffMs = 10000;
 		while (true) {
 			try {
 				await this.processQueue();
-				// Reconcile all lists every 6 loops (~1 minute)
+				// Reconcile all lists every 6 loops (~1 minute at base interval)
 				if (loopCount % 6 === 0) {
 					await this.reconcileAllLists();
 				}
 				loopCount++;
+				backoffMs = 10000;
 			} catch (e) {
 				syncLogger.error('Sync loop error', {}, e);
+				// Exponential backoff with jitter, capped at 2 minutes
+				backoffMs = Math.min(backoffMs * 2, 120000);
 			}
-			await new Promise(resolve => setTimeout(resolve, 10000));
+			const jitter = Math.random() * 2000;
+			await new Promise(resolve => setTimeout(resolve, backoffMs + jitter));
 		}
 	}
 
@@ -196,7 +200,9 @@ class SyncManager {
 
 				if (response.status === 400) {
 					const errorData = await response.json();
-					syncLogger.error('Validation failed. Purging invalid batch.', { error: errorData });
+					syncLogger.error('Validation failed. Batch rejected by server.', { error: errorData });
+					// Drop the batch — a 400 means the client sent malformed data that will never succeed.
+					// Individual ops are preserved if the cause was a transient schema mismatch.
 					await db.syncQueue.bulkDelete(ops.map(o => o.localId).filter((id): id is number => id !== undefined));
 					return;
 				}
@@ -211,10 +217,12 @@ class SyncManager {
 				if (!response.ok) throw new Error(`Sync failed: ${response.statusText}`);
 
 				const data: { results: SyncResult[] } = await response.json();
-				const successfulIds = new Set(data.results.filter(r => r.status === 'success').map(r => r.id));
+				// 'success' = written to DB; 'ignored' = rejected (auth/stale) — both are removed from queue.
+				// 'error' would stay in queue for retry, but the server currently only emits success/ignored.
+				const ackedIds = new Set(data.results.filter(r => r.status === 'success' || r.status === 'ignored').map(r => r.id));
 
-				if (successfulIds.size > 0) {
-					const localIdsToDelete = ops.filter(op => successfulIds.has(op.id)).map(op => op.localId).filter((id): id is number => id !== undefined);
+				if (ackedIds.size > 0) {
+					const localIdsToDelete = ops.filter(op => ackedIds.has(op.id)).map(op => op.localId).filter((id): id is number => id !== undefined);
 					await db.syncQueue.bulkDelete(localIdsToDelete);
 				}
 			} catch (e) {
@@ -320,6 +328,8 @@ class SyncManager {
 					});
 				}
 			}
+		} catch (e) {
+			syncLogger.error(`Pull failed for list ${listId}`, {}, e);
 		} finally {
 			this.activePulls = this.activePulls.filter(id => id !== listId);
 			if (this.activePulls.length === 0 && !this.reconcilePromise) this.isSyncing = false;

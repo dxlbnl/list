@@ -1,21 +1,19 @@
 <script lang="ts">
 	import { DropdownMenu as BitsDropdown } from "bits-ui";
+	import type { DropdownMenuItemProps } from "bits-ui";
 	import type { Snippet } from "svelte";
 
-	let { 
-		children, 
+	let {
+		children,
 		class: className,
 		onSelect,
 		danger = false,
 		highlightAccent = false,
-		...rest 
-	}: { 
-		children: Snippet; 
-		class?: string;
-		onSelect?: () => void;
+		...rest
+	}: DropdownMenuItemProps & {
+		children: Snippet;
 		danger?: boolean;
 		highlightAccent?: boolean;
-		[key: string]: any;
 	} = $props();
 </script>
 

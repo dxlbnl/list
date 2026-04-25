@@ -6,8 +6,9 @@ const CACHE = `cache-${version}`;
 
 const ASSETS = [
 	...build, // the app itself
-	...files, // everything in `static`
-	'/'       // the index route
+	...files  // everything in `static`
+	// '/' is intentionally excluded: it returns auth-dependent HTML and must
+	// always be fetched fresh from the network so the correct user is embedded.
 ];
 
 self.addEventListener('install', (event) => {

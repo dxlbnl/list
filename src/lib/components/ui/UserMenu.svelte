@@ -275,7 +275,6 @@
 	>
 		<div class="user-menu-qr-wrapper">
 			<QRCodeDisplay url={qrCodeUrl} isLoading={isLoadingQr} />
-			<p>{qrCodeUrl}</p>
 			<div class="user-menu-qr-footer small muted mono">
 				Sync session active
 			</div>

@@ -67,31 +67,29 @@ export type DatabaseList = z.infer<typeof listDatabaseSchema>;
 
 /**
  * SYNC SCHEMAS
- * Partial versions for delta updates.
+ * Partial delta versions — types derived from DatabaseItem/DatabaseList so there's no duplication.
  */
-const itemSyncDataSchema = itemSchema.partial().extend({ id: z.string() }).transform((val) => {
-	const result: any = { id: val.id };
-	if (val.listId !== undefined) result.list_id = val.listId;
-	if (val.name !== undefined) result.name = val.name;
-	if (val.groupName !== undefined) result.group_name = val.groupName;
-	if (val.rank !== undefined) result.rank = val.rank;
-	if (val.done !== undefined) result.done = val.done;
-	if (val.deletedAt !== undefined) result.deleted_at = val.deletedAt ? new Date(val.deletedAt).toISOString() : null;
-	
-	// Always provide updated_at to satisfy NOT NULL constraints
-	result.updated_at = val.updatedAt ? new Date(val.updatedAt).toISOString() : new Date().toISOString();
-	
-	return result;
-});
+type ItemSyncData = Partial<DatabaseItem> & Required<Pick<DatabaseItem, 'id' | 'updated_at'>>;
+type ListSyncData = Partial<DatabaseList> & Required<Pick<DatabaseList, 'id'>>;
 
-const listSyncDataSchema = listSchema.partial().extend({ id: z.string() }).transform((val) => {
-	const result: any = { id: val.id };
-	if (val.slug !== undefined) result.slug = val.slug;
-	if (val.name !== undefined) result.name = val.name;
-	if (val.createdBy !== undefined) result.created_by = val.createdBy;
-	if (val.createdAt !== undefined) result.created_at = val.createdAt ? new Date(val.createdAt).toISOString() : new Date().toISOString();
-	return result;
-});
+const itemSyncDataSchema = itemSchema.partial().extend({ id: z.string() }).transform((val): ItemSyncData => ({
+	id: val.id,
+	list_id: val.listId,
+	name: val.name,
+	group_name: val.groupName,
+	rank: val.rank,
+	done: val.done,
+	deleted_at: val.deletedAt?.toISOString() ?? null,
+	updated_at: val.updatedAt?.toISOString() ?? new Date().toISOString(),
+}));
+
+const listSyncDataSchema = listSchema.partial().extend({ id: z.string() }).transform((val): ListSyncData => ({
+	id: val.id,
+	slug: val.slug,
+	name: val.name,
+	created_by: val.createdBy,
+	created_at: val.createdAt?.toISOString(),
+}));
 
 export const syncOperationSchema = z.discriminatedUnion('entity', [
 	z.object({
@@ -111,7 +109,7 @@ export const syncOperationSchema = z.discriminatedUnion('entity', [
 ]);
 
 export const syncRequestSchema = z.object({
-	operations: z.array(syncOperationSchema),
+	operations: z.array(syncOperationSchema).max(500),
 	clientId: z.string().optional()
 });
 
