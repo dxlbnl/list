@@ -1,4 +1,4 @@
-import { db, type LocalList, type LocalItem } from '$lib/client/db';
+import { db } from '$lib/client/db';
 import { logger } from '$lib/logger';
 import { supabase } from '$lib/client/supabase';
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
@@ -21,6 +21,8 @@ class SyncManager {
 	private activeListIds = new Set<string>();
 	private clientId = Math.random().toString(36).substring(7);
 	private currentToken: string | null = null;
+	private tokenRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+	private isRefreshingToken = false;
 	activePulls = $state<string[]>([]);
 
 	constructor() {
@@ -61,12 +63,53 @@ class SyncManager {
 				this.channel.unsubscribe();
 				this.channel = null;
 			}
+			if (this.tokenRefreshTimer) clearTimeout(this.tokenRefreshTimer);
+			this.currentToken = null;
 			return;
 		}
 		if (token === this.currentToken && (this.syncStatus === 'connected' || this.syncStatus === 'connecting')) return;
 		this.currentToken = token;
+		this.scheduleTokenRefresh(token);
 		this.connectSupabase(token);
 		this.reconcileAllLists();
+	}
+
+	private getTokenExpiry(token: string): number | null {
+		try {
+			const payload = JSON.parse(atob(token.split('.')[1]));
+			return typeof payload.exp === 'number' ? payload.exp * 1000 : null;
+		} catch {
+			return null;
+		}
+	}
+
+	private scheduleTokenRefresh(token: string) {
+		if (this.tokenRefreshTimer) clearTimeout(this.tokenRefreshTimer);
+		const expiry = this.getTokenExpiry(token);
+		if (!expiry) return;
+		// Refresh 5 minutes before expiry, or immediately if already close/past
+		const delay = Math.max(0, expiry - Date.now() - 5 * 60 * 1000);
+		this.tokenRefreshTimer = setTimeout(() => this.doTokenRefresh(), delay);
+	}
+
+	private async doTokenRefresh() {
+		if (this.isRefreshingToken) return;
+		this.isRefreshingToken = true;
+		try {
+			const res = await fetch('/api/auth/token');
+			if (res.status === 401) {
+				const { logout } = await import('$lib/client/auth');
+				await logout();
+				return;
+			}
+			if (!res.ok) return;
+			const { token } = await res.json() as { token: string };
+			if (token) this.init(token);
+		} catch (e) {
+			syncLogger.error('Token refresh failed', {}, e);
+		} finally {
+			this.isRefreshingToken = false;
+		}
 	}
 
 	private connectSupabase(token: string) {
@@ -135,6 +178,9 @@ class SyncManager {
 				this.syncStatus = status === 'SUBSCRIBED' ? 'connected' : 'disconnected';
 				if (status === 'CHANNEL_ERROR') {
 					syncLogger.error('Realtime subscription error', { message: err?.message });
+					if (err?.message && (err.message.includes('expired') || err.message.includes('InvalidJWT'))) {
+						this.doTokenRefresh();
+					}
 				}
 			});
 	}
@@ -188,7 +234,6 @@ class SyncManager {
 		this.pushPromise = (async () => {
 			this.isSyncing = true;
 			this.lastSyncError = null;
-			const startTime = performance.now();
 
 			try {
 				const ops = await db.syncQueue.toArray();
