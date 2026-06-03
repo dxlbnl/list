@@ -49,4 +49,6 @@ it records the reason here AND states it in chat.
   unchanged, each-keys stable, removed fn was dead); no scope creep.
 - flag (pre-existing, filed separately): inline `onRename` in `[slug]/+page.svelte` doesn't
   translate `"GENERAL"`→`""` like the removed dead fn did — latent group-rename quirk → inbox.
-- result: done — commit pending
+- result: done — commit `a9bb829`
+- manager: paused (user switching to a local editor); filed B3 (relational fixtures, user-
+  approved) in `ready/` and B4 (group-rename quirk) in `inbox/`. No further dispatch.
