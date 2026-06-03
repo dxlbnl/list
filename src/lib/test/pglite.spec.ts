@@ -1,9 +1,15 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { users, lists } from '$lib/server/db/schema';
-import { listDatabaseSchema } from '$lib/validations';
+import { z } from 'zod';
+import { users, lists, items } from '$lib/server/db/schema';
+import {
+	itemDatabaseSchema,
+	itemSchema,
+	listDatabaseSchema,
+	listSchema
+} from '$lib/validations';
 import { createTestDb, type TestDb } from './pglite';
-import { listFixture } from './fixtures';
+import { world } from './fixtures';
 
 describe('pglite harness', () => {
 	let h: TestDb;
@@ -12,26 +18,47 @@ describe('pglite harness', () => {
 		await h?.close();
 	});
 
-	it('boots the Drizzle schema and round-trips a fixture row', async () => {
+	it('boots the Drizzle schema and round-trips a coherent list+items graph', async () => {
 		h = await createTestDb();
 
+		// Native zod4-mock coherent-graph pattern: pin exactly one list in the
+		// registry, then generate N items — each item's `listId` matcher
+		// (registered in fixtures.ts) picks that list from the registry. No FK
+		// stamping in test code.
+		world.populate(listSchema, 1);
+		const generatedItems = world.generate(z.array(itemSchema).length(2));
+		const generatedList = world.registry.pick(listSchema);
 
-		// Same zod4-mock fixtures feed the DB: fixture → schema-validated row → insert.
-		const fixture = listFixture();
-		const row = listDatabaseSchema.parse(fixture);
+		const listRow = listDatabaseSchema.parse(generatedList);
+		const itemRows = generatedItems.map((i) => itemDatabaseSchema.parse(i));
 
 		// Satisfy the lists.created_by FK with an owning user.
-		await h.db.insert(users).values({ id: row.created_by, email: null });
+		await h.db.insert(users).values({ id: listRow.created_by, email: null });
 		await h.db.insert(lists).values({
-			id: row.id,
-			slug: row.slug,
-			name: row.name,
-			createdBy: row.created_by,
-			createdAt: new Date(row.created_at)
+			id: listRow.id,
+			slug: listRow.slug,
+			name: listRow.name,
+			createdBy: listRow.created_by,
+			createdAt: new Date(listRow.created_at)
 		});
+		await h.db.insert(items).values(
+			itemRows.map((r) => ({
+				id: r.id,
+				listId: r.list_id,
+				name: r.name,
+				groupName: r.group_name,
+				rank: r.rank,
+				done: r.done,
+				deletedAt: r.deleted_at ? new Date(r.deleted_at) : null,
+				updatedAt: new Date(r.updated_at)
+			}))
+		);
 
-		const read = await h.db.select().from(lists).where(eq(lists.id, row.id));
-		expect(read).toHaveLength(1);
-		expect(read[0].name).toBe(row.name);
+		const readList = await h.db.select().from(lists).where(eq(lists.id, listRow.id));
+		expect(readList).toHaveLength(1);
+		expect(readList[0].name).toBe(listRow.name);
+
+		const readItems = await h.db.select().from(items).where(eq(items.listId, listRow.id));
+		expect(readItems).toHaveLength(2);
 	}, 30_000);
 });

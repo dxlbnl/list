@@ -44,10 +44,15 @@ See `architecture/stack.md`, `architecture/sync-engine.md`, and
      `src/lib/server/db/schema.ts` per call (no Docker/network). Use for the sync CTE and
      `auth.ts`.
 - **Fixtures convention**: test data is **schema-derived** — `src/lib/test/fixtures.ts`
-  feeds the Zod schemas in `src/lib/validations.ts` to **`zod4-mock`** with a fixed seed
-  (deterministic), exposing `listFixture()` / `itemFixture()` with thin per-test
-  overrides. The **same fixtures** seed both Dexie (client) and pglite (DB) tests:
-  fixture → schema-validated object → insert.
+  registers the Zod schemas from `src/lib/validations.ts` on a single shared
+  **`zod4-mock`** `world` with a fixed seed (deterministic) and exports that `world`
+  for direct use. Tests consume the library API directly: `world.generate(schema)` /
+  `world.generate(schema, { overrides })` for one record; `world.populate(parent, 1)`
+  + `world.generate(z.array(child).length(N))` + `world.registry.pick(parent)` for a
+  coherent parent+children graph (the child's `listId` matcher resolves via the
+  registered relation, so no FK is stamped in test code). The **same world** seeds
+  both Dexie (client) and pglite (DB) tests: generate → schema-validated object →
+  insert.
 - **Test file location**: co-located `*.test.ts` / `*.spec.ts` next to source; shared
   harness + fixtures live in `src/lib/test/`.
 - **Commands**: `pnpm test` (CI mode, `--run`); `pnpm test:unit` for interactive;
@@ -98,4 +103,5 @@ standing constraint into a rule when an item is done. Keep it short; the "why" l
 - Deletion **MUST** be soft (set `deletedAt`); do not hard-delete user data.
 - DB-integration tests **MUST** use the in-process `pglite` harness (`src/lib/test/pglite.ts`), not Docker/Testcontainers. applies: `src/**/*.spec.ts`
 - Test fixtures **MUST** be schema-derived from `src/lib/validations.ts` via `zod4-mock` (`src/lib/test/fixtures.ts`); do not hand-roll parallel test data. applies: `src/**/*.spec.ts`
+- Test code **MUST** consume the registered `zod4-mock` `world` from `src/lib/test/fixtures.ts` directly; **MUST NOT** wrap it in fixture helper functions, and **MUST NOT** hand-stamp foreign keys in test code (use the world's registered relations/matchers). applies: `src/**/*.spec.ts` (see [D2](decisions.md))
 - CI (`.github/workflows/ci.yml`) **MUST** gate `pnpm check`, `pnpm lint`, and `pnpm test` on every push/PR.

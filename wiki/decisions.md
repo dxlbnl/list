@@ -62,3 +62,34 @@
   (`.github/workflows/ci.yml`) **MUST** gate `pnpm check`, `pnpm lint`, and `pnpm test` on
   every push/PR." (B2 cleared the pre-existing lint baseline and made lint blocking.)
 - **Supersedes**: none
+
+## D2: Tests consume the `zod4-mock` world directly — no fixture wrappers
+
+- **Date**: 2026-06-03
+- **By**: implementer (B3)
+- **Context**: The first iteration of `src/lib/test/fixtures.ts` (B1) wrapped the
+  registered `world` in helper functions — `listFixture()`, `itemFixture()`,
+  `listWithItemsFixture()`. The user rejected this on review: the wrappers hid the
+  library and let a real bug slip in (`listWithItemsFixture()` generated a list,
+  then **stamped** `listId` onto each item by hand, bypassing the `relations` /
+  `matchers` registration entirely). The library already has a native API for every
+  case the wrappers were covering: `world.generate(schema)`,
+  `world.generate(schema, { overrides })`, `world.populate(parent, 1)` +
+  `world.generate(z.array(child).length(N))` + `world.registry.pick(parent)` for
+  coherent parent+children graphs.
+- **Decision**: Test code in `src/lib/test/**` consumes the registered `zod4-mock`
+  `world` (exported from `src/lib/test/fixtures.ts`) directly. No fixture wrapper
+  helpers, no manual FK construction (no `item.listId = list.id`-style lines), no
+  re-export shims under old names. Coherent relational data is produced via the
+  library's registered relations/matchers, not by hand-wiring in test code.
+- **Consequences**: Tests are slightly more verbose at call sites but use one
+  consistent, library-native vocabulary; bugs of the "stamp FK by hand and bypass
+  the matcher" shape become structurally impossible because there is no helper to
+  hide them in. If a relational pattern keeps recurring, the right fix is a richer
+  schema registration on the world, not a wrapper function above it.
+- **Rule added/changed**: candidate rule for promotion to `architecture.md` Rules —
+  "Test code **MUST** consume the registered `zod4-mock` `world` from
+  `src/lib/test/fixtures.ts` directly; **MUST NOT** wrap it in fixture helper
+  functions, and **MUST NOT** hand-stamp foreign keys in test code (use the world's
+  registered relations/matchers). applies: `src/**/*.spec.ts`"
+- **Supersedes**: none
