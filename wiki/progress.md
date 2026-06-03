@@ -34,4 +34,19 @@ it records the reason here AND states it in chat.
 - reviewer: PASS — all 6 acceptance points met, no scope creep.
 - manager: promoted D1's 3 rules into `architecture.md` Rules (pglite harness, zod4-mock
   fixtures, CI gating with lint-non-blocking-pending-B2).
+- result: done — commit `008f76e`
+
+## 2026-06-03 — B2: Clear the ESLint baseline + make CI lint blocking
+
+- manager: filed B2 (chore) from B1's escalation; flagged behavior-adjacent (navigation
+  `resolve()`, each-keys) — implementer told to stop+flag any non-trivial fix for promotion.
+- implementer: cleared the lint baseline (live count was 20, not the snapshotted 27 —
+  `scratch/convert_to_jwk.ts` already deleted; also fixed 2 off-card errors to reach 0).
+  Removed dead imports/`handleRenameGroup`; wrapped nav in `resolve()`; added each-keys;
+  `any`→`LocalItem[]`. Flipped CI lint to blocking; reconciled D1 + architecture.md.
+  `pnpm lint` exit 0, `pnpm check` 0 errors, server tests 5/5.
+- reviewer: PASS — every behavior-adjacent fix confirmed neutral (resolve() destinations
+  unchanged, each-keys stable, removed fn was dead); no scope creep.
+- flag (pre-existing, filed separately): inline `onRename` in `[slug]/+page.svelte` doesn't
+  translate `"GENERAL"`→`""` like the removed dead fn did — latent group-rename quirk → inbox.
 - result: done — commit pending

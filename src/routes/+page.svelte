@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { createList } from "$lib/client/actions";
+	import { resolve } from "$app/paths";
 	import { db } from "$lib/client/db";
 	import { liveQuery } from "dexie";
 	import { syncManager } from "$lib/client/sync.svelte";
@@ -57,10 +58,10 @@
 			<LoadingState message="SYNCING YOUR LISTS" />
 		{:else if $lists && $lists.length > 0}
 			<div class="list-grid">
-				{#each $lists as list}
+				{#each $lists as list (list.id)}
 					{@const effectiveSlug = getEffectiveSlug(list, $lists)}
 					{@const isShared = list.createdBy !== data.user?.id}
-					<a href="/{effectiveSlug}" class="list-card transition-all">
+					<a href={resolve("/[slug]", { slug: effectiveSlug })} class="list-card transition-all">
 						<h3>{list.name}</h3>
 						<div class="list-card-meta">
 							<span class="muted small mono">{effectiveSlug}</span>

@@ -12,6 +12,7 @@
 	import { db as dexieDb } from "$lib/client/db";
 	import { liveQuery } from "dexie";
 	import { goto } from "$app/navigation";
+	import { resolve } from "$app/paths";
 	import Dialog from "$lib/components/ui/Dialog.svelte";
 	import { syncManager } from "$lib/client/sync.svelte";
 	import { onMount } from "svelte";
@@ -104,7 +105,7 @@
 	$effect(() => {
 		const allItems = $items;
 		if (!dragInProgress && allItems) {
-			const groups: Record<string, any[]> = {};
+			const groups: Record<string, LocalItem[]> = {};
 			allItems.forEach((item) => {
 				const g = item.groupName || "GENERAL";
 				if (!groups[g]) groups[g] = [];
@@ -176,13 +177,6 @@
 		}, 500);
 	}
 
-	async function handleRenameGroup(oldName: string, newName: string) {
-		if (newName && newName !== oldName && data.listId) {
-			const actualOldName = oldName === "GENERAL" ? "" : oldName;
-			await renameGroup(data.listId, actualOldName, newName);
-		}
-	}
-
 	async function handleDeleteGroup(groupName: string) {
 		if (data.listId) {
 			const actualGroupName = groupName === "GENERAL" ? "" : groupName;
@@ -203,7 +197,7 @@
 		if (!data.listId) return;
 		await deleteList(data.listId);
 		isDeleteDialogOpen = false;
-		goto("/");
+		goto(resolve("/"));
 	}
 
 	async function handleShareList() {
@@ -331,7 +325,7 @@
 			<h2 class="mono">List deleted</h2>
 			<p class="muted small">This list has been removed by the owner.</p>
 			<a
-				href="/"
+				href={resolve("/")}
 				class="btn-primary-ghost mt-4 mono small tracking-widest"
 			>
 				← Back to Dashboard

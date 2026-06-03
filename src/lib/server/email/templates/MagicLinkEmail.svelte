@@ -7,8 +7,6 @@
 		Html,
 		Link,
 		Preview,
-		Section,
-		Column,
 		Text,
 		Hr,
 	} from "svelte-email";

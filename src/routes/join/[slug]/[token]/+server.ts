@@ -3,7 +3,6 @@ import { lists, listUsers, listInvites } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { error, redirect } from '@sveltejs/kit';
 import { MESSAGES } from '$lib/constants/messages';
-import { nanoid } from '$lib/utils';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ params, locals }) => {

@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
 	import AccessCard from '$lib/components/ui/AccessCard.svelte';
 	import { themeManager, type Theme } from '$lib/client/theme.svelte';
 	let { data, form } = $props();
@@ -57,7 +56,7 @@
 			<div class="info-row">
 				<span class="label mono tiny muted">Theme selection</span>
 				<div class="theme-toggle-group">
-					{#each themes as theme}
+					{#each themes as theme (theme.id)}
 						<button 
 							class="theme-btn mono tiny" 
 							class:active={themeManager.current === theme.id}

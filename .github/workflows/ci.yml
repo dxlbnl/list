@@ -32,10 +32,8 @@ jobs:
       - name: Type check
         run: pnpm check
 
-      # Non-blocking until B2 clears the pre-existing lint baseline; then remove continue-on-error.
       - name: Lint
         run: pnpm lint
-        continue-on-error: true
 
       - name: Test
         run: pnpm test

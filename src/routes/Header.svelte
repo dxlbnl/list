@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import { resolve } from '$app/paths';
 	import UserMenu from "$lib/components/ui/UserMenu.svelte";
 
 	let { user } = $props();
@@ -9,7 +10,7 @@
 
 <header>
 	<div class="header-content">
-		<a href="/" class="logo-link" class:is-back={page.url.pathname !== '/'}>
+		<a href={resolve('/')} class="logo-link" class:is-back={page.url.pathname !== '/'}>
 			{#if page.url.pathname !== '/'}
 				<span class="back-arrow mono">←</span>
 			{/if}

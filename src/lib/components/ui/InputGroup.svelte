@@ -22,7 +22,7 @@
 		placeholder = undefined,
 		actionDisabled = false,
 		...rest
-	} = $props();
+	}: Props = $props();
 
 	function handleKeydown(e: KeyboardEvent) {
 		if (

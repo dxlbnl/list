@@ -5,8 +5,8 @@
 	import { page } from "$app/state";
 	import { deleteList } from "$lib/client/actions";
 	import { goto } from "$app/navigation";
+	import { resolve } from "$app/paths";
 	import { menuState } from "$lib/client/menu.svelte";
-	import { db as dexieDb } from "$lib/client/db";
 	import QRCodeDisplay from "./QRCodeDisplay.svelte";
 	import ConfirmDeleteDialog from "./ConfirmDeleteDialog.svelte";
 	import * as auth from "$lib/client/auth";
@@ -24,7 +24,7 @@
 		if (currentList?.id) {
 			await deleteList(currentList.id);
 			isDeleteDialogOpen = false;
-			goto("/");
+			goto(resolve("/"));
 		}
 	}
 

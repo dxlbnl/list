@@ -58,9 +58,8 @@ See `architecture/stack.md`, `architecture/sync-engine.md`, and
   in test mode and `pnpm check` loads it via `svelte-kit sync --mode test`.
 - **CI**: `.github/workflows/ci.yml` runs `pnpm install`, `pnpm check`, `pnpm lint`,
   `pnpm test` on push/PR (pinned Node 22 + pnpm 10.33.0), installing the Playwright
-  chromium browser for the `client` tier. `pnpm check` and `pnpm test` are blocking; the
-  `pnpm lint` step is currently **non-blocking** (`continue-on-error`) pending item **B2**
-  clearing the pre-existing lint baseline, after which it becomes blocking too.
+  chromium browser for the `client` tier. `pnpm check`, `pnpm lint`, and `pnpm test` are
+  all blocking.
 
 > Note: the seed `.claude/settings.json` ships only stack-agnostic permissions, so the
 > first `pnpm …` run in a session will prompt for approval until pnpm rules are added to
@@ -99,4 +98,4 @@ standing constraint into a rule when an item is done. Keep it short; the "why" l
 - Deletion **MUST** be soft (set `deletedAt`); do not hard-delete user data.
 - DB-integration tests **MUST** use the in-process `pglite` harness (`src/lib/test/pglite.ts`), not Docker/Testcontainers. applies: `src/**/*.spec.ts`
 - Test fixtures **MUST** be schema-derived from `src/lib/validations.ts` via `zod4-mock` (`src/lib/test/fixtures.ts`); do not hand-roll parallel test data. applies: `src/**/*.spec.ts`
-- CI (`.github/workflows/ci.yml`) **MUST** gate `pnpm check` and `pnpm test` on every push/PR; `pnpm lint` runs non-blocking until item B2 clears the pre-existing lint baseline, after which lint **MUST** become blocking too.
+- CI (`.github/workflows/ci.yml`) **MUST** gate `pnpm check`, `pnpm lint`, and `pnpm test` on every push/PR.

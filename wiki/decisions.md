@@ -45,12 +45,11 @@
      feeds the Zod schemas in `src/lib/validations.ts` (the single source of truth) to
      `zod4-mock` with a fixed seed. The same fixtures seed both Dexie (client) and pglite
      (DB) tests, so there is one consistent data source.
-  3. **CI gates the suite** — `.github/workflows/ci.yml` gates `pnpm check` and
-     `pnpm test` on every push/PR (pinned Node 22 + pnpm 10.33.0). `pnpm lint` also runs
-     but is **non-blocking** (`continue-on-error`) until item **B2** clears the
-     pre-existing lint baseline, after which lint becomes blocking too. CI is the proof
-     the browser tier is green, since the chromium download is blocked in the dev
-     container.
+  3. **CI gates the suite** — `.github/workflows/ci.yml` gates `pnpm check`, `pnpm lint`,
+     and `pnpm test` on every push/PR (pinned Node 22 + pnpm 10.33.0). (Lint was initially
+     non-blocking pending **B2**; B2 cleared the pre-existing lint baseline and made it
+     blocking.) CI is the proof the browser tier is green, since the chromium download is
+     blocked in the dev container.
 - **Consequences**: New devDependencies (`@electric-sql/pglite`, `fake-indexeddb`,
   `zod4-mock`). Browser (`client`) Vitest project requires a Playwright chromium install
   (a CI step; one-time locally). A committed `.env.test` supplies non-secret public env
@@ -60,7 +59,6 @@
   (`src/lib/test/pglite.ts`), not Docker/Testcontainers."; "Test fixtures **MUST** be
   derived from the `src/lib/validations.ts` Zod schemas via `zod4-mock`
   (`src/lib/test/fixtures.ts`); do not hand-roll parallel test data."; "CI
-  (`.github/workflows/ci.yml`) **MUST** gate `pnpm check` and `pnpm test` on every
-  push/PR; `pnpm lint` runs **non-blocking** until item **B2** clears the pre-existing
-  lint baseline, after which lint **MUST** become blocking too."
+  (`.github/workflows/ci.yml`) **MUST** gate `pnpm check`, `pnpm lint`, and `pnpm test` on
+  every push/PR." (B2 cleared the pre-existing lint baseline and made lint blocking.)
 - **Supersedes**: none
