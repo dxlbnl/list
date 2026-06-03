@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import AccessCard from '$lib/components/ui/AccessCard.svelte';
 
 	let countdown = $state(3);
@@ -10,7 +11,7 @@
 			countdown--;
 			if (countdown <= 0) {
 				clearInterval(timer);
-				goto('/');
+				goto(resolve('/'));
 			}
 		}, 1000);
 		return () => clearInterval(timer);
@@ -31,7 +32,7 @@
 		{#snippet footer()}
 			<div class="card-footer split">
 				<span class="mono tiny muted">Redirecting in {countdown}s...</span>
-				<a href="/" class="manual-link mono tiny">Continue now</a>
+				<a href={resolve('/')} class="manual-link mono tiny">Continue now</a>
 			</div>
 		{/snippet}
 	</AccessCard>

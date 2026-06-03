@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from "$app/state";
+	import { resolve } from "$app/paths";
 </script>
 
 <div class="error-container">
@@ -24,7 +25,7 @@
 		</div>
 
 		<footer class="error-footer">
-			<a href="/" class="btn-primary">Return home</a>
+			<a href={resolve("/")} class="btn-primary">Return home</a>
 		</footer>
 	</div>
 </div>

@@ -16,22 +16,37 @@ with documented harnesses for each kind of test we'll need.
 
 ## Acceptance (definition of done)
 
-1. **Runnable suite** — `pnpm install` then `pnpm test` completes green. The two
-   `src/lib/vitest-examples/` scaffold specs either pass or are removed; the browser
-   (client) Vitest project runs (document the `playwright install chromium` step if the
-   provider needs it). `pnpm check` and `pnpm lint` also pass.
+1. **Runnable suite** — `pnpm install` then `pnpm test` completes green (node/server
+   tier). The two `src/lib/vitest-examples/` scaffold specs either pass or are removed;
+   the browser (client) Vitest project runs in CI (the `playwright install chromium` step
+   is network-blocked in the dev container, so CI is the proof — acceptable). `pnpm check`
+   also passes. **`pnpm lint`**: 27 pre-existing errors live in product files outside this
+   item's scope — tracked separately in **B2** and run **non-blocking** in CI until B2
+   clears them (user decision, 2026-06-03). B1 does **not** require a green lint baseline;
+   B1's own added files (`src/lib/test/**`) lint clean.
 2. **Test setup file** — a Vitest `setupFiles` wired into the node/client projects that
    provides the shared scaffolding real tests will need: `fake-indexeddb` for Dexie-backed
    client tests, and mocks/stubs for `$env/*` and `$app/*` so server/client modules import
    cleanly under test.
-3. **DB-integration harness (pglite)** — an in-process Postgres (`@electric-sql/pglite`)
+3. **Fixtures via zod4-mock** — a `tests/fixtures` (or `src/lib/test/fixtures`) helper that
+   builds test data by feeding the project's Zod schemas in `src/lib/validations.ts` to
+   **`zod4-mock`** (`dxlbnl/zod4-mock`, deterministic schema-driven mock generator for Zod v4 —
+   project is on Zod ^4.3.6, so it's compatible). Fixtures are derived from the schemas (the
+   existing single source of truth for wire/DB/client shapes), seeded deterministically so
+   tests are reproducible, with thin overrides for per-test fields. Include one assertion that
+   a generated fixture parses cleanly against its schema, proving the wiring.
+4. **DB-integration harness (pglite)** — an in-process Postgres (`@electric-sql/pglite`)
    helper that boots a fresh schema from the Drizzle schema (`src/lib/server/db/schema.ts`)
    per test/suite, so the raw-SQL sync CTE and `auth.ts` can be tested against real SQL with
-   no Docker/network. Include **one** smoke test proving the harness works (e.g. insert a
-   row via Drizzle and read it back) — this is harness validation, not product coverage.
-4. **CI workflow** — a GitHub Actions workflow (`.github/workflows/ci.yml`) that on push/PR
+   no Docker/network. Seed DB rows from the **same zod4-mock fixtures** (point 3) so client and
+   DB tests share one consistent data source — fixture → schema-validated object → inserted via
+   Drizzle. Include **one** smoke test proving the harness works (e.g. seed a fixture row via
+   Drizzle and read it back) — this is harness validation, not product coverage.
+5. **CI workflow** — a GitHub Actions workflow (`.github/workflows/ci.yml`) that on push/PR
    runs `pnpm install`, `pnpm check`, `pnpm lint`, and `pnpm test` on a pinned Node + pnpm.
-5. **Docs** — `wiki/architecture.md` Test setup section updated to describe the three test
+   `check` and `test` are blocking; `lint` runs **non-blocking** (`continue-on-error`) until
+   B2 clears the baseline, then becomes blocking.
+6. **Docs** — `wiki/architecture.md` Test setup section updated to describe the three test
    tiers (node unit, browser/Svelte, pglite integration), the commands, and where each kind
    of test lives. Record the standing choices (pglite for DB tests; CI gates the suite) in
    `wiki/decisions.md`; the manager promotes them to Rules on completion.
@@ -52,8 +67,8 @@ with documented harnesses for each kind of test we'll need.
 
 ## Notes
 
-- New deps expected (devDependencies): `@electric-sql/pglite`, `fake-indexeddb`, and
-  possibly a Drizzle→pglite adapter. Adding dev test tooling is acceptable for this chore;
+- New deps expected (devDependencies): `@electric-sql/pglite`, `fake-indexeddb`, `zod4-mock`,
+  and possibly a Drizzle→pglite adapter. Adding dev test tooling is acceptable for this chore;
   keep runtime deps untouched.
 - The browser Vitest project uses `@vitest/browser-playwright` (chromium, headless) — see
   `vite.config.ts`. Confirm it runs in CI (may need a Playwright install step in the workflow).

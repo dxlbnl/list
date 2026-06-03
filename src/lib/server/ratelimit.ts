@@ -1,6 +1,6 @@
 import { db } from '$lib/server/db';
 import { rateLimits } from '$lib/server/db/schema';
-import { eq, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { logger } from '$lib/logger';
 
 /**

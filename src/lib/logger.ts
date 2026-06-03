@@ -123,7 +123,12 @@ class Logger {
 					const userId = typeof ctx.userId === 'string' ? ctx.userId : undefined;
 					const user = userId ? `${colors.magenta}@${userId.slice(0, 5)}${colors.reset}` : '';
 
-					const { method: _m, path: _p, status: _s, duration: _d, userId: _u, ...remaining } = ctx;
+					const remaining = { ...ctx };
+					delete remaining.method;
+					delete remaining.path;
+					delete remaining.status;
+					delete remaining.duration;
+					delete remaining.userId;
 					const remainingStr = Object.keys(remaining).length > 0 ? ` ${colors.dim}${JSON.stringify(remaining)}${colors.reset}` : '';
 
 					console.log(`${prefix} ${colors.bright}${method}${colors.reset} ${path} ${status} ${duration} ${user}${remainingStr}`);
