@@ -29,3 +29,38 @@
 ---
 
 <!-- entries start here -->
+
+## D1: Testing foundation — pglite, zod4-mock, CI gate
+
+- **Date**: 2026-06-03
+- **By**: implementer (B1)
+- **Context**: Later fixes (notably the sync-authz bugs) need real regression tests, so
+  the project needs a runnable test foundation with harnesses for each test kind. Docker
+  won't run in the web container, so Testcontainers is out.
+- **Decision**:
+  1. **DB-integration tests use `@electric-sql/pglite`** — in-process Postgres booted
+     from the Drizzle schema (`src/lib/server/db/schema.ts`) per suite via the
+     `src/lib/test/pglite.ts` harness. No Docker, no network.
+  2. **Test fixtures are schema-derived via `zod4-mock`** — `src/lib/test/fixtures.ts`
+     feeds the Zod schemas in `src/lib/validations.ts` (the single source of truth) to
+     `zod4-mock` with a fixed seed. The same fixtures seed both Dexie (client) and pglite
+     (DB) tests, so there is one consistent data source.
+  3. **CI gates the suite** — `.github/workflows/ci.yml` gates `pnpm check` and
+     `pnpm test` on every push/PR (pinned Node 22 + pnpm 10.33.0). `pnpm lint` also runs
+     but is **non-blocking** (`continue-on-error`) until item **B2** clears the
+     pre-existing lint baseline, after which lint becomes blocking too. CI is the proof
+     the browser tier is green, since the chromium download is blocked in the dev
+     container.
+- **Consequences**: New devDependencies (`@electric-sql/pglite`, `fake-indexeddb`,
+  `zod4-mock`). Browser (`client`) Vitest project requires a Playwright chromium install
+  (a CI step; one-time locally). A committed `.env.test` supplies non-secret public env
+  placeholders so types generate and modules import under test.
+- **Rule added/changed**: promoted to `architecture.md` Rules (binding) on B1 completion —
+  "DB-integration tests **MUST** use the in-process `pglite` harness
+  (`src/lib/test/pglite.ts`), not Docker/Testcontainers."; "Test fixtures **MUST** be
+  derived from the `src/lib/validations.ts` Zod schemas via `zod4-mock`
+  (`src/lib/test/fixtures.ts`); do not hand-roll parallel test data."; "CI
+  (`.github/workflows/ci.yml`) **MUST** gate `pnpm check` and `pnpm test` on every
+  push/PR; `pnpm lint` runs **non-blocking** until item **B2** clears the pre-existing
+  lint baseline, after which lint **MUST** become blocking too."
+- **Supersedes**: none

@@ -27,11 +27,40 @@ See `architecture/stack.md`, `architecture/sync-engine.md`, and
 
 ## Test setup
 
-- **Test runner**: Vitest (with `vitest-browser-svelte` / Playwright browser provider).
-- **Test command**: `pnpm test` (CI mode, `--run`); `pnpm test:unit` for interactive.
-- **Type check**: `pnpm check` (svelte-kit sync + svelte-check).
-- **Lint**: `pnpm lint` (ESLint).
-- **Test file location**: co-located `*.test.ts` / `*.spec.ts` next to source.
+- **Test runner**: Vitest, configured in `vite.config.ts` as **two projects**:
+  - **`client`** (browser) — Svelte component tests via `vitest-browser-svelte` on the
+    Playwright chromium provider (headless). Matches `src/**/*.svelte.{test,spec}.ts`.
+    Setup: `src/lib/test/setup.client.ts` (wires `fake-indexeddb/auto` for Dexie + stubs
+    `$app`/`$env`).
+  - **`server`** (node) — everything else: plain unit tests and **pglite DB-integration**
+    tests. Matches `src/**/*.{test,spec}.ts` (excluding `*.svelte.*`). Setup:
+    `src/lib/test/setup.node.ts` (deterministic `$env`/`$app` stubs).
+- **Three test tiers**:
+  1. **node unit** — pure-logic tests, run by the `server` project.
+  2. **browser / Svelte** — component tests, run by the `client` project (needs chromium;
+     see CI step below). Locally, run `pnpm exec playwright install chromium` once.
+  3. **pglite integration** — real Postgres in-process via `@electric-sql/pglite`; the
+     harness in `src/lib/test/pglite.ts` (`createTestDb()`) boots a fresh schema from
+     `src/lib/server/db/schema.ts` per call (no Docker/network). Use for the sync CTE and
+     `auth.ts`.
+- **Fixtures convention**: test data is **schema-derived** — `src/lib/test/fixtures.ts`
+  feeds the Zod schemas in `src/lib/validations.ts` to **`zod4-mock`** with a fixed seed
+  (deterministic), exposing `listFixture()` / `itemFixture()` with thin per-test
+  overrides. The **same fixtures** seed both Dexie (client) and pglite (DB) tests:
+  fixture → schema-validated object → insert.
+- **Test file location**: co-located `*.test.ts` / `*.spec.ts` next to source; shared
+  harness + fixtures live in `src/lib/test/`.
+- **Commands**: `pnpm test` (CI mode, `--run`); `pnpm test:unit` for interactive;
+  `pnpm test:unit --project server` to skip the browser tier. `pnpm check`
+  (svelte-kit sync `--mode test` + svelte-check); `pnpm lint` (ESLint).
+- **Test env**: `.env.test` (committed, non-secret placeholders) supplies the public env
+  vars so `$env/static/public` types generate and modules import cleanly; Vitest loads it
+  in test mode and `pnpm check` loads it via `svelte-kit sync --mode test`.
+- **CI**: `.github/workflows/ci.yml` runs `pnpm install`, `pnpm check`, `pnpm lint`,
+  `pnpm test` on push/PR (pinned Node 22 + pnpm 10.33.0), installing the Playwright
+  chromium browser for the `client` tier. `pnpm check` and `pnpm test` are blocking; the
+  `pnpm lint` step is currently **non-blocking** (`continue-on-error`) pending item **B2**
+  clearing the pre-existing lint baseline, after which it becomes blocking too.
 
 > Note: the seed `.claude/settings.json` ships only stack-agnostic permissions, so the
 > first `pnpm …` run in a session will prompt for approval until pnpm rules are added to
@@ -68,3 +97,6 @@ standing constraint into a rule when an item is done. Keep it short; the "why" l
 - Wire/DB/client data shapes **MUST** be defined by the Zod schemas in `src/lib/validations.ts`; do not hand-roll parallel types.
 - Server code **MUST** use the shared `logger` from `$lib/logger` (not `console.log`) and call `logger.flush()` before returning from endpoints.
 - Deletion **MUST** be soft (set `deletedAt`); do not hard-delete user data.
+- DB-integration tests **MUST** use the in-process `pglite` harness (`src/lib/test/pglite.ts`), not Docker/Testcontainers. applies: `src/**/*.spec.ts`
+- Test fixtures **MUST** be schema-derived from `src/lib/validations.ts` via `zod4-mock` (`src/lib/test/fixtures.ts`); do not hand-roll parallel test data. applies: `src/**/*.spec.ts`
+- CI (`.github/workflows/ci.yml`) **MUST** gate `pnpm check` and `pnpm test` on every push/PR; `pnpm lint` runs non-blocking until item B2 clears the pre-existing lint baseline, after which lint **MUST** become blocking too.
