@@ -85,4 +85,57 @@ it records the reason here AND states it in chat.
 - reviewer: PASS — all 8 acceptance items met, scope clean, D2 well-formed, recommended
   for Rule promotion.
 - manager: promoted D2 to `architecture.md` Rules (no-wrappers / no-hand-FK in test code).
-- result: done — commit pending
+- result: done — commit `ac3515e`
+
+## 2026-06-03 — B4/B5/B6: backlog updates between items
+
+- manager: folded user answers into B4 (default group **is** renameable; `"GENERAL"` is
+  the display sentinel for `groupName: ""`; fix the live `onRename` to apply the
+  `"GENERAL" → ""` translation the removed dead code did). Cleared `needs-answers`,
+  moved B4 to `ready/`.
+- manager: filed B5 (persist empty groups + explicit group deletion that moves items —
+  including soft-deleted — to the default group) from a separate concern the user
+  raised mid-answer. `feature`, medium, `review`-flagged (architectural).
+- manager: filed B6 (test coverage audit) from user direction "we have no tests atm,
+  we just setup the infra for it. we need to check the codebase, and see where tests
+  are needed. I do know we have bugs though" + "be smart about it." `research`, high,
+  `review`-flagged. Output target: `wiki/research/test-coverage-audit.md`.
+
+## 2026-06-03 — B6: Test coverage audit
+
+- manager: dispatched B6 to a `general-purpose` researcher. Sequence agreed with user:
+  B6 first (audit + prioritized list, user approves the cut line), then B4 (rename
+  fix — possibly with expanded scope based on B6 findings), then any test/bug items
+  spawned from B6, then B5 (refactor groups with the new safety net in place).
+- researcher: produced `wiki/research/test-coverage-audit.md` — triage by area (11),
+  12 test items above the cut line + 9 below, 11 latent bugs (8 confirmed, 1 confirmed
+  + needs-reproduction, 1 suspected, 1 confirmed perf), what-NOT-to-test, and a
+  sequenced next-step plan. Added Research table to INDEX.md; set `report:` on the card.
+- reviewer: PASS — spot-checked L1, L2, L7, L9, L10, L11 at file:line and confirmed
+  grounded; all 7 PASS criteria met; no scope creep.
+- user (review checkpoint, 2026-06-04): approved filing T1-T12 + standalone bug items
+  for L1/L2/L10 + a `/wiki-sync` chore + reframe B4 with the L7 finding + also file
+  T13-T21 (below cut line, low priority). Two design decisions surfaced in the same
+  turn:
+  - **D3** (sessions persistent — no `expires_at`): the L9 wiki divergence is a wiki
+    bug, not a code bug. The user wants a lightweight login UX with no forced expiry.
+  - **D4** (rate limiting → Vercel): T17 dropped; the in-app `ratelimit.ts` +
+    `rateLimits` table are superseded and to be removed via a follow-up chore.
+- manager: logged D3 + D4 in `decisions.md`; promoted both to `architecture.md` Rules.
+  Reframed B4 (now an investigate-or-close item — Branch A fix the real bypass,
+  Branch B close invalid; added `flags: [review]`). Moved B6 to `done/`.
+- manager (intake pass, 2026-06-04): filed 13 items from the audit per user approval —
+  - **B7** (chore, high): characterise current "group disappears when emptied" — **B5 prerequisite** (T4).
+  - **B8** (bug, high, review): sync CTE INSERT+UPDATE data loss (T1/L1).
+  - **B9** (chore, high, review): `mergeUsers` transaction wrap + lockdown (T5/L10).
+  - **B10** (bug, medium, review): sync CTE `upsert_lists` authz hole (T2/L2).
+  - **B11** (bug, high, review): slug-collision sync-batch failure (T9+T10/L5).
+  - **B12** (chore, medium): CTE invariant safety net — LWW + soft-delete preservation + validator drop-undefined (T6+T7+T8).
+  - **B13** (chore, medium): sync engine invariant safety net — pending-wins + reconciliation (T11+T12).
+  - **B14** (chore lite, low): replace `console.error` in `supabase-auth.ts` with shared logger (L4).
+  - **B15** (chore, high, review): `/wiki-sync` to reconcile L3 (SSE→Realtime) + L9 (sessions.expires_at — see D3) + CLAUDE.md rate-limit note (D4).
+  - **B16** (chore, medium, review): remove in-app rate limiting (D4 follow-up — `ratelimit.ts`, `rateLimits` table, callers, migration).
+  - **B17** (research, low, review): reorder strategy — midpoint floats vs accept renumber (L6).
+  - **B18** (research, low, review): soft-delete restore UX — build or remove the wiki claim (L8).
+  - **B19** (chore, low): pick-and-fold bucket for T13-T21 (below-cut-line low-value tests; T17 dropped by D4).
+- result: done — commit pending (this commit closes B6 + decisions + B4 reframe + the 13 new cards)

@@ -104,4 +104,6 @@ standing constraint into a rule when an item is done. Keep it short; the "why" l
 - DB-integration tests **MUST** use the in-process `pglite` harness (`src/lib/test/pglite.ts`), not Docker/Testcontainers. applies: `src/**/*.spec.ts`
 - Test fixtures **MUST** be schema-derived from `src/lib/validations.ts` via `zod4-mock` (`src/lib/test/fixtures.ts`); do not hand-roll parallel test data. applies: `src/**/*.spec.ts`
 - Test code **MUST** consume the registered `zod4-mock` `world` from `src/lib/test/fixtures.ts` directly; **MUST NOT** wrap it in fixture helper functions, and **MUST NOT** hand-stamp foreign keys in test code (use the world's registered relations/matchers). applies: `src/**/*.spec.ts` (see [D2](decisions.md))
+- Sessions **MUST** persist indefinitely server-side; do not add an `expires_at` column or any forced-expiry behaviour. Explicit logout remains the only way to end a session. (see [D3](decisions.md))
+- Rate limiting **MUST** be delegated to Vercel's platform-level controls (WAF / function-level limits); do not add or revive in-app rate-limit middleware or DB tables. (see [D4](decisions.md))
 - CI (`.github/workflows/ci.yml`) **MUST** gate `pnpm check`, `pnpm lint`, and `pnpm test` on every push/PR.

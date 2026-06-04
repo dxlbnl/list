@@ -93,3 +93,58 @@
   functions, and **MUST NOT** hand-stamp foreign keys in test code (use the world's
   registered relations/matchers). applies: `src/**/*.spec.ts`"
 - **Supersedes**: none
+
+## D3: Sessions are persistent — no server-side expiry
+
+- **Date**: 2026-06-04
+- **By**: user (during B6 review checkpoint)
+- **Context**: The B6 audit surfaced (as L9) that
+  `wiki/architecture/data-model.md` and `architecture/database.md` document a
+  `sessions.expires_at` column that does not exist in the Drizzle schema
+  (`src/lib/server/db/schema.ts:10-17` defines `sessions` with only `id` and
+  `userId`). Audit recommended either adding the column or updating the wiki.
+- **Decision**: The missing `expires_at` is **intentional**. The user wants a
+  lightweight login UX: "I want a lightweight way to login, without having to
+  relog at all." Sessions persist indefinitely on the server; the cookie's
+  far-future browser expiry is the only client-side bound. Magic-link
+  re-auth is by user choice (e.g. logging in on a new device), not by
+  forced expiry.
+- **Consequences**: No session-rotation or idle-expiry feature work. Logout
+  must remain an explicit user action (and the QR-clone path remains the
+  way to move a session between devices). The wiki pages that claim
+  `expires_at` need to be reconciled (folded into the planned `/wiki-sync`
+  chore). Any future "force re-auth for sensitive action" feature must add
+  its own time-boxed re-auth challenge — it cannot rely on session expiry.
+- **Rule added/changed**: promoted to `architecture.md` Rules —
+  "Sessions **MUST** persist indefinitely server-side; do not add an
+  `expires_at` column or any forced-expiry behaviour. Explicit logout
+  remains the only way to end a session."
+- **Supersedes**: none
+
+## D4: Rate limiting is delegated to Vercel — not implemented in-app
+
+- **Date**: 2026-06-04
+- **By**: user (during B6 review checkpoint)
+- **Context**: The codebase has an in-app rate-limit table
+  (`rateLimits` in `src/lib/server/db/schema.ts`) and module
+  (`src/lib/server/ratelimit.ts`) wired into `/login` and `/api/auth/clone`.
+  CLAUDE.md mentions it as a current architectural piece. The B6 audit
+  proposed (T17) a pglite test for the window-reset CASE; the user redirected:
+  rate limiting is now Vercel's responsibility, in-app handling is deprecated.
+- **Decision**: Rate limiting is delegated to **Vercel's platform-level
+  rate limiting** (WAF / firewall rules / function configuration), not the
+  in-app `ratelimit.ts` + `rateLimits` table. The in-app code is
+  superseded; no new in-app rate-limit checks should be added, and existing
+  ones should be removed in a follow-up chore (filed via intake after this
+  decision lands).
+- **Consequences**: No test work targets `ratelimit.ts` (T17 dropped from
+  the B6 plan). A follow-up chore removes the dead code: `ratelimit.ts`,
+  the `rateLimits` table from `schema.ts`, the `rateLimit(...)` calls in
+  `/login/+page.server.ts` and `/api/auth/clone/+server.ts`, and the
+  corresponding Drizzle migration. CLAUDE.md's "Data Model Highlights"
+  section that references in-DB rate limiting needs reconciliation.
+- **Rule added/changed**: promoted to `architecture.md` Rules —
+  "Rate limiting **MUST** be delegated to Vercel's platform-level controls
+  (WAF / function-level limits); do not add or revive in-app rate-limit
+  middleware or DB tables."
+- **Supersedes**: none

@@ -25,6 +25,12 @@ Every agent reads this page first, before doing anything else.
 | [progress.md](progress.md) | Append-only run journal — what the agents have done. |
 | [specs/](specs/) | One detailed spec page per feature/bug. See `specs/README.md`. |
 
+## Research
+
+| Page | Purpose |
+|------|---------|
+| [research/test-coverage-audit.md](research/test-coverage-audit.md) | B6 — prioritized test work + latent-bug audit (risk × value), seeds the backlog. |
+
 ## Existing project reference docs
 
 These pages predate Vibin and remain the **detailed reference** for the codebase.
