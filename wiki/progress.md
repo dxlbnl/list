@@ -138,4 +138,36 @@ it records the reason here AND states it in chat.
   - **B17** (research, low, review): reorder strategy — midpoint floats vs accept renumber (L6).
   - **B18** (research, low, review): soft-delete restore UX — build or remove the wiki claim (L8).
   - **B19** (chore, low): pick-and-fold bucket for T13-T21 (below-cut-line low-value tests; T17 dropped by D4).
-- result: done — commit pending (this commit closes B6 + decisions + B4 reframe + the 13 new cards)
+- result: done — commit `d364659`
+
+## 2026-06-04 — Project baseline + versioning convention
+
+- user: set `package.json` `version` to **1.0.0** (after B6 audit + initial intake),
+  and asked the manager to "version at relevant points in the progress" going forward.
+- manager: saved versioning convention to memory (`feedback-version-bump`): semver
+  bump on user-visible milestones only (patch=bugfix, minor=feature, major=breaking);
+  internal infra / tests / wiki edits do **not** bump. Each item's `progress.md`
+  entry notes the bump (or its absence) on its own line. **Not** promoted to a
+  binding Rule — it's a project-policy heuristic, not enforced by code.
+
+## 2026-06-04 — B7: Characterise group-disappear-on-empty (B5 prerequisite)
+
+- manager: dispatched B7 to the implementer (chore track — no spec, no tests-first;
+  the test IS the deliverable, characterisation). Must land before B5.
+- implementer: found a user-started `src/routes/[slug]/page.svelte.test.ts` already in
+  the working tree (untracked); extended the `data` prop to satisfy `+layout.server.ts`
+  shape, then ran green. Test mounts real `+page.svelte` via `vitest-browser-svelte`,
+  seeds via `world.populate(listSchema, 1)` + `world.registry.pick(listSchema)` + the
+  `addItem` action, asserts "Snacks" header present, calls `deleteItem`, asserts
+  "Snacks" gone. Confirms audit T4 prediction (no L7-style surprise). Flagged a benign
+  stderr `TypeError: data.items is not iterable` from `sync.svelte.ts:~361` during the
+  test (stubbed fetch returns `[]`, `pull()` doesn't guard) — caught by try/catch,
+  doesn't affect assertions, but noisy. Suite all green: client 2/2, server 3/6, full
+  5 files / 8 tests, check 0 errors, lint clean.
+- reviewer: PASS — all 3 acceptance items met, Rule compliance (pnpm, D1 mutations
+  through actions, D2 world-direct), no scope creep, no `D<n>` needed. Suggested
+  follow-up intake item for the harness warning.
+- manager: filed **B20** (chore, lite, low) from reviewer's suggestion — guard
+  `data.items` or smarten the fetch stub.
+- result: done — commit pending (no version bump: internal characterisation test only,
+  no user-visible change)
