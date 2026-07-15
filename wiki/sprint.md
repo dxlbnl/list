@@ -12,12 +12,13 @@ Migrate to Vibin v2 and tee up the next wave of work (sync overhaul, persistent 
 
 - [x] Migrate machinery to v2 (agents/skills/hooks/CLAUDE.md/settings) — committed
 - [x] Distil the v1 wiki into the `wiki/knowledge/` graph; flatten the backlog to v2 cards
-- [ ] File the three new ideas as backlog cards (sync-overhaul, persistent-groups, gift-lists)
-- [ ] Run the `researcher` deep-dive on sync (< 1s / single round-trip) → atoms + redesign proposal
+- [x] File the three new ideas as backlog cards (sync-overhaul, persistent-groups, gift-lists)
+- [x] Run the `researcher` deep-dive on sync (< 1s / single round-trip) → atoms + redesign proposal
 - [ ] **Compose the first real v2 sprint with the user** (sprint boundary = checkpoint)
 
-**Next:** File the three feature cards, then run the sync researcher; then PAUSE for the user to compose
-the first proper v2 sprint (don't auto-start it).
+**Next:** Migration + sync research done. PAUSE for the user to compose the first proper v2 sprint —
+pick which of sync-overhaul / persistent-groups / gift-lists to run first, and settle the three sync
+design decisions in [sync-redesign](knowledge/architecture/sync-redesign.md).
 
 ## Run log
 

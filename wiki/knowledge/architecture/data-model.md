@@ -15,6 +15,7 @@ Two parallel stores hold the same shapes (both defined by the Zod schemas in `sr
 - **General group**: `group_name = ""` is the canonical empty-group value in both stores; `"GENERAL"` is a UI-only display alias, never persisted. See [groups](../domain/groups.md).
 - **Slug collisions** on shared lists resolve by a `slug--prefix` URL scheme; merge-time slug clashes get a random `-xxxx` suffix. See [slug-routing](../conventions/slug-routing.md).
 - **`isLocalOnly`** (Dexie only) marks rows not yet server-confirmed so reconciliation won't prematurely delete them.
+- **No sync cursor column yet.** `items` has `updated_at` (client wall-clock, used for LWW) but `lists` has only `created_at` — no `updated_at`, no monotonic version anywhere. The [sync-redesign](sync-redesign.md) proposes an additive server-assigned `updated_seq bigint` (+ `updated_at` on `lists`) so a push can return a delta of rows changed since the client's cursor.
 - **`rate_limits` table — DEPRECATED.** Rate limiting MUST be delegated to Vercel per [the-rules](../project/the-rules.md); the table plus `ratelimit.ts` are slated for removal (still referenced by `/login`, `/settings`, `/api/auth/clone` today).
 
 **Why:** one Zod-defined shape across wire/DB/client keeps the camelCase↔snake_case transforms in a single place; float ranks + soft delete make reorder and undo cheap and non-destructive; the client's extra `isLocalOnly`/`syncQueue` fields exist only to drive offline [sync](sync-model.md).

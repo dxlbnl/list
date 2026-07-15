@@ -19,6 +19,8 @@ capture gate prompts you).
 
 ### architecture/ — how the system is built
 - [sync-model](architecture/sync-model.md) — offline-first write path, batch push, realtime pull, conflict resolution.
+- [sync-latency](architecture/sync-latency.md) — where cross-device convergence time actually goes today (the diagnosis).
+- [sync-redesign](architecture/sync-redesign.md) — **proposed**: fold pull into the push response via a server cursor for <1s, one-trip convergence.
 - [data-model](architecture/data-model.md) — Postgres (Drizzle) + Dexie schema; float ranks, soft delete, slug disambiguation.
 - [client-modules](architecture/client-modules.md) — `actions.ts`, `sync.svelte.ts`, `db.ts`, menu/theme runes.
 - [server-modules](architecture/server-modules.md) — the `/api/sync` CTE, `auth.ts`, `supabase-auth.ts`.
