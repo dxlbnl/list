@@ -18,7 +18,7 @@ the CTE is rewritten **once** incorporating every server-side change.
 **Server — one coherent CTE rewrite on the new schema:**
 - [ ] [sync-cursor-delta-transport](backlog/sync-cursor-delta-transport.md) — **backbone**: migration (`updated_seq` + HLC stamp on items/lists, `lists.updated_at`); `POST /api/sync` returns `{results, changes, cursor}`.
 - [x] **sync-cte-insert-update-data-loss** — coalesce same-id INSERT+UPDATE ✅ (fix + pglite regression green).
-- [ ] [sync-cte-upsert-lists-authz-hole](backlog/sync-cte-upsert-lists-authz-hole.md) — force `created_by = user.id`.
+- [x] **sync-cte-upsert-lists-authz-hole** — force `created_by = user.id` ✅ (fix + pglite regression).
 - [ ] [slug-collision-sync-batch-failure](backlog/slug-collision-sync-batch-failure.md) — per-op isolation + auto-rename (`nanoid(4)` suffix).
 - [ ] [sync-no-stall-one-poison-op](backlog/sync-no-stall-one-poison-op.md) — per-op status response (server) + short jittered backoff & poison-op quarantine (client).
 
@@ -35,8 +35,7 @@ the CTE is rewritten **once** incorporating every server-side change.
 - [ ] [sync-engine-invariant-safety-net](backlog/sync-engine-invariant-safety-net.md) — client engine invariants: pending-wins, apply-guard, reconciliation.
 - [ ] [harness-pull-non-items-response](backlog/harness-pull-non-items-response.md) — pull hardening.
 
-**Next:** Server CTE correctness continues — `sync-cte-upsert-lists-authz-hole` then
-`slug-collision-sync-batch-failure` (both pglite-testable against `processSyncBatch`), then the
+**Next:** `slug-collision-sync-batch-failure` (per-op isolation + server auto-rename), then the
 `updated_seq`/HLC schema + cursor delta. The two-client harness follows for the client-side cards.
 
 ## Run log
@@ -51,3 +50,5 @@ the CTE is rewritten **once** incorporating every server-side change.
   `processSyncBatch(db, userId, ops)` (pglite-testable; the `/api/sync` endpoint is now a thin wrapper).
   Closed `sync-cte-insert-update-data-loss`: same-id INSERT+UPDATE now coalesce per-field (latest non-null
   wins) — red repro → green; `pnpm test`/`check`/`lint` all pass.
+- 2026-07-16 — Closed `sync-cte-upsert-lists-authz-hole`: list INSERT now forces `created_by = user.id`
+  (client-supplied value ignored) — red repro → green.

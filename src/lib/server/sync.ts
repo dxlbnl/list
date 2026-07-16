@@ -81,7 +81,9 @@ export async function processSyncBatch(
 
 		upsert_lists AS (
 			INSERT INTO ${lists} (id, slug, name, created_by, created_at)
-			SELECT id, slug, name, created_by, created_at FROM list_input d
+			-- Force created_by to the authenticated user: the client-supplied created_by
+			-- is ignored on INSERT so ownership can't be spoofed to another user id.
+			SELECT id, slug, name, ${userId}, created_at FROM list_input d
 			WHERE NOT EXISTS (SELECT 1 FROM ${lists} l WHERE l.id = d.id)
 			   OR EXISTS (SELECT 1 FROM ${lists} l WHERE l.id = d.id AND l.created_by = ${userId})
 			ON CONFLICT (id) DO UPDATE SET

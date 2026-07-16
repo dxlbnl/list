@@ -55,3 +55,35 @@ describe('processSyncBatch — same-id INSERT + UPDATE coalescing', () => {
 		expect(results.every((r) => r.status !== 'ignored')).toBe(true);
 	}, 30_000);
 });
+
+describe('processSyncBatch — list INSERT authz (created_by cannot be spoofed)', () => {
+	let h: TestDb;
+	afterEach(async () => {
+		await h?.close();
+	});
+
+	it('forces created_by to the authenticated user on a new-list INSERT', async () => {
+		h = await createTestDb();
+		const ATTACKER = 'attacker';
+		const VICTIM = 'victim';
+		await h.db.insert(users).values([
+			{ id: ATTACKER, email: null },
+			{ id: VICTIM, email: null }
+		]);
+
+		const ops: SyncOperation[] = [
+			{
+				id: 'op-1',
+				entity: 'list',
+				type: 'INSERT',
+				data: { id: 'list-x', slug: 'mine', name: 'Mine', created_by: VICTIM, created_at: new Date('2026-01-01T00:00:00.000Z').toISOString() }
+			}
+		];
+
+		await processSyncBatch(h.db, ATTACKER, ops);
+
+		const rows = await h.db.select().from(lists).where(eq(lists.id, 'list-x'));
+		expect(rows).toHaveLength(1);
+		expect(rows[0].createdBy).toBe(ATTACKER); // not the spoofed VICTIM
+	}, 30_000);
+});
