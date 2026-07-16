@@ -2,7 +2,7 @@
 title: Sync CTE authz — client can INSERT a list with arbitrary created_by
 type: bug
 priority: medium
-flags: [review]
+flags: []
 created: 2026-06-04
 ---
 
@@ -53,4 +53,4 @@ Confirmed by reading the code (surfaced by the test-coverage audit as finding L2
 - See [sync-model](../knowledge/architecture/sync-model.md) and
   [server-modules](../knowledge/architecture/server-modules.md) for the CTE + authz model;
   [pglite](../knowledge/testing/pglite.md) for the harness.
-- `flags: [review]`: authz change to a load-bearing endpoint.
+- **Approved 2026-07-16** — cleared for Sprint 1.

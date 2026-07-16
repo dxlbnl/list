@@ -2,7 +2,7 @@
 title: Kill the 20s+ stall and one-poison-op queue wedging
 type: bug
 priority: high
-flags: [review]
+flags: []
 created: 2026-07-16
 ---
 
@@ -38,5 +38,5 @@ Atoms: [sync-latency](../knowledge/architecture/sync-latency.md) (the backoff-cl
 [async harness](sync-async-test-harness.md): inject a 500 / offline blip and assert the retry
 happens within a bounded delay (no 20s cliff) and one poison op never wedges the queue.
 
-`flags: [review]`: changes the retry/backoff contract and the `/api/sync` response shape.
+**Approved 2026-07-16** — cleared for Sprint 1: per-op error response contract approved.
 </parameter>

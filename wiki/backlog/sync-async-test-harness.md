@@ -2,7 +2,7 @@
 title: Async/parallel/timing sync test harness (two clients, virtual time, budgets)
 type: feature
 priority: high
-flags: [review]
+flags: []
 created: 2026-07-16
 ---
 
@@ -45,5 +45,5 @@ Atoms: [async-sync-testing](../knowledge/testing/async-sync-testing.md) (the pat
 [test-setup](../knowledge/testing/test-setup.md) (the server/node tier),
 [sync-model](../knowledge/architecture/sync-model.md) (the path under test).
 
-`flags: [review]`: foundational test infrastructure the whole overhaul is validated against.
+**Approved 2026-07-16** — cleared for Sprint 1: build first, TDD the Stage-0 fixes against it.
 </parameter>

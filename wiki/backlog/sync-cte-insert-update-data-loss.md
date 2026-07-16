@@ -2,7 +2,7 @@
 title: Sync CTE drops items when INSERT + UPDATE for the same id batch together
 type: bug
 priority: high
-flags: [review]
+flags: []
 created: 2026-06-04
 ---
 
@@ -58,5 +58,4 @@ Confirmed by reading the code (surfaced by the test-coverage audit as finding L1
   [server-modules](../knowledge/architecture/server-modules.md) for the batch-push + CTE
   design; [pglite](../knowledge/testing/pglite.md) and
   [fixtures](../knowledge/testing/fixtures.md) for the integration harness.
-- `flags: [review]`: changes load-bearing server SQL — pause for approval before
-  tests/impl.
+- **Approved 2026-07-16** — cleared for Sprint 1.

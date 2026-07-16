@@ -2,7 +2,7 @@
 title: Concurrent list-create on two devices (same user + slug) aborts the entire sync batch
 type: bug
 priority: high
-flags: [review]
+flags: []
 created: 2026-06-04
 ---
 
@@ -62,4 +62,4 @@ exact Postgres CTE error semantics want a reproduction.
   [fixtures](../knowledge/testing/fixtures.md) for the harness.
 - Pairs with the low-priority `slugify`/`isReservedSlug`/`getEffectiveSlug` unit tests
   pooled in `low-priority-tests-from-audit` — fold them in if you touch slug logic here.
-- `flags: [review]`: server CTE change; the collision-rename strategy is user-visible.
+- **Approved 2026-07-16** — cleared for Sprint 1: server-side auto-rename (`nanoid(4)` suffix) approved.

@@ -2,7 +2,7 @@
 title: Add a last-write-wins guard to the client apply paths
 type: bug
 priority: high
-flags: [review]
+flags: []
 created: 2026-07-16
 ---
 
@@ -31,11 +31,10 @@ has none** — that asymmetry is the bug.
 **Fix.** Before every `db.items.put` / `db.lists.put` in the apply paths, compare stamps and
 **skip if the incoming server row is not newer than the local row** (row-level LWW by
 `updatedAt`). This drops stale echoes, fixing both the delete-resurrection and the stale-field
-reverts. Consider also suppressing self-echo by `clientId`. This is a **row-level** guard now;
-per-field LWW-Map lands in Stage 2 ([sync-per-field-lww-map](sync-per-field-lww-map.md)); the
-clean server-authoritative apply lands in Stage 1
-([sync-cursor-delta-transport](sync-cursor-delta-transport.md)) — this bug is a strong argument
-for both.
+reverts. **Also suppress self-echo** by `clientId` (approved) — ignore Realtime events this client
+originated. This is a **row-level** guard keyed on `updatedAt` now; the HLC stamp + clean
+server-authoritative apply land in Stage 1
+([sync-cursor-delta-transport](sync-cursor-delta-transport.md)) — this bug is a strong argument for both.
 
 ## Notes
 
@@ -51,5 +50,5 @@ reproduction ("a stale INSERT/UPDATE echo must not un-delete a locally soft-dele
 against the [async harness](sync-async-test-harness.md) first; add it to
 [sync-engine-invariant-safety-net](sync-engine-invariant-safety-net.md).
 
-`flags: [review]`: correctness change to a load-bearing client apply path.
+**Approved 2026-07-16** — cleared for Sprint 1 (incl. self-echo suppression).
 </parameter>
