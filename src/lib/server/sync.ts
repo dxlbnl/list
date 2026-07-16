@@ -53,7 +53,11 @@ export async function processSyncBatch(
 		operations.filter((o) => o.type === 'DELETE' && o.entity === 'item').map((o) => o.data.id)
 	);
 
-	// 2. EXECUTE THE SINGLE ATOMIC CTE BATCH (Exactly 1 Round Trip).
+	// 2. Write path — run the atomic CTE only when there are ops. A pure pull/backfill (0 ops) skips
+	// it entirely, saving a whole DB round-trip.
+	const writtenListIds = new Set<string>();
+	const writtenItemIds = new Set<string>();
+	if (operations.length > 0) {
 	const result = await db.execute(sql`
 		WITH
 		list_input AS (
@@ -164,8 +168,9 @@ export async function processSyncBatch(
 	`);
 
 	const row = rowsOf(result)[0] as { written_list_ids: string[]; written_item_ids: string[] } | undefined;
-	const writtenListIds = new Set<string>(row?.written_list_ids ?? []);
-	const writtenItemIds = new Set<string>(row?.written_item_ids ?? []);
+	for (const id of row?.written_list_ids ?? []) writtenListIds.add(id);
+	for (const id of row?.written_item_ids ?? []) writtenItemIds.add(id);
+	}
 
 	const results: SyncResult[] = operations.map((op) => {
 		const entityId = op.data.id as string;
@@ -175,36 +180,44 @@ export async function processSyncBatch(
 		return { id: op.id, status: 'ignored' };
 	});
 
-	// Delta pull folded into the push response: the member-visible rows changed since the
-	// caller's cursor (updated_seq), plus the new high-water cursor — so one round-trip both
-	// persists and pulls. The write CTE above is atomic; the delta reads committed state after it.
-	const changedItems = rowsOf(
+	// Delta pull folded into the push response, in ONE query: the member-visible item + list rows
+	// changed since the caller's cursor (updated_seq) as JSON arrays, plus the new high-water cursor —
+	// so a pull costs a single DB round-trip, not three.
+	const deltaRow = rowsOf(
 		await db.execute(sql`
-			SELECT i.id, i.list_id, i.name, i.group_name, i.rank, i.done, i.deleted_at, i.updated_at, i.updated_seq
-			FROM ${items} i
-			WHERE i.updated_seq > ${cursor}
-			  AND EXISTS (SELECT 1 FROM ${listUsers} lu WHERE lu.list_id = i.list_id AND lu.user_id = ${userId})
-			ORDER BY i.updated_seq
+			SELECT
+				COALESCE((
+					SELECT json_agg(t) FROM (
+						SELECT i.id, i.list_id, i.name, i.group_name, i.rank, i.done, i.deleted_at, i.updated_at, i.updated_seq
+						FROM ${items} i
+						WHERE i.updated_seq > ${cursor}
+						  AND EXISTS (SELECT 1 FROM ${listUsers} lu WHERE lu.list_id = i.list_id AND lu.user_id = ${userId})
+						ORDER BY i.updated_seq
+					) t
+				), '[]'::json) AS items,
+				COALESCE((
+					SELECT json_agg(t) FROM (
+						SELECT l.id, l.slug, l.name, l.created_by, l.created_at, l.updated_at, l.updated_seq
+						FROM ${lists} l
+						WHERE l.updated_seq > ${cursor}
+						  AND (l.created_by = ${userId} OR EXISTS (SELECT 1 FROM ${listUsers} lu WHERE lu.list_id = l.id AND lu.user_id = ${userId}))
+						ORDER BY l.updated_seq
+					) t
+				), '[]'::json) AS lists,
+				GREATEST(
+					(SELECT COALESCE(max(updated_seq), 0) FROM ${items}),
+					(SELECT COALESCE(max(updated_seq), 0) FROM ${lists}),
+					${cursor}
+				) AS cursor
 		`)
-	);
-	const changedLists = rowsOf(
-		await db.execute(sql`
-			SELECT l.id, l.slug, l.name, l.created_by, l.created_at, l.updated_at, l.updated_seq
-			FROM ${lists} l
-			WHERE l.updated_seq > ${cursor}
-			  AND (l.created_by = ${userId} OR EXISTS (SELECT 1 FROM ${listUsers} lu WHERE lu.list_id = l.id AND lu.user_id = ${userId}))
-			ORDER BY l.updated_seq
-		`)
-	);
-	const maxRow = rowsOf(
-		await db.execute(sql`
-			SELECT GREATEST(
-				(SELECT COALESCE(max(updated_seq), 0) FROM ${items}),
-				(SELECT COALESCE(max(updated_seq), 0) FROM ${lists})
-			) AS cursor
-		`)
-	)[0] as { cursor: number | string } | undefined;
-	const nextCursor = Number(maxRow?.cursor ?? cursor);
+	)[0] as { items: unknown; lists: unknown; cursor: number | string } | undefined;
 
-	return { results, changes: { items: changedItems, lists: changedLists }, cursor: nextCursor };
+	const asRows = (v: unknown): Record<string, unknown>[] =>
+		Array.isArray(v) ? (v as Record<string, unknown>[]) : typeof v === 'string' ? JSON.parse(v) : [];
+
+	return {
+		results,
+		changes: { items: asRows(deltaRow?.items), lists: asRows(deltaRow?.lists) },
+		cursor: Number(deltaRow?.cursor ?? cursor)
+	};
 }

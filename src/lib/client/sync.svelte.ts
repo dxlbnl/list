@@ -208,7 +208,10 @@ class SyncManager {
 		while (true) {
 			try {
 				await this.processQueue();
-				await this.pullDelta(); // cursor backfill — reconverge items even if a realtime event was missed
+				// Cursor backfill ~every 10s (Realtime is the fast path; this only catches missed events).
+				if (loopCount % 5 === 0) {
+					await this.pullDelta();
+				}
 				// Reconcile the authoritative list set (membership + hard deletes) ~every 60s.
 				if (loopCount % 30 === 0) {
 					await this.reconcileAllLists();
