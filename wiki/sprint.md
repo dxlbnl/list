@@ -5,32 +5,45 @@
 
 ## Sprint goal
 
-**Sync is correct and never stalls — proven by an async/timing test harness.** (Stage 0 of the
-[sync overhaul](backlog/sync-single-roundtrip-overhaul.md); no schema change.)
+**The full sync rework in one sprint** — correct + **<1s single-round-trip** cross-device convergence.
+All three stages of the [sync overhaul](backlog/sync-single-roundtrip-overhaul.md) ship together, validated
+continuously against the async harness. Backbone: the `updated_seq` cursor + HLC LWW stamp (schema change);
+the CTE is rewritten **once** incorporating every server-side change.
 
-## Tasks
+## Tasks (build order)
 
-Build the harness first (failing repros), then the fixes:
+**Harness first — write the failing repros before any fix:**
+- [ ] [sync-async-test-harness](backlog/sync-async-test-harness.md) — two-client virtual-time harness; repros: resurrection, 20s stall, data-loss, lost concurrent edit, cross-device <1s.
 
-- [ ] [sync-async-test-harness](backlog/sync-async-test-harness.md) — two-client virtual-time harness; write **failing** repros first (resurrection, 20s stall, lost concurrent edit)
-- [ ] [sync-apply-lww-guard](backlog/sync-apply-lww-guard.md) — row-level apply-iff-newer on Realtime + pull (fixes resurrection)
-- [ ] [sync-no-stall-one-poison-op](backlog/sync-no-stall-one-poison-op.md) — kill the 20s backoff + poison-op wedge (client cadence + server per-op status)
-- [ ] [sync-loop-reconverge-items](backlog/sync-loop-reconverge-items.md) — loop re-pulls items for active lists
-- [ ] [sync-cte-insert-update-data-loss](backlog/sync-cte-insert-update-data-loss.md) — server: coalesce same-id INSERT+UPDATE
-- [ ] [slug-collision-sync-batch-failure](backlog/slug-collision-sync-batch-failure.md) — server: per-op isolation + slug rename
-- [ ] [sync-cte-upsert-lists-authz-hole](backlog/sync-cte-upsert-lists-authz-hole.md) — server: `created_by = user.id`
+**Server — one coherent CTE rewrite on the new schema:**
+- [ ] [sync-cursor-delta-transport](backlog/sync-cursor-delta-transport.md) — **backbone**: migration (`updated_seq` + HLC stamp on items/lists, `lists.updated_at`); `POST /api/sync` returns `{results, changes, cursor}`.
+- [ ] [sync-cte-insert-update-data-loss](backlog/sync-cte-insert-update-data-loss.md) — coalesce same-id INSERT+UPDATE.
+- [ ] [sync-cte-upsert-lists-authz-hole](backlog/sync-cte-upsert-lists-authz-hole.md) — force `created_by = user.id`.
+- [ ] [slug-collision-sync-batch-failure](backlog/slug-collision-sync-batch-failure.md) — per-op isolation + auto-rename (`nanoid(4)` suffix).
+- [ ] [sync-no-stall-one-poison-op](backlog/sync-no-stall-one-poison-op.md) — per-op status response (server) + short jittered backoff & poison-op quarantine (client).
 
-**Next:** Awaiting user go-ahead on this sprint composition. On approval → run the harness card first
-(failing repros), then the fixes top-to-bottom.
+**Client:**
+- [ ] [sync-apply-lww-guard](backlog/sync-apply-lww-guard.md) — apply-iff-newer by HLC on Realtime + pull; self-echo suppression.
+- [ ] [sync-realtime-guarded-primary](backlog/sync-realtime-guarded-primary.md) — keep Realtime inline (guarded + ordered); cursor delta = editor push-fold + backfill.
+- [ ] [sync-loop-reconverge-items](backlog/sync-loop-reconverge-items.md) — the periodic loop does a cursor-backfill of active lists (absorbed into the new design).
 
-Deferred to later sprints: **Stage 1** ([cursor transport](backlog/sync-cursor-delta-transport.md) +
-[realtime-guarded-primary](backlog/sync-realtime-guarded-primary.md)) for the editor push-fold + backfill;
-**Stage 2** ([fractional-index reorder](backlog/sync-fractional-index-reorder.md)). Per-field LWW: decided against.
+**Ordering:**
+- [ ] [sync-fractional-index-reorder](backlog/sync-fractional-index-reorder.md) — midpoint fractional-index reorder (kills the N-writes-per-drag amplifier).
+
+**Invariant nets (build alongside the above):**
+- [ ] [cte-invariant-safety-net](backlog/cte-invariant-safety-net.md) — server CTE invariants (pglite): LWW, soft-delete preservation, validator drop-undefined.
+- [ ] [sync-engine-invariant-safety-net](backlog/sync-engine-invariant-safety-net.md) — client engine invariants: pending-wins, apply-guard, reconciliation.
+- [ ] [harness-pull-non-items-response](backlog/harness-pull-non-items-response.md) — pull hardening.
+
+**Next:** Awaiting go-ahead to start. On approval → build the harness + failing repros first, then work the
+list top-to-bottom; the CTE-touching server cards land as a single rewrite. All review gates are cleared, so
+the sprint interior runs autonomously until done, a real fork, or a blocker.
 
 ## Run log
 
-- 2026-07-16 — Composed sync-overhaul backlog (epic + 3 stages + async test harness). Design settled with
-  user: **keep Realtime as the guarded data channel** (no nudge, no receive-side round-trip; the editor's
-  push folds in the pull); **row-level LWW** enforced on both surfaces (per-field deferred); gift-list
-  owner-blindness via **separate claim channels**, not server-filtered reads. Atoms updated: sync-redesign,
-  sync-merge-model, sync-latency. Sprint 1 = Stage 0 + harness; awaiting go-ahead.
+- 2026-07-16 — Composed the sync overhaul (epic + cards + async harness). Design locked with user: **keep
+  Realtime as the guarded data channel** (no nudge, no receive-side round-trip; editor push folds in the
+  pull); **row-level LWW keyed on an HLC** (per-field decided against); gift-list owner-blindness via
+  **separate claim channels**. All Sprint 1 review flags cleared.
+- 2026-07-16 — Scope decision: do the **whole rework (Stages 0+1+2) in one sprint**, not staged across
+  sprints. Sprint = all 13 sync cards; CTE rewritten once on the `updated_seq`/HLC backbone.
