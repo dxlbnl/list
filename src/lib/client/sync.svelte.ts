@@ -1,6 +1,7 @@
 import { db, type ListDatabase, type LocalItem, type LocalList } from '$lib/client/db';
 import { logger } from '$lib/logger';
 import { supabase } from '$lib/client/supabase';
+import { observe as hlcObserve } from './hlc';
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import type { DatabaseItem, DatabaseList, ApiItem, ApiList } from '$lib/validations';
 
@@ -240,6 +241,7 @@ class SyncManager {
 	 * deleted item or reverting a newer field edit — the client apply path had no such guard.
 	 */
 	async applyServerItem(candidate: LocalItem): Promise<void> {
+		hlcObserve(candidate.updatedAt); // keep our clock ahead of observed stamps
 		if (await this.isOperationPending(candidate.id)) return; // local in-flight wins
 		const local = await this.db.items.get(candidate.id);
 		if (local && local.updatedAt >= candidate.updatedAt) return; // stale echo — drop it

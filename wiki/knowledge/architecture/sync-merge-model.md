@@ -24,7 +24,10 @@ is subsumed: your own delayed echo is older than your newer local state, so the 
 
 **Stamp = a row-level HLC (decided).** `updated_at` is client wall-clock, so skew corrupts LWW. Replace it
 with a **hybrid logical clock**: `(physical, counter)`, monotonic and causally ordered even when a device's
-clock is wrong (`physical = max(last, wall, received)`; tie → `counter++`). The [cursor](sync-redesign.md) is
+clock is wrong (`physical = max(last, wall, received)`; tie → `counter++`). **Implemented** in `src/lib/client/hlc.ts`
+(`now()` = strictly-monotonic stamp, `observe()` = advance past peer stamps); `actions.ts` stamps local
+writes with it and `applyServerItem` observes incoming ones. Stored in the existing ms `updatedAt` (the
++1ms bump is the counter) — no schema change. The [cursor](sync-redesign.md) is
 a separate `updated_seq`. Two stamps, both per-row: "which write wins" (HLC) and "what have I seen" (seq).
 
 **Per-field LWW: decided against (2026-07-16).** Because ops are field-scoped and the server `COALESCE`s per

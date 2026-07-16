@@ -78,3 +78,8 @@ the CTE is rewritten **once** incorporating every server-side change.
   Two-client harness (`sync-harness.spec.ts`, fake fetch → `processSyncBatch` on shared pglite) proves A→B
   cross-device convergence with no realtime. Closed: cursor-delta, realtime-guarded, no-stall, loop-reconverge,
   async-harness. 14/14 green, check/lint clean.
+- 2026-07-16 — Closed `sync-fractional-index-reorder` (`rankBetween` + moved-item-only persist) and
+  `harness-pull-non-items-response` (guard `data.items`). 17/17 green.
+- 2026-07-16 — **HLC** implemented (`src/lib/client/hlc.ts`): monotonic `now()` + `observe()`; `actions.ts`
+  stamps local writes, `applyServerItem` observes peer stamps. Row-level LWW is now skew-proof, stored in
+  the existing `updatedAt` (no schema change). 20/20 green, check/lint clean.

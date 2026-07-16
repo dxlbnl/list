@@ -1,6 +1,7 @@
 import { db, type LocalList, type LocalItem } from '$lib/client/db';
 import { slugify, isReservedSlug, nanoid } from '$lib/utils';
 import { syncManager } from './sync.svelte';
+import { now as hlcNow } from './hlc';
 
 export async function createList(name: string, userId: string) {
 	const id = nanoid();
@@ -46,7 +47,7 @@ export async function addItem(listId: string, name: string, groupName: string = 
 		rank: Date.now(),
 		done: false,
 		deletedAt: null,
-		updatedAt: new Date(),
+		updatedAt: hlcNow(),
 		isLocalOnly: true
 	};
 
@@ -65,7 +66,7 @@ export async function addItem(listId: string, name: string, groupName: string = 
 }
 
 export async function updateItem(itemId: string, data: Partial<LocalItem>) {
-	const now = new Date();
+	const now = hlcNow();
 	await db.items.update(itemId, { ...data, updatedAt: now });
 
 	await db.syncQueue.add({
@@ -82,7 +83,7 @@ export async function updateItem(itemId: string, data: Partial<LocalItem>) {
 export async function updateItems(updates: { id: string; data: Partial<LocalItem> }[]) {
 	if (updates.length === 0) return;
 	
-	const now = new Date();
+	const now = hlcNow();
 	const timestamp = Date.now();
 	
 	// Prepare bulk item updates
@@ -116,7 +117,7 @@ export async function updateItems(updates: { id: string; data: Partial<LocalItem
 }
 
 export async function deleteItem(itemId: string) {
-	const now = new Date();
+	const now = hlcNow();
 	await db.items.update(itemId, { deletedAt: now, updatedAt: now });
 
 	await db.syncQueue.add({
