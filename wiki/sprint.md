@@ -16,7 +16,7 @@ the CTE is rewritten **once** incorporating every server-side change.
 - [ ] [sync-async-test-harness](backlog/sync-async-test-harness.md) — two-client virtual-time harness; repros: resurrection, 20s stall, data-loss, lost concurrent edit, cross-device <1s.
 
 **Server — one coherent CTE rewrite on the new schema:**
-- [ ] [sync-cursor-delta-transport](backlog/sync-cursor-delta-transport.md) — **backbone**: migration (`updated_seq` + HLC stamp on items/lists, `lists.updated_at`); `POST /api/sync` returns `{results, changes, cursor}`.
+- [~] **sync-cursor-delta-transport** — SERVER done ✅ (schema + `updated_seq` cursor + delta folded into the `/api/sync` response; migration `0001` ready to push). CLIENT side (track/advance cursor, apply `changes`) lands with the harness; HLC LWW stamp still to do.
 - [x] **sync-cte-insert-update-data-loss** — coalesce same-id INSERT+UPDATE ✅ (fix + pglite regression green).
 - [x] **sync-cte-upsert-lists-authz-hole** — force `created_by = user.id` ✅ (fix + pglite regression).
 - [x] **slug-collision-sync-batch-failure** — server auto-rename on `(user,slug)` collision ✅ (fix + pglite regression). Per-op isolation lands with no-stall; client learns the new slug via the cursor delta.
