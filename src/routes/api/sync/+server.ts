@@ -20,19 +20,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		throw error(400, `${MESSAGES.DATA.PROCESS_ERROR}: ${validation.error.message}`);
 	}
 
-	const { operations, clientId } = validation.data;
+	const { operations, clientId, cursor } = validation.data;
 	syncLogger.info(`Processing ${operations.length} operations`, { userId: user.id, count: operations.length, clientId });
 
 	const tStart = performance.now();
 
 	try {
-		const { results } = await processSyncBatch(db, user.id, operations);
+		const { results, changes, cursor: nextCursor } = await processSyncBatch(db, user.id, operations, cursor);
 
 		const tTotal = performance.now() - tStart;
 		const ignoredCount = results.filter((r) => r.status === 'ignored').length;
 		syncLogger.info(`Atomic Sync complete`, { tTotal: tTotal.toFixed(2), opCount: operations.length, ignoredCount });
 
-		return json({ results });
+		return json({ results, changes, cursor: nextCursor });
 	} catch (e) {
 		const message = e instanceof Error ? e.message : String(e);
 		syncLogger.error('Sync failed', { userId: user.id, error: message });

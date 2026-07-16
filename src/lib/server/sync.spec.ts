@@ -114,3 +114,40 @@ describe('processSyncBatch — concurrent list create with same (user, slug)', (
 		expect(results.every((r) => r.status !== 'ignored')).toBe(true);
 	}, 30_000);
 });
+
+describe('processSyncBatch — cursor delta (fold pull into push response)', () => {
+	let h: TestDb;
+	afterEach(async () => {
+		await h?.close();
+	});
+
+	it('returns member-visible rows changed since the cursor and advances it', async () => {
+		h = await createTestDb();
+		await seedListMember(h);
+
+		const t1 = new Date('2026-01-01T00:00:00.000Z').toISOString();
+		const insert: SyncOperation[] = [
+			{ id: 'op-i', entity: 'item', type: 'INSERT', data: { id: 'item-1', list_id: LIST, name: 'Milk', group_name: '', rank: 1, done: false, deleted_at: null, updated_at: t1 } }
+		];
+
+		// From cursor 0 the delta returns the just-written item and advances the cursor.
+		const first = await processSyncBatch(h.db, USER, insert, 0);
+		expect(first.changes.items.map((r) => r.id)).toContain('item-1');
+		expect(first.cursor).toBeGreaterThan(0);
+
+		// A pull with the up-to-date cursor and no ops returns nothing new.
+		const second = await processSyncBatch(h.db, USER, [], first.cursor);
+		expect(second.changes.items).toHaveLength(0);
+		expect(second.changes.lists).toHaveLength(0);
+
+		// A later edit shows up in a delta taken from the *old* cursor, with a higher cursor.
+		const t2 = new Date('2026-01-01T00:00:02.000Z').toISOString();
+		const update: SyncOperation[] = [
+			{ id: 'op-u', entity: 'item', type: 'UPDATE', data: { id: 'item-1', done: true, updated_at: t2 } }
+		];
+		await processSyncBatch(h.db, USER, update, first.cursor);
+		const third = await processSyncBatch(h.db, USER, [], first.cursor);
+		expect(third.changes.items.map((r) => r.id)).toContain('item-1');
+		expect(third.cursor).toBeGreaterThan(first.cursor);
+	}, 30_000);
+});

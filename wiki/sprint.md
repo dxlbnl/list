@@ -35,8 +35,13 @@ the CTE is rewritten **once** incorporating every server-side change.
 - [ ] [sync-engine-invariant-safety-net](backlog/sync-engine-invariant-safety-net.md) — client engine invariants: pending-wins, apply-guard, reconciliation.
 - [ ] [harness-pull-non-items-response](backlog/harness-pull-non-items-response.md) — pull hardening.
 
-**Next:** the `updated_seq`/HLC schema backbone + cursor delta (`sync-cursor-delta-transport`), then the
-two-client harness for the client-side cards (apply-guard, realtime, no-stall, loop, reorder).
+**Next:** the two-client async harness, then the client side of the cursor delta + the client cards
+(apply-guard, realtime-guarded, no-stall, loop, reorder) and the HLC LWW swap.
+
+> ⚠ **DB migration pending:** `drizzle/0001_reflective_maria_hill.sql` (sequence + `updated_seq` +
+> `lists.updated_at`) must be applied to Neon via `pnpm db:migrate` (or `pnpm db:push`) before the app's
+> `/api/sync` works against it — until then the CTE's `nextval('sync_seq')` errors on the un-migrated DB.
+> pglite tests already run against the new schema.
 
 ## Run log
 
@@ -56,3 +61,9 @@ two-client harness for the client-side cards (apply-guard, realtime, no-stall, l
   (in-batch dupe or already-owned) with an id-derived suffix instead of aborting on the UNIQUE violation —
   red repro (23505) → green. The createList local-dedup foundation test + client-learns-new-slug fold into
   the harness/cursor cards. Server CTE correctness cluster done (3 cards).
+- 2026-07-16 — **Backbone (server side).** Added the `updated_seq` sequence + columns (+ `lists.updated_at`);
+  the CTE bumps `updated_seq` on every upsert and `processSyncBatch` folds the pull into the response
+  (`{ results, changes, cursor }`) — member-visible rows since the caller's cursor. pglite: insert returns
+  the row + advances the cursor; a caught-up pull is empty; a later edit shows in a delta from the old
+  cursor. 10/10 green, check/lint clean. Migration `0001_reflective_maria_hill.sql` generated (needs
+  `pnpm db:migrate`/`db:push` on Neon). Client cursor + HLC still to do.

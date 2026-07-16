@@ -32,8 +32,9 @@ function rowsOf(result: unknown): Record<string, unknown>[] {
 export async function processSyncBatch(
 	db: SyncExecutor,
 	userId: string,
-	operations: SyncOperation[]
-): Promise<{ results: SyncResult[] }> {
+	operations: SyncOperation[],
+	cursor = 0
+): Promise<{ results: SyncResult[]; changes: { items: Record<string, unknown>[]; lists: Record<string, unknown>[] }; cursor: number }> {
 	// 1. PREPARE JSON BATCHES (data is already transformed to DB shape by Zod).
 	const itemUpsertsJson = JSON.stringify(
 		operations
@@ -104,7 +105,9 @@ export async function processSyncBatch(
 			   OR EXISTS (SELECT 1 FROM ${lists} l WHERE l.id = d.id AND l.created_by = ${userId})
 			ON CONFLICT (id) DO UPDATE SET
 				name = COALESCE(EXCLUDED.name, ${lists.name}),
-				slug = COALESCE(EXCLUDED.slug, ${lists.slug})
+				slug = COALESCE(EXCLUDED.slug, ${lists.slug}),
+				updated_at = now(),
+				updated_seq = nextval('sync_seq')
 			RETURNING id
 		),
 		upsert_members AS (
@@ -136,7 +139,8 @@ export async function processSyncBatch(
 				rank = COALESCE(EXCLUDED.rank, ${items.rank}),
 				done = COALESCE(EXCLUDED.done, ${items.done}),
 				deleted_at = COALESCE(EXCLUDED.deleted_at, ${items.deletedAt}),
-				updated_at = EXCLUDED.updated_at
+				updated_at = EXCLUDED.updated_at,
+				updated_seq = nextval('sync_seq')
 			WHERE ${items.updatedAt} < EXCLUDED.updated_at
 			RETURNING id
 		),
@@ -171,5 +175,36 @@ export async function processSyncBatch(
 		return { id: op.id, status: 'ignored' };
 	});
 
-	return { results };
+	// Delta pull folded into the push response: the member-visible rows changed since the
+	// caller's cursor (updated_seq), plus the new high-water cursor — so one round-trip both
+	// persists and pulls. The write CTE above is atomic; the delta reads committed state after it.
+	const changedItems = rowsOf(
+		await db.execute(sql`
+			SELECT i.id, i.list_id, i.name, i.group_name, i.rank, i.done, i.deleted_at, i.updated_at, i.updated_seq
+			FROM ${items} i
+			WHERE i.updated_seq > ${cursor}
+			  AND EXISTS (SELECT 1 FROM ${listUsers} lu WHERE lu.list_id = i.list_id AND lu.user_id = ${userId})
+			ORDER BY i.updated_seq
+		`)
+	);
+	const changedLists = rowsOf(
+		await db.execute(sql`
+			SELECT l.id, l.slug, l.name, l.created_by, l.created_at, l.updated_at, l.updated_seq
+			FROM ${lists} l
+			WHERE l.updated_seq > ${cursor}
+			  AND (l.created_by = ${userId} OR EXISTS (SELECT 1 FROM ${listUsers} lu WHERE lu.list_id = l.id AND lu.user_id = ${userId}))
+			ORDER BY l.updated_seq
+		`)
+	);
+	const maxRow = rowsOf(
+		await db.execute(sql`
+			SELECT GREATEST(
+				(SELECT COALESCE(max(updated_seq), 0) FROM ${items}),
+				(SELECT COALESCE(max(updated_seq), 0) FROM ${lists})
+			) AS cursor
+		`)
+	)[0] as { cursor: number | string } | undefined;
+	const nextCursor = Number(maxRow?.cursor ?? cursor);
+
+	return { results, changes: { items: changedItems, lists: changedLists }, cursor: nextCursor };
 }
