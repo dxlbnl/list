@@ -25,7 +25,7 @@ Build the harness first (failing repros), then the fixes:
 
 Deferred to later sprints: **Stage 1** ([cursor transport](backlog/sync-cursor-delta-transport.md) +
 [realtime-guarded-primary](backlog/sync-realtime-guarded-primary.md)) for the editor push-fold + backfill;
-**Stage 2** ([fractional-index reorder](backlog/sync-fractional-index-reorder.md); per-field LWW optional).
+**Stage 2** ([fractional-index reorder](backlog/sync-fractional-index-reorder.md)). Per-field LWW: decided against.
 
 ## Run log
 

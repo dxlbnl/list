@@ -22,8 +22,8 @@ Sync is both **incorrect** and **slow** cross-device. Two symptom families:
 
 - **Merge** — one symmetric **row-level LWW** applied *identically at every apply point*
   (server upsert + client Realtime apply + client pull), keyed on a comparable stamp, not raw
-  wall-clock. Dexie becomes a real replica, not a dumb cache. Per-field LWW is deferred. See
-  [sync-merge-model](../knowledge/architecture/sync-merge-model.md).
+  wall-clock. Dexie becomes a real replica, not a dumb cache. Stamp = a **row-level HLC**; per-field
+  LWW decided against. See [sync-merge-model](../knowledge/architecture/sync-merge-model.md).
 - **Transport** — fold pull into the **editor's** push via a server-assigned monotonic cursor
   (`updated_seq`): `POST /api/sync` returns the rows changed since the caller's cursor, so one
   round-trip both persists and pulls (removes round-trips, doesn't add one). See
@@ -48,11 +48,10 @@ Stage 0 fixes are validated against it (write the failing reproductions first).
 - [sync-cte-upsert-lists-authz-hole](sync-cte-upsert-lists-authz-hole.md) — server: `created_by = user.id` on INSERT.
 
 **Stage 1 — Transport** (<1s, single round-trip)
-- [sync-cursor-delta-transport](sync-cursor-delta-transport.md) — Design A: `updated_seq` cursor delta in the push response.
+- [sync-cursor-delta-transport](sync-cursor-delta-transport.md) — Design A: `updated_seq` cursor delta in the push response (and the HLC LWW stamp).
 - [sync-realtime-guarded-primary](sync-realtime-guarded-primary.md) — keep Realtime inline, guarded + ordered; cursor as backfill.
 
-**Stage 2 — Merge correctness + ordering**
-- [sync-per-field-lww-map](sync-per-field-lww-map.md) — per-field LWW (**deferred/optional**; row-level first).
+**Stage 2 — Ordering**
 - [sync-fractional-index-reorder](sync-fractional-index-reorder.md) — midpoint fractional-index reorder.
 
 **Testing** (foundational, cross-cutting)
