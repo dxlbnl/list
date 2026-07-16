@@ -45,6 +45,13 @@ Confirmed by reading the code (surfaced by the test-coverage audit as finding L1
 
 ## Notes
 
+- **Epic:** [Sync overhaul](sync-single-roundtrip-overhaul.md) — **Stage 0** (server
+  correctness). The [async harness](sync-async-test-harness.md) +
+  [cte-invariant-safety-net](cte-invariant-safety-net.md) cover this fix; the Stage-1
+  [cursor delta](sync-cursor-delta-transport.md) `SELECT` inherits the coalesce, so it must not
+  regress. Atoms: [sync-model](../knowledge/architecture/sync-model.md),
+  [server-modules](../knowledge/architecture/server-modules.md),
+  [async-sync-testing](../knowledge/testing/async-sync-testing.md).
 - Depends on the validator drop-undefined contract (absent keys, not `null`) that
   `cte-invariant-safety-net` locks down — the CTE fix leans on it.
 - See [sync-model](../knowledge/architecture/sync-model.md) and

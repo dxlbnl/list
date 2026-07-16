@@ -38,6 +38,9 @@ the test stderr; `pnpm check` / `pnpm lint` / `pnpm test` stay green.
 
 ## Notes
 
+- **Epic:** [Sync overhaul](sync-single-roundtrip-overhaul.md) — small **Stage 0/1** pull
+  hardening (`pull()` should tolerate a non-`{items}` response shape), adjacent to the
+  cursor-delta pull rework. Atom: [sync-model](../knowledge/architecture/sync-model.md).
 - Confirm the exact `data.items` site by grep at implementation time — the line drifts.
 - The engine is described in [client-modules](../knowledge/architecture/client-modules.md)
   and [sync-model](../knowledge/architecture/sync-model.md); the component-test harness in

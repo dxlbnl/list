@@ -20,7 +20,8 @@ capture gate prompts you).
 ### architecture/ — how the system is built
 - [sync-model](architecture/sync-model.md) — offline-first write path, batch push, realtime pull, conflict resolution.
 - [sync-latency](architecture/sync-latency.md) — where cross-device convergence time actually goes today (the diagnosis).
-- [sync-redesign](architecture/sync-redesign.md) — **proposed**: fold pull into the push response via a server cursor for <1s, one-trip convergence.
+- [sync-redesign](architecture/sync-redesign.md) — **proposed transport**: fold pull into the push response via a server cursor for <1s, one-trip convergence.
+- [sync-merge-model](architecture/sync-merge-model.md) — **proposed merge**: one symmetric per-field LWW-Map applied on both surfaces (not a server-only guard).
 - [data-model](architecture/data-model.md) — Postgres (Drizzle) + Dexie schema; float ranks, soft delete, slug disambiguation.
 - [client-modules](architecture/client-modules.md) — `actions.ts`, `sync.svelte.ts`, `db.ts`, menu/theme runes.
 - [server-modules](architecture/server-modules.md) — the `/api/sync` CTE, `auth.ts`, `supabase-auth.ts`.
@@ -29,6 +30,7 @@ capture gate prompts you).
 - [test-setup](testing/test-setup.md) — Vitest two-project (client/server) setup, three tiers, commands, CI.
 - [fixtures](testing/fixtures.md) — schema-derived `zod4-mock` world; consume it directly.
 - [pglite](testing/pglite.md) — in-process Postgres integration harness.
+- [async-sync-testing](testing/async-sync-testing.md) — testing the concurrent/timed sync engine: virtual time, two clients, latency + error budgets.
 
 ### domain/ — product behaviour
 - [lists](domain/lists.md) — drag-and-drop reorder via float ranks.

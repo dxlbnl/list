@@ -36,6 +36,15 @@ exec, logged as `tTotal`). The problem is **cross-device** convergence.
 UPDATEs → N row writes → **N Realtime echoes** and N cursor bumps for a single gesture. See
 [lists](../domain/lists.md) and the `reorder-design-midpoint-vs-renumber` card.
 
-**Why:** naming the exact hops shows the fix is not "make Realtime faster" but "remove the second hop and
-the timer gap" — fold the pull into the push response and refresh items on a cursor, per
-[sync-redesign](sync-redesign.md).
+**The 20s+ stall = error backoff, not normal latency.** `startLoop` base is 10s and the first backoff is
+`min(10000*2, 120000)` = **20s** (`sync.svelte.ts:212`). A healthy push is immediate, so the loop only
+matters as a backstop — but when a push **throws** (a 500 from a poison op, a transient Neon error, an
+offline blip) the immediate path gives up and the *only* retry is the loop, now ~20s (then 40s…) out. And
+the CTE batch is **atomic**: one un-syncable op (e.g. `slug-collision-sync-batch-failure`) 500s the *whole*
+batch, so a single bad op re-fails every 20/40/…s and blocks all other queued changes. Fix = decouple
+healthy cadence from error backoff (short base + small jittered steps), isolate/quarantine poison ops, and
+return per-op errors instead of failing the batch.
+
+**Why:** naming the exact hops shows the fix is not "make Realtime faster" but "remove the second hop, the
+timer gap, and the backoff cliff" — fold the pull into the push response and refresh items on a cursor
+([sync-redesign](sync-redesign.md)), and enforce the merge at every apply point ([sync-merge-model](sync-merge-model.md)).

@@ -1,71 +1,51 @@
 ---
-title: Sync redesign — fold pull into the push response via a server cursor
+title: Sync redesign — fold pull into the editor's push; keep Realtime as the data channel
 type: decision
 status: draft
-tags: [sync, redesign, cursor, round-trip, realtime, convergence, pull-in-push, updated-seq, per-viewer-filter, latency]
+tags: [sync, redesign, cursor, round-trip, realtime, convergence, pull-in-push, updated-seq, backfill, latency]
 ---
 
-Target: a change **converges cross-device in <1s, ideally one client→server round-trip**. The core defect
-today is that **push and pull are separate channels** ([sync-model](sync-model.md)): `POST /api/sync`
-returns only per-op *write status*, so a client can't learn other clients' changes in the same trip —
-cross-device convergence rides the async Supabase Realtime echo or the coarse fallback loop
-([sync-latency](sync-latency.md)).
+Target: converge cross-device in <1s with **no extra round-trip**. Two independent moves:
 
-**Recommendation (Design A).** Make `POST /api/sync` **also return the authoritative rows changed since the
-caller's cursor** — one trip both persists *and* pulls. A passive/idle client pulls by POSTing an
-**empty** `operations` array with its cursor. **Realtime demotes to a nudge**: on any `postgres_changes`
-event the client just triggers a cursor-pull instead of applying `payload.new` inline — so the server
-(not the client, not a broadcast) decides what each viewer may see. Add a ~1s short-poll of the focused
-`activeListIds` as the guaranteed-latency path when Realtime is degraded.
+**1. Fold pull into the editor's push.** `POST /api/sync` returns the ack **plus** the rows changed since
+the caller's `cursor`, so one round-trip both persists and pulls — the editor never makes a separate pull.
+Idle clients pull by POSTing empty `operations` + cursor. (This *removes* round-trips; it doesn't add one.)
 
-**Cursor mechanism.** `updated_at` is a poor cursor: it is **client wall-clock** (set in `actions.ts`,
-consumed as LWW in the CTE), so a skewed client can write a past timestamp a peer's cursor has already
-passed. Use a **server-assigned monotonic `updated_seq bigint`** (from one Postgres sequence, set via
-`nextval()` in the sync CTE on every insert/update) as the cursor; keep `updated_at` for LWW. Cursor =
-max `updated_seq` the client has applied (persisted in Dexie/localStorage); the delta `SELECT` returns
-member-visible rows with `updated_seq > cursor`. This **decouples "which write wins" (LWW by `updated_at`)
-from "what has the client seen" (cursor by `updated_seq`)**. Caveat: sequences can commit out of
-commit-order under concurrency (a small missed-row window) — the periodic reconcile backstops it.
+**2. Keep Realtime as the data channel for peers — but fix it.** Peers keep receiving `payload.new`
+**inline** (the Vercel-compatible replacement for the old SSE push — Vercel can't hold a long connection),
+so a peer's update is **pushed** in one hop, not nudge-then-pulled. Fix it by applying `payload.new` only
+under the [merge guard](sync-merge-model.md) (apply-iff-newer — kills the resurrection bug) and ordering by
+`updated_seq`. The cursor delta is used **only** for the editor's push-fold and as **backfill** on
+reconnect / missed event / cold start — never a steady-state pull. (We rejected demoting Realtime to a
+nudge: it adds a round-trip on the receive path the user won't pay.)
 
-**Schema change required (additive).** `items` and `lists` need `updated_seq bigint` (+ `lists` also needs
-an `updated_at` — today it has only `created_at`, so list renames have no LWW/cursor column at all — see
-[data-model](data-model.md)). **Hard deletes and membership changes have no row to return** (a deleted row
-can't satisfy `updated_seq > cursor`); keep those on the existing reconcile path (`GET /api/lists` +
-`reconcileAllLists`). Item deletes are **soft** ([soft-deletes](../domain/soft-deletes.md)) so they flow
-through the delta as normal rows with `deleted_at` set. Split cleanly: **cursor delta = item upserts +
-list renames; reconcile = list membership + hard list-deletes.**
+**Two stamps, both row-level.** `updated_seq` (server-assigned monotonic, `nextval()` in the CTE) = the
+**cursor** ("what have I seen"). A **row-level** LWW stamp (`updated_at`, ideally upgraded to an **HLC** so
+client skew can't win) = "which write wins." Per-field LWW is **deferred** — see [sync-merge-model](sync-merge-model.md).
 
-**Alternatives.** (B) *Keep Realtime primary, fix cursoring:* on each Realtime event do a cursor-pull
-instead of trusting inline `payload.new` — fixes drift + the per-viewer leak, needs `updated_seq`, but
-convergence still gated by Realtime reliability (CHANNEL_ERROR / JWT-refresh gaps). Good **migration
-stepping-stone**. (C) *Short-poll right after push, no cursor fold:* trivial, but only the editor polls —
-does nothing for the *other* device; rejected as a primary. (D) *Broadcast the merged result over
-Realtime:* removes replication lag but a shared broadcast channel **cannot be per-viewer filtered**, so it
-leaks — rejected.
+**Schema (additive).** `updated_seq bigint` on items+lists; `updated_at` on lists (today only `created_at` —
+see [data-model](data-model.md)). Split: **cursor delta = item upserts + list renames; reconcile
+(`GET /api/lists`) = membership + hard list-deletes** (a deleted row can't satisfy `updated_seq > cursor`;
+soft item-deletes flow through the delta as rows with `deleted_at` set).
 
-**Constraints the design MUST respect.** The delta `SELECT` runs on committed rows, so it inherits the
-CTE fixes and must not regress them: coalesce same-id INSERT+UPDATE before returning
-(`sync-cte-insert-update-data-loss`); return the **server-renamed** slug so a client learns its rename in
-one trip (`slug-collision-sync-batch-failure` — this design *helps* here); filter the delta strictly to
-`list_users` membership and land the `created_by = user.id` INSERT fix (`sync-cte-upsert-lists-authz-hole`).
-**Per-viewer filtering is a hard requirement** for the planned owner-blind gift lists:
-because the delta is a server-side `SELECT`, claim rows can be excluded per viewer (owner never receives
-guests' claims) — the very leak an inline-`payload.new` Realtime subscription can't prevent. This is the
-strongest argument for Design A.
+**Gift-list per-viewer, without a pull.** Owner-blindness doesn't require routing reads server-side: keep
+claims in a **separate table** the owner isn't subscribed to / is RLS-denied on, so the owner's Realtime
+never carries claim rows; guests get claim `payload.new` on their channel. If server-composed per-viewer
+payloads are ever needed, use Supabase **Broadcast** to viewer-scoped channels (SSE-style control, still a
+push). Normal lists pay nothing for this.
 
-**Open decisions for the user.** (1) Cursor column: server `updated_seq` sequence (recommended, skew-proof)
-vs an `updated_at` watermark + id tie-break (no new column on items, but client-clock fragile). (2) Add the
-~1s short-poll for focused lists (guaranteed <1s, more requests) or rely on the Realtime nudge alone
-(cheaper, Realtime-dependent). (3) Whether membership changes also get cursored (needs a timestamp/seq on
-`list_users`) or stay on the reconcile path (simpler; the recommendation).
+**Constraints (must not regress).** The delta `SELECT` + CTE must: coalesce same-id INSERT+UPDATE
+(`sync-cte-insert-update-data-loss`); return the server-renamed slug (`slug-collision-sync-batch-failure`);
+filter to `list_users` membership + force `created_by = user.id` (`sync-cte-upsert-lists-authz-hole`).
 
-**Migration path.** 1) additive migration: `updated_seq` on items+lists, `updated_at` on lists, set via
-`nextval()` in the CTE. 2) `POST /api/sync` accepts optional `cursor`, returns `{ results, changes, cursor }`
-(omit cursor → old behaviour, backward-compatible). 3) client tracks + advances the cursor, applies
-`changes` under the existing pending-wins guard. 4) flip Realtime handlers to cursor-pull (fixes the leak).
-5) optional focused short-poll. 6) keep the 10s loop + reconcile as deep backstop.
+**Open decisions.** (1) LWW stamp: keep wall-clock `updated_at` or upgrade to HLC. (2) Cursor membership
+changes too (needs a seq on `list_users`) or keep on reconcile (recommended, simpler).
 
-**Why:** folding pull into the push response collapses two async channels into one authorized,
-server-filtered round-trip — the only way to make convergence both fast (<1s) and *safe* (per-viewer),
-which the current inline-Realtime pull can be neither reliably nor for gift lists. A server-assigned
-monotonic cursor is the piece that makes a delta pull correct without trusting client clocks.
+**Migration.** 1) additive columns + `nextval()` in the CTE. 2) `POST /api/sync` accepts optional `cursor`,
+returns `{results, changes, cursor}` (omit → old behaviour). 3) client tracks/advances the cursor, applies
+`changes` **and** Realtime `payload.new` under the apply-guard. 4) cursor backfill on reconnect/gap; Realtime
+stays inline.
+
+**Why:** the editor's round-trip does double duty (persist + pull) and peers still get data pushed in one
+hop — **same hop count as today**, but correct (guarded), ordered (`updated_seq`), and gap-healing
+(backfill). Transport is here; the merge rule is [sync-merge-model](sync-merge-model.md).

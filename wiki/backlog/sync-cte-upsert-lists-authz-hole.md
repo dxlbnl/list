@@ -43,6 +43,11 @@ Confirmed by reading the code (surfaced by the test-coverage audit as finding L2
 
 ## Notes
 
+- **Epic:** [Sync overhaul](sync-single-roundtrip-overhaul.md) — **Stage 0/1** (server authz).
+  The `created_by = user.id` INSERT fix is a hard requirement the Stage-1
+  [cursor delta](sync-cursor-delta-transport.md) `SELECT` also relies on (member-visible
+  filtering). Atoms: [server-modules](../knowledge/architecture/server-modules.md),
+  [async-sync-testing](../knowledge/testing/async-sync-testing.md).
 - Shares the same SQL as `cte-invariant-safety-net` (LWW / soft-delete / validator
   invariants) — coordinate so the invariant net covers this change.
 - See [sync-model](../knowledge/architecture/sync-model.md) and

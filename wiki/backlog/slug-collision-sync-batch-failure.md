@@ -46,6 +46,12 @@ exact Postgres CTE error semantics want a reproduction.
 
 ## Notes
 
+- **Epic:** [Sync overhaul](sync-single-roundtrip-overhaul.md) — **Stage 0**. Relates to
+  [sync-no-stall-one-poison-op](sync-no-stall-one-poison-op.md): per-op isolation stops this
+  collision from 500ing the whole batch, and returning the **server-renamed** slug lets the
+  client learn its rename in one trip (which the Stage-1 [cursor delta](sync-cursor-delta-transport.md)
+  depends on). Atoms: [sync-model](../knowledge/architecture/sync-model.md),
+  [async-sync-testing](../knowledge/testing/async-sync-testing.md).
 - Server-side rename is preferred over client-side because client-side doesn't help
   concurrent edits from different devices.
 - See [sync-model](../knowledge/architecture/sync-model.md),

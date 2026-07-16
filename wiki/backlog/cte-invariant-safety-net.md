@@ -42,6 +42,10 @@ test-coverage audit as findings T6 + T7 + T8.)
 
 ## Notes
 
+- **Epic:** [Sync overhaul](sync-single-roundtrip-overhaul.md) — **Testing**. Server CTE
+  invariants via pglite, built alongside the [async test harness](sync-async-test-harness.md)
+  (same pglite Postgres). Atoms: [async-sync-testing](../knowledge/testing/async-sync-testing.md),
+  [pglite](../knowledge/testing/pglite.md).
 - The validator drop-undefined contract is the one `sync-cte-insert-update-data-loss`
   relies on — either can land first; if that fix lands first, this verifies the validator
   side held.

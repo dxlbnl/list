@@ -38,6 +38,11 @@ regress them silently:
 
 ## Notes
 
+- **Epic:** [Sync overhaul](sync-single-roundtrip-overhaul.md) — **Testing**. Now built **on**
+  the [async test harness](sync-async-test-harness.md); extend it with the resurrection
+  (stale-echo un-delete) and row-level LWW invariants from the Stage-0
+  [apply-guard](sync-apply-lww-guard.md). Atom:
+  [async-sync-testing](../knowledge/testing/async-sync-testing.md).
 - Independent of the server-CTE cards — different code surface (client engine, not the
   CTE).
 - Consume the registered `zod4-mock` `world` from `src/lib/test/fixtures.ts` directly —

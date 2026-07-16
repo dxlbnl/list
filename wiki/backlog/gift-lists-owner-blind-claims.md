@@ -26,11 +26,12 @@ build. Grounding: [auth](../knowledge/domain/auth.md) (anonymous sessions + shar
    is the first "lists that work differently" — decide if it generalises to a list-type concept.
 2. **Who can claim** — anonymous guests via a share/invite token (leaning yes; anonymous sessions already
    exist), or must guests have accounts? What stops the owner from claiming to peek?
-3. **Owner-blindness (the hard part)** — claims live in a separate store, and the owner's reads **and**
-   Realtime subscription must be server-side filtered to exclude claim rows. The current single
-   `postgres_changes` channel would leak claims to the owner — needs per-viewer authorization (RLS /
-   role-scoped channels / a claims-excluding read path). This must be enforced on the **server**, never
-   just hidden in the client.
+3. **Owner-blindness (the hard part)** — keep claims in a **separate table on their own Realtime channel**
+   the owner isn't subscribed to / is RLS-denied on, so the owner's `payload.new` never carries claim rows
+   (no server-side read-filtering, no extra round-trip on normal lists — see
+   [sync-redesign](../knowledge/architecture/sync-redesign.md)). Guests get claim events on their channel.
+   If server-composed per-viewer payloads are later needed, use Supabase **Broadcast** to viewer-scoped
+   channels. Enforce on the **server** (RLS/membership), never just hidden in the client.
 4. **Guest visibility** — do guests see each other's claims in realtime (yes, to prevent duplicates)?
    Then guests need a claim channel the owner is excluded from.
 5. **Concurrency** — two guests claim the same item near-simultaneously: first-wins? show "already
