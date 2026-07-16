@@ -17,3 +17,15 @@ export function isReservedSlug(slug: string): boolean {
 }
 
 export { nanoid } from 'nanoid';
+
+/**
+ * Fractional-index rank between two neighbours, for O(1) reorder without renumbering the list.
+ * `null` means "no neighbour on that side" (a list end). Repeated midpoints stay strictly ordered
+ * until float precision runs out (renormalise then — a rare, separate pass).
+ */
+export function rankBetween(before: number | null, after: number | null): number {
+	if (before == null && after == null) return 0;
+	if (before == null) return after! - 1;
+	if (after == null) return before + 1;
+	return (before + after) / 2;
+}

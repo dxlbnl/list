@@ -28,12 +28,12 @@ the CTE is rewritten **once** incorporating every server-side change.
 - [x] **sync-loop-reconverge-items** — the loop now calls `pullDelta` each pass (cursor backfill), so a missed realtime event still reconverges ✅.
 
 **Ordering:**
-- [ ] [sync-fractional-index-reorder](backlog/sync-fractional-index-reorder.md) — midpoint fractional-index reorder (kills the N-writes-per-drag amplifier).
+- [x] **sync-fractional-index-reorder** — `rankBetween` midpoint; the DnD handler now persists **only the moved item** ✅ (kills the N-writes-per-drag amplifier). Unit-tested.
 
 **Invariant nets (build alongside the above):**
 - [ ] [cte-invariant-safety-net](backlog/cte-invariant-safety-net.md) — server CTE invariants (pglite): LWW, soft-delete preservation, validator drop-undefined.
 - [ ] [sync-engine-invariant-safety-net](backlog/sync-engine-invariant-safety-net.md) — client engine invariants: pending-wins, apply-guard, reconciliation.
-- [ ] [harness-pull-non-items-response](backlog/harness-pull-non-items-response.md) — pull hardening.
+- [x] **harness-pull-non-items-response** — `pull` guards `data.items ?? []` (no crash on a non-items response) ✅.
 
 **Next:** the two-client async harness, then the client side of the cursor delta + the client cards
 (apply-guard, realtime-guarded, no-stall, loop, reorder) and the HLC LWW swap.

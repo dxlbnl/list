@@ -449,8 +449,8 @@ class SyncManager {
 				}
 				return;
 			}
-			const data: { list: ApiList; items: ApiItem[] } = await res.json();
-			for (const si of data.items) {
+			const data: { list: ApiList; items?: ApiItem[] } = await res.json();
+			for (const si of data.items ?? []) {
 				await this.applyServerItem({
 					id: si.id,
 					listId: si.listId,
