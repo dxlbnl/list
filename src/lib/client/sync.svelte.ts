@@ -108,7 +108,7 @@ class SyncManager {
 		if (this.isRefreshingToken) return;
 		this.isRefreshingToken = true;
 		try {
-			const res = await fetch('/api/auth/token');
+			const res = await this.fetchFn('/api/auth/token');
 			if (res.status === 401) {
 				const { logout } = await import('$lib/client/auth');
 				await logout();
@@ -305,6 +305,33 @@ class SyncManager {
 		}
 	}
 
+	/**
+	 * Reconcile the local list set against the server's authoritative view: delete
+	 * locally-known lists that are absent server-side (unless `isLocalOnly`), then upsert the
+	 * rest (pending local op wins). Extracted from reconcileAllLists so the deletes-absent
+	 * invariant is unit-testable without auth/fetch.
+	 */
+	async reconcileWithServerLists(serverLists: ApiList[]): Promise<void> {
+		const serverListIds = new Set(serverLists.map(l => l.id));
+		const localLists = await this.db.lists.toArray();
+		for (const list of localLists) {
+			if (!serverListIds.has(list.id) && !list.isLocalOnly) {
+				await this.db.lists.delete(list.id);
+				await this.db.items.where('listId').equals(list.id).delete();
+			}
+		}
+		for (const sl of serverLists) {
+			if (await this.isOperationPending(sl.id)) continue;
+			await this.db.lists.put({
+				id: sl.id,
+				slug: sl.slug,
+				name: sl.name,
+				createdBy: sl.createdBy,
+				createdAt: new Date(sl.createdAt)
+			});
+		}
+	}
+
 	async processQueue() {
 		if (!this.isOnline) return;
 		if (this.pushPromise) return this.pushPromise;
@@ -386,7 +413,7 @@ class SyncManager {
 		this.reconcilePromise = (async () => {
 			this.isSyncing = true;
 			try {
-				const res = await fetch('/api/lists');
+				const res = await this.fetchFn('/api/lists');
 				if (res.status === 401 || res.status === 403) {
 					syncLogger.error('Session expired or invalid during reconciliation. Logging out.');
 					const { logout } = await import('$lib/client/auth');
@@ -400,28 +427,7 @@ class SyncManager {
 					throw new Error('Expected array of lists from API');
 				}
 
-				const serverListIds = new Set(serverLists.map(l => l.id));
-
-				const localLists = await this.db.lists.toArray();
-				for (const list of localLists) {
-					if (!serverListIds.has(list.id) && !list.isLocalOnly) {
-						await this.db.lists.delete(list.id);
-						await this.db.items.where('listId').equals(list.id).delete();
-					}
-				}
-
-				for (const sl of serverLists) {
-					const isPending = await this.isOperationPending(sl.id);
-					if (!isPending) {
-						await this.db.lists.put({
-							id: sl.id,
-							slug: sl.slug,
-							name: sl.name,
-							createdBy: sl.createdBy,
-							createdAt: new Date(sl.createdAt)
-						});
-					}
-				}
+				await this.reconcileWithServerLists(serverLists);
 			} catch (e) {
 				syncLogger.error('Reconciliation failed', {}, e);
 			} finally {
@@ -437,7 +443,7 @@ class SyncManager {
 		this.activePulls.push(listId);
 		this.isSyncing = true;
 		try {
-			const res = await fetch(`/api/lists/${listId}`);
+			const res = await this.fetchFn(`/api/lists/${listId}`);
 			if (res.status === 401 || res.status === 403) {
 				syncLogger.error('Session expired or invalid during pull. Logging out.');
 				const { logout } = await import('$lib/client/auth');

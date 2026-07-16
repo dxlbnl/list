@@ -57,3 +57,38 @@ describe('SyncManager.applyServerItem — LWW apply guard (no resurrection)', ()
 		await db.delete();
 	});
 });
+
+describe('SyncManager invariants (characterisation / lock-down)', () => {
+	it('pending-wins keys on the entity id (data.id), not the op id', async () => {
+		const db = freshDb();
+		const sm = createSyncManager(db);
+		// op.id = "Y" (the operation's own nanoid), data.id = "X" (the entity).
+		await db.syncQueue.add({ id: 'Y', entity: 'item', type: 'UPDATE', data: { id: 'X' }, timestamp: 1 });
+
+		// X is pending (matches data.id) → even a far-future server row is NOT applied.
+		await sm.applyServerItem({ id: 'X', listId: 'l', name: 's', groupName: '', rank: 1, done: false, deletedAt: null, updatedAt: new Date('2030-01-01') });
+		expect(await db.items.get('X')).toBeUndefined();
+
+		// Y is only an op.id, never a data.id → not pending → a server row IS applied.
+		await sm.applyServerItem({ id: 'Y', listId: 'l', name: 's', groupName: '', rank: 1, done: false, deletedAt: null, updatedAt: new Date('2030-01-01') });
+		expect(await db.items.get('Y')).toBeDefined();
+		await db.delete();
+	});
+
+	it('reconcile deletes locally-known lists absent from the server, but keeps isLocalOnly', async () => {
+		const db = freshDb();
+		const sm = createSyncManager(db);
+		await db.lists.bulkPut([
+			{ id: 'keep', slug: 'k', name: 'K', createdBy: 'u', createdAt: new Date() },
+			{ id: 'local', slug: 'lo', name: 'L', createdBy: 'u', createdAt: new Date(), isLocalOnly: true },
+			{ id: 'gone', slug: 'g', name: 'G', createdBy: 'u', createdAt: new Date() }
+		]);
+
+		await sm.reconcileWithServerLists([{ id: 'keep', slug: 'k', name: 'K', createdBy: 'u', createdAt: new Date().toISOString() }]);
+
+		expect(await db.lists.get('keep')).toBeDefined();
+		expect(await db.lists.get('local')).toBeDefined(); // isLocalOnly preserved
+		expect(await db.lists.get('gone')).toBeUndefined(); // absent server-side → deleted
+		await db.delete();
+	});
+});

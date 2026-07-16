@@ -31,8 +31,8 @@ the CTE is rewritten **once** incorporating every server-side change.
 - [x] **sync-fractional-index-reorder** — `rankBetween` midpoint; the DnD handler now persists **only the moved item** ✅ (kills the N-writes-per-drag amplifier). Unit-tested.
 
 **Invariant nets (build alongside the above):**
-- [ ] [cte-invariant-safety-net](backlog/cte-invariant-safety-net.md) — server CTE invariants (pglite): LWW, soft-delete preservation, validator drop-undefined.
-- [ ] [sync-engine-invariant-safety-net](backlog/sync-engine-invariant-safety-net.md) — client engine invariants: pending-wins, apply-guard, reconciliation.
+- [x] **cte-invariant-safety-net** — pglite: stale UPDATE ignored (LWW); COALESCE keeps a soft-delete; validator drops-undefined on the wire ✅.
+- [x] **sync-engine-invariant-safety-net** — pending-wins keys on `data.id` (not `op.id`); reconcile deletes-absent but keeps `isLocalOnly` ✅.
 - [x] **harness-pull-non-items-response** — `pull` guards `data.items ?? []` (no crash on a non-items response) ✅.
 
 **Next:** the two-client async harness, then the client side of the cursor delta + the client cards
@@ -83,3 +83,7 @@ the CTE is rewritten **once** incorporating every server-side change.
 - 2026-07-16 — **HLC** implemented (`src/lib/client/hlc.ts`): monotonic `now()` + `observe()`; `actions.ts`
   stamps local writes, `applyServerItem` observes peer stamps. Row-level LWW is now skew-proof, stored in
   the existing `updatedAt` (no schema change). 20/20 green, check/lint clean.
+- 2026-07-16 — Closed the two invariant nets: `cte-invariant.spec.ts` (stale UPDATE ignored / soft-delete
+  COALESCE preserved / validator drop-undefined wire contract) + engine invariants (pending-wins keys on
+  `data.id` not `op.id`; reconcile deletes-absent yet keeps `isLocalOnly`). Extracted `reconcileWithServerLists`
+  and routed every fetch through the injected `fetchFn`. 25/25 green, check/lint clean. **All 13 sprint cards done.**
