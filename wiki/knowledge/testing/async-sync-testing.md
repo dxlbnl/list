@@ -11,7 +11,10 @@ the `server`/node tier per [test-setup](test-setup.md)) must give:
 
 - **Two independent clients, one server.** Instantiate two `SyncManager` + two Dexie (`fake-indexeddb`)
   instances talking to a **single** pglite Postgres via the real `/api/sync` handler — this exercises the
-  actual cross-device path ([sync-model](../architecture/sync-model.md)), not a mock.
+  actual cross-device path ([sync-model](../architecture/sync-model.md)), not a mock. Runs in the **node tier**
+(name the test `*.spec.ts`, not `*.svelte.spec.ts`): `import 'fake-indexeddb/auto'` +
+`createSyncManager(new ListDatabase(uniqueName))` — no chromium needed, and the name-parameterized Dexie
+isolates each client. `SyncManager` skips its window listeners/loop when `window` is undefined (node).
 - **Deterministic virtual time.** Drive the ~10s loop, backoff, short-poll, and JWT refresh with fake timers
   (`vi.useFakeTimers`) so tests are fast, deterministic, and can **assert timing** (advance the clock, assert
   what did/didn't happen). Never `sleep` on wall-clock.
