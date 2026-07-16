@@ -23,7 +23,7 @@ the CTE is rewritten **once** incorporating every server-side change.
 - [ ] [sync-no-stall-one-poison-op](backlog/sync-no-stall-one-poison-op.md) — per-op status response (server) + short jittered backoff & poison-op quarantine (client).
 
 **Client:**
-- [ ] [sync-apply-lww-guard](backlog/sync-apply-lww-guard.md) — apply-iff-newer by HLC on Realtime + pull; self-echo suppression.
+- [x] **sync-apply-lww-guard** — single guarded apply path `applyServerItem` (apply-iff-newer + pending) ✅ (resurrection fixed; node-tier tests). Self-echo subsumed by the guard.
 - [ ] [sync-realtime-guarded-primary](backlog/sync-realtime-guarded-primary.md) — keep Realtime inline (guarded + ordered); cursor delta = editor push-fold + backfill.
 - [ ] [sync-loop-reconverge-items](backlog/sync-loop-reconverge-items.md) — the periodic loop does a cursor-backfill of active lists (absorbed into the new design).
 
@@ -67,3 +67,8 @@ the CTE is rewritten **once** incorporating every server-side change.
   the row + advances the cursor; a caught-up pull is empty; a later edit shows in a delta from the old
   cursor. 10/10 green, check/lint clean. Migration `0001_reflective_maria_hill.sql` generated (needs
   `pnpm db:migrate`/`db:push` on Neon). Client cursor + HLC still to do.
+- 2026-07-16 — **Client apply-guard (the resurrection fix).** Refactored `SyncManager`: exposed a testable
+  `createSyncManager(db)` factory + parameterized `ListDatabase(name)`; Realtime + pull now go through one
+  guarded `applyServerItem` (drops a server row not strictly newer than local, or with a pending op). Node-tier
+  tests (`sync-engine.spec.ts`, fake-indexeddb — no chromium): a stale echo can't un-delete; newer applies;
+  pending wins. This also **proves the client-side harness approach**. 13/13 green, check/lint clean.

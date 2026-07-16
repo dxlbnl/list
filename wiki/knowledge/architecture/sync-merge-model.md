@@ -16,7 +16,11 @@ older than what I have?".
 **Decision.** Apply the **same row-level last-write-wins rule at every apply point** — server upsert, Realtime
 apply, and `pull` apply: *write the row iff its stamp is newer than the local row's*. This makes Dexie a real
 replica, not a dumb cache, and makes convergence independent of arrival order and of which surface saw a write
-first. **One stamp per row, not per field.**
+first. **One stamp per row, not per field.** **Status:** the client half is implemented — `applyServerItem`
+(`sync.svelte.ts`) is now the single guarded apply path for Realtime + pull, dropping a server row that
+isn't strictly newer than local (`updatedAt`) or that has a pending local op; the server upsert already
+guards by `updated_at`. This kills the delete-resurrection / stale-echo-revert class. (Self-echo suppression
+is subsumed: your own delayed echo is older than your newer local state, so the guard drops it.)
 
 **Stamp = a row-level HLC (decided).** `updated_at` is client wall-clock, so skew corrupts LWW. Replace it
 with a **hybrid logical clock**: `(physical, counter)`, monotonic and causally ordered even when a device's

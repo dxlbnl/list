@@ -1,4 +1,4 @@
-import { db } from '$lib/client/db';
+import { db, type ListDatabase, type LocalItem } from '$lib/client/db';
 import { logger } from '$lib/logger';
 import { supabase } from '$lib/client/supabase';
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
@@ -13,6 +13,7 @@ interface SyncResult {
 }
 
 class SyncManager {
+	private db: ListDatabase;
 	isSyncing = $state(false);
 	isOnline = $state(true);
 	syncStatus = $state<'connected' | 'connecting' | 'disconnected'>('disconnected');
@@ -25,7 +26,8 @@ class SyncManager {
 	private isRefreshingToken = false;
 	activePulls = $state<string[]>([]);
 
-	constructor() {
+	constructor(database: ListDatabase = db) {
+		this.db = database;
 		if (typeof window !== 'undefined') {
 			this.isOnline = navigator.onLine;
 
@@ -130,14 +132,14 @@ class SyncManager {
 				if (!listId) return;
 
 				if (payload.eventType === 'DELETE') {
-					await db.lists.delete(listId);
-					await db.items.where('listId').equals(listId).delete();
+					await this.db.lists.delete(listId);
+					await this.db.items.where('listId').equals(listId).delete();
 					this.reconcileAllLists();
 				} else if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
 					const serverList = payload.new as DatabaseList;
 					const isPending = await this.isOperationPending(listId);
 					if (!isPending) {
-						await db.lists.put({
+						await this.db.lists.put({
 							id: serverList.id,
 							slug: serverList.slug,
 							name: serverList.name,
@@ -154,24 +156,19 @@ class SyncManager {
 				if (!listId || !this.activeListIds.has(listId)) return;
 
 				if (payload.eventType === 'DELETE' && 'id' in payload.old) {
-					await db.items.delete(payload.old.id as string);
+					await this.db.items.delete(payload.old.id as string);
 				} else if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
 					const serverItem = payload.new as DatabaseItem;
-					const isPending = await this.isOperationPending(serverItem.id);
-					if (!isPending) {
-						await db.items.put({
-							id: serverItem.id,
-							listId: serverItem.list_id,
-							name: serverItem.name,
-							groupName: serverItem.group_name || "",
-							rank: serverItem.rank,
-							done: serverItem.done,
-							deletedAt: serverItem.deleted_at ? new Date(serverItem.deleted_at) : null,
-							updatedAt: new Date(serverItem.updated_at)
-						});
-					} else {
-						this.pull(listId);
-					}
+					await this.applyServerItem({
+						id: serverItem.id,
+						listId: serverItem.list_id,
+						name: serverItem.name,
+						groupName: serverItem.group_name || "",
+						rank: serverItem.rank,
+						done: serverItem.done,
+						deletedAt: serverItem.deleted_at ? new Date(serverItem.deleted_at) : null,
+						updatedAt: new Date(serverItem.updated_at)
+					});
 				}
 			})
 			.subscribe((status, err) => {
@@ -220,15 +217,29 @@ class SyncManager {
 	private pushPromise: Promise<void> | null = null;
 
 	private async isOperationPending(entityId: string) {
-		const ops = await db.syncQueue.toArray();
+		const ops = await this.db.syncQueue.toArray();
 		return ops.some(op => op.data.id === entityId);
+	}
+
+	/**
+	 * The single client apply path for a server item row — used by both the Realtime
+	 * handler and pull. Last-write-wins guard: skip if a local op is still pending for this
+	 * id, or if the local row is newer-or-equal than the incoming one. This is what stops a
+	 * stale/reordered echo (e.g. an item's own delayed creation echo) from resurrecting a
+	 * deleted item or reverting a newer field edit — the client apply path had no such guard.
+	 */
+	async applyServerItem(candidate: LocalItem): Promise<void> {
+		if (await this.isOperationPending(candidate.id)) return; // local in-flight wins
+		const local = await this.db.items.get(candidate.id);
+		if (local && local.updatedAt >= candidate.updatedAt) return; // stale echo — drop it
+		await this.db.items.put(candidate);
 	}
 
 	async processQueue() {
 		if (!this.isOnline) return;
 		if (this.pushPromise) return this.pushPromise;
 
-		const count = await db.syncQueue.count();
+		const count = await this.db.syncQueue.count();
 		if (count === 0) return;
 
 		this.pushPromise = (async () => {
@@ -236,7 +247,7 @@ class SyncManager {
 			this.lastSyncError = null;
 
 			try {
-				const ops = await db.syncQueue.toArray();
+				const ops = await this.db.syncQueue.toArray();
 				const response = await fetch('/api/sync', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
@@ -248,7 +259,7 @@ class SyncManager {
 					syncLogger.error('Validation failed. Batch rejected by server.', { error: errorData });
 					// Drop the batch — a 400 means the client sent malformed data that will never succeed.
 					// Individual ops are preserved if the cause was a transient schema mismatch.
-					await db.syncQueue.bulkDelete(ops.map(o => o.localId).filter((id): id is number => id !== undefined));
+					await this.db.syncQueue.bulkDelete(ops.map(o => o.localId).filter((id): id is number => id !== undefined));
 					return;
 				}
 
@@ -268,7 +279,7 @@ class SyncManager {
 
 				if (ackedIds.size > 0) {
 					const localIdsToDelete = ops.filter(op => ackedIds.has(op.id)).map(op => op.localId).filter((id): id is number => id !== undefined);
-					await db.syncQueue.bulkDelete(localIdsToDelete);
+					await this.db.syncQueue.bulkDelete(localIdsToDelete);
 				}
 			} catch (e) {
 				syncLogger.error(`Sync failed`, { count }, e);
@@ -277,7 +288,7 @@ class SyncManager {
 			} finally {
 				this.pushPromise = null;
 				if (this.activePulls.length === 0 && !this.reconcilePromise) this.isSyncing = false;
-				const remaining = await db.syncQueue.count();
+				const remaining = await this.db.syncQueue.count();
 				if (remaining > 0 && this.isOnline) setTimeout(() => this.processQueue(), 100);
 			}
 		})();
@@ -308,18 +319,18 @@ class SyncManager {
 
 				const serverListIds = new Set(serverLists.map(l => l.id));
 
-				const localLists = await db.lists.toArray();
+				const localLists = await this.db.lists.toArray();
 				for (const list of localLists) {
 					if (!serverListIds.has(list.id) && !list.isLocalOnly) {
-						await db.lists.delete(list.id);
-						await db.items.where('listId').equals(list.id).delete();
+						await this.db.lists.delete(list.id);
+						await this.db.items.where('listId').equals(list.id).delete();
 					}
 				}
 
 				for (const sl of serverLists) {
 					const isPending = await this.isOperationPending(sl.id);
 					if (!isPending) {
-						await db.lists.put({
+						await this.db.lists.put({
 							id: sl.id,
 							slug: sl.slug,
 							name: sl.name,
@@ -352,26 +363,23 @@ class SyncManager {
 			}
 			if (!res.ok) {
 				if (res.status === 404) {
-					await db.lists.delete(listId);
-					await db.items.where('listId').equals(listId).delete();
+					await this.db.lists.delete(listId);
+					await this.db.items.where('listId').equals(listId).delete();
 				}
 				return;
 			}
 			const data: { list: ApiList; items: ApiItem[] } = await res.json();
 			for (const si of data.items) {
-				const isPending = await this.isOperationPending(si.id);
-				if (!isPending) {
-					await db.items.put({
-						id: si.id,
-						listId: si.listId,
-						name: si.name,
-						groupName: si.groupName || "",
-						rank: si.rank,
-						done: si.done,
-						deletedAt: si.deletedAt ? new Date(si.deletedAt) : null,
-						updatedAt: new Date(si.updatedAt)
-					});
-				}
+				await this.applyServerItem({
+					id: si.id,
+					listId: si.listId,
+					name: si.name,
+					groupName: si.groupName || "",
+					rank: si.rank,
+					done: si.done,
+					deletedAt: si.deletedAt ? new Date(si.deletedAt) : null,
+					updatedAt: new Date(si.updatedAt)
+				});
 			}
 		} catch (e) {
 			syncLogger.error(`Pull failed for list ${listId}`, {}, e);
@@ -380,6 +388,11 @@ class SyncManager {
 			if (this.activePulls.length === 0 && !this.reconcilePromise) this.isSyncing = false;
 		}
 	}
+}
+
+/** Factory for a fresh, isolated SyncManager (injectable Dexie) — used by the async test harness. */
+export function createSyncManager(database?: ListDatabase) {
+	return new SyncManager(database);
 }
 
 export const syncManager = new SyncManager();
