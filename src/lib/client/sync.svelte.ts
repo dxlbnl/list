@@ -1,6 +1,7 @@
-import { db } from '$lib/client/db';
+import { db, type ListDatabase, type LocalItem, type LocalList } from '$lib/client/db';
 import { logger } from '$lib/logger';
 import { supabase } from '$lib/client/supabase';
+import { observe as hlcObserve } from './hlc';
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import type { DatabaseItem, DatabaseList, ApiItem, ApiList } from '$lib/validations';
 
@@ -13,6 +14,7 @@ interface SyncResult {
 }
 
 class SyncManager {
+	private db: ListDatabase;
 	isSyncing = $state(false);
 	isOnline = $state(true);
 	syncStatus = $state<'connected' | 'connecting' | 'disconnected'>('disconnected');
@@ -23,11 +25,20 @@ class SyncManager {
 	private currentToken: string | null = null;
 	private tokenRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 	private isRefreshingToken = false;
+	private fetchFn: typeof fetch;
+	private cursor = 0;
+	private consecutiveFailures = 0;
 	activePulls = $state<string[]>([]);
 
-	constructor() {
+	constructor(database: ListDatabase = db, fetchFn: typeof fetch = (...args) => fetch(...args)) {
+		this.db = database;
+		this.fetchFn = fetchFn;
 		if (typeof window !== 'undefined') {
 			this.isOnline = navigator.onLine;
+			try {
+				const c = localStorage.getItem('syncCursor');
+				if (c) this.cursor = Number(c) || 0;
+			} catch { /* no localStorage */ }
 
 			window.addEventListener('online', async () => {
 				this.isOnline = true;
@@ -37,7 +48,7 @@ class SyncManager {
 				await Promise.all([
 					this.processQueue(),
 					this.reconcileAllLists(),
-					...Array.from(this.activeListIds).map(id => this.pull(id))
+					this.pullDelta()
 				]);
 			});
 
@@ -49,6 +60,7 @@ class SyncManager {
 			document.addEventListener('visibilitychange', () => {
 				if (document.visibilityState === 'visible' && this.isOnline) {
 					this.reconcileAllLists();
+					this.pullDelta();
 				}
 			});
 
@@ -96,7 +108,7 @@ class SyncManager {
 		if (this.isRefreshingToken) return;
 		this.isRefreshingToken = true;
 		try {
-			const res = await fetch('/api/auth/token');
+			const res = await this.fetchFn('/api/auth/token');
 			if (res.status === 401) {
 				const { logout } = await import('$lib/client/auth');
 				await logout();
@@ -130,14 +142,14 @@ class SyncManager {
 				if (!listId) return;
 
 				if (payload.eventType === 'DELETE') {
-					await db.lists.delete(listId);
-					await db.items.where('listId').equals(listId).delete();
+					await this.db.lists.delete(listId);
+					await this.db.items.where('listId').equals(listId).delete();
 					this.reconcileAllLists();
 				} else if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
 					const serverList = payload.new as DatabaseList;
 					const isPending = await this.isOperationPending(listId);
 					if (!isPending) {
-						await db.lists.put({
+						await this.db.lists.put({
 							id: serverList.id,
 							slug: serverList.slug,
 							name: serverList.name,
@@ -154,24 +166,19 @@ class SyncManager {
 				if (!listId || !this.activeListIds.has(listId)) return;
 
 				if (payload.eventType === 'DELETE' && 'id' in payload.old) {
-					await db.items.delete(payload.old.id as string);
+					await this.db.items.delete(payload.old.id as string);
 				} else if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
 					const serverItem = payload.new as DatabaseItem;
-					const isPending = await this.isOperationPending(serverItem.id);
-					if (!isPending) {
-						await db.items.put({
-							id: serverItem.id,
-							listId: serverItem.list_id,
-							name: serverItem.name,
-							groupName: serverItem.group_name || "",
-							rank: serverItem.rank,
-							done: serverItem.done,
-							deletedAt: serverItem.deleted_at ? new Date(serverItem.deleted_at) : null,
-							updatedAt: new Date(serverItem.updated_at)
-						});
-					} else {
-						this.pull(listId);
-					}
+					await this.applyServerItem({
+						id: serverItem.id,
+						listId: serverItem.list_id,
+						name: serverItem.name,
+						groupName: serverItem.group_name || "",
+						rank: serverItem.rank,
+						done: serverItem.done,
+						deletedAt: serverItem.deleted_at ? new Date(serverItem.deleted_at) : null,
+						updatedAt: new Date(serverItem.updated_at)
+					});
 				}
 			})
 			.subscribe((status, err) => {
@@ -196,22 +203,27 @@ class SyncManager {
 
 	async startLoop() {
 		let loopCount = 0;
-		let backoffMs = 10000;
+		const BASE_MS = 2000;
+		let backoffMs = BASE_MS;
 		while (true) {
 			try {
 				await this.processQueue();
-				// Reconcile all lists every 6 loops (~1 minute at base interval)
-				if (loopCount % 6 === 0) {
+				// Cursor backfill ~every 10s (Realtime is the fast path; this only catches missed events).
+				if (loopCount % 5 === 0) {
+					await this.pullDelta();
+				}
+				// Reconcile the authoritative list set (membership + hard deletes) ~every 60s.
+				if (loopCount % 30 === 0) {
 					await this.reconcileAllLists();
 				}
 				loopCount++;
-				backoffMs = 10000;
+				backoffMs = BASE_MS; // healthy cadence is decoupled from the error backoff
 			} catch (e) {
 				syncLogger.error('Sync loop error', {}, e);
-				// Exponential backoff with jitter, capped at 2 minutes
-				backoffMs = Math.min(backoffMs * 2, 120000);
+				// Gentle incremental backoff capped at 30s — no 20s cliff on the first failure.
+				backoffMs = Math.min(backoffMs * 2, 30000);
 			}
-			const jitter = Math.random() * 2000;
+			const jitter = Math.random() * 500;
 			await new Promise(resolve => setTimeout(resolve, backoffMs + jitter));
 		}
 	}
@@ -220,15 +232,114 @@ class SyncManager {
 	private pushPromise: Promise<void> | null = null;
 
 	private async isOperationPending(entityId: string) {
-		const ops = await db.syncQueue.toArray();
+		const ops = await this.db.syncQueue.toArray();
 		return ops.some(op => op.data.id === entityId);
+	}
+
+	/**
+	 * The single client apply path for a server item row — used by both the Realtime
+	 * handler and pull. Last-write-wins guard: skip if a local op is still pending for this
+	 * id, or if the local row is newer-or-equal than the incoming one. This is what stops a
+	 * stale/reordered echo (e.g. an item's own delayed creation echo) from resurrecting a
+	 * deleted item or reverting a newer field edit — the client apply path had no such guard.
+	 */
+	async applyServerItem(candidate: LocalItem): Promise<void> {
+		hlcObserve(candidate.updatedAt); // keep our clock ahead of observed stamps
+		if (await this.isOperationPending(candidate.id)) return; // local in-flight wins
+		const local = await this.db.items.get(candidate.id);
+		if (local && local.updatedAt >= candidate.updatedAt) return; // stale echo — drop it
+		await this.db.items.put(candidate);
+	}
+
+	/** Apply a server list row (rename / new list from the cursor delta). Pending local op wins. */
+	async applyServerList(candidate: LocalList): Promise<void> {
+		if (await this.isOperationPending(candidate.id)) return;
+		await this.db.lists.put(candidate);
+	}
+
+	/** Apply the cursor-delta `changes` (member-visible rows since our cursor) and advance the cursor. */
+	private async applyChanges(
+		changes: { items?: DatabaseItem[]; lists?: DatabaseList[] } | undefined,
+		newCursor: number | undefined
+	): Promise<void> {
+		for (const si of changes?.items ?? []) {
+			await this.applyServerItem({
+				id: si.id,
+				listId: si.list_id,
+				name: si.name,
+				groupName: si.group_name || "",
+				rank: si.rank,
+				done: si.done,
+				deletedAt: si.deleted_at ? new Date(si.deleted_at) : null,
+				updatedAt: new Date(si.updated_at)
+			});
+		}
+		for (const sl of changes?.lists ?? []) {
+			await this.applyServerList({
+				id: sl.id,
+				slug: sl.slug,
+				name: sl.name,
+				createdBy: sl.created_by,
+				createdAt: new Date(sl.created_at)
+			});
+		}
+		if (typeof newCursor === 'number' && newCursor > this.cursor) {
+			this.cursor = newCursor;
+			try {
+				if (typeof localStorage !== 'undefined') localStorage.setItem('syncCursor', String(this.cursor));
+			} catch { /* no localStorage */ }
+		}
+	}
+
+	/** Idle / backfill pull: POST an empty batch with the cursor and apply what changed since. */
+	async pullDelta(): Promise<void> {
+		if (!this.isOnline) return;
+		try {
+			const res = await this.fetchFn('/api/sync', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ operations: [], clientId: this.clientId, cursor: this.cursor })
+			});
+			if (!res.ok) return;
+			const data: { changes?: { items?: DatabaseItem[]; lists?: DatabaseList[] }; cursor?: number } = await res.json();
+			await this.applyChanges(data.changes, data.cursor);
+		} catch (e) {
+			syncLogger.error('pullDelta failed', {}, e);
+		}
+	}
+
+	/**
+	 * Reconcile the local list set against the server's authoritative view: delete
+	 * locally-known lists that are absent server-side (unless `isLocalOnly`), then upsert the
+	 * rest (pending local op wins). Extracted from reconcileAllLists so the deletes-absent
+	 * invariant is unit-testable without auth/fetch.
+	 */
+	async reconcileWithServerLists(serverLists: ApiList[]): Promise<void> {
+		const serverListIds = new Set(serverLists.map(l => l.id));
+		const localLists = await this.db.lists.toArray();
+		for (const list of localLists) {
+			if (!serverListIds.has(list.id) && !list.isLocalOnly) {
+				await this.db.lists.delete(list.id);
+				await this.db.items.where('listId').equals(list.id).delete();
+			}
+		}
+		for (const sl of serverLists) {
+			if (await this.isOperationPending(sl.id)) continue;
+			await this.db.lists.put({
+				id: sl.id,
+				slug: sl.slug,
+				name: sl.name,
+				createdBy: sl.createdBy,
+				createdAt: new Date(sl.createdAt)
+			});
+		}
 	}
 
 	async processQueue() {
 		if (!this.isOnline) return;
 		if (this.pushPromise) return this.pushPromise;
 
-		const count = await db.syncQueue.count();
+		const count = await this.db.syncQueue.count();
 		if (count === 0) return;
 
 		this.pushPromise = (async () => {
@@ -236,11 +347,11 @@ class SyncManager {
 			this.lastSyncError = null;
 
 			try {
-				const ops = await db.syncQueue.toArray();
-				const response = await fetch('/api/sync', {
+				const ops = await this.db.syncQueue.toArray();
+				const response = await this.fetchFn('/api/sync', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ operations: ops, clientId: this.clientId })
+					body: JSON.stringify({ operations: ops, clientId: this.clientId, cursor: this.cursor })
 				});
 
 				if (response.status === 400) {
@@ -248,7 +359,7 @@ class SyncManager {
 					syncLogger.error('Validation failed. Batch rejected by server.', { error: errorData });
 					// Drop the batch — a 400 means the client sent malformed data that will never succeed.
 					// Individual ops are preserved if the cause was a transient schema mismatch.
-					await db.syncQueue.bulkDelete(ops.map(o => o.localId).filter((id): id is number => id !== undefined));
+					await this.db.syncQueue.bulkDelete(ops.map(o => o.localId).filter((id): id is number => id !== undefined));
 					return;
 				}
 
@@ -261,23 +372,36 @@ class SyncManager {
 
 				if (!response.ok) throw new Error(`Sync failed: ${response.statusText}`);
 
-				const data: { results: SyncResult[] } = await response.json();
+				const data: { results: SyncResult[]; changes?: { items?: DatabaseItem[]; lists?: DatabaseList[] }; cursor?: number } = await response.json();
 				// 'success' = written to DB; 'ignored' = rejected (auth/stale) — both are removed from queue.
-				// 'error' would stay in queue for retry, but the server currently only emits success/ignored.
 				const ackedIds = new Set(data.results.filter(r => r.status === 'success' || r.status === 'ignored').map(r => r.id));
 
 				if (ackedIds.size > 0) {
 					const localIdsToDelete = ops.filter(op => ackedIds.has(op.id)).map(op => op.localId).filter((id): id is number => id !== undefined);
-					await db.syncQueue.bulkDelete(localIdsToDelete);
+					await this.db.syncQueue.bulkDelete(localIdsToDelete);
 				}
+
+				// Fold the pull into the push response: apply changed rows + advance the cursor.
+				await this.applyChanges(data.changes, data.cursor);
+				this.consecutiveFailures = 0;
 			} catch (e) {
-				syncLogger.error(`Sync failed`, { count }, e);
+				this.consecutiveFailures++;
+				syncLogger.error(`Sync failed`, { count, consecutiveFailures: this.consecutiveFailures }, e);
 				this.lastSyncError = (e as Error).message;
+				// Poison-op quarantine: after repeated failures drop the wedged batch so other work can
+				// flow instead of re-failing the same ops forever behind the backoff.
+				if (this.consecutiveFailures >= 5) {
+					const stuck = await this.db.syncQueue.toArray();
+					syncLogger.warn('Quarantining batch after repeated sync failures', { count: stuck.length });
+					await this.db.syncQueue.bulkDelete(stuck.map(o => o.localId).filter((id): id is number => id !== undefined));
+					this.consecutiveFailures = 0;
+					return;
+				}
 				throw e;
 			} finally {
 				this.pushPromise = null;
 				if (this.activePulls.length === 0 && !this.reconcilePromise) this.isSyncing = false;
-				const remaining = await db.syncQueue.count();
+				const remaining = await this.db.syncQueue.count();
 				if (remaining > 0 && this.isOnline) setTimeout(() => this.processQueue(), 100);
 			}
 		})();
@@ -286,13 +410,16 @@ class SyncManager {
 	}
 
 	async reconcileAllLists() {
-		if (!this.isOnline || !this.currentToken) return;
+		// No currentToken (Supabase JWT) requirement: GET /api/lists authenticates via the session
+		// cookie, so the [slug] load's miss-fallback can pull a just-opened/just-joined list even before
+		// Realtime auth is ready. Requiring the token here caused a spurious 404 on direct/cold link opens.
+		if (!this.isOnline) return;
 		if (this.reconcilePromise) return this.reconcilePromise;
 
 		this.reconcilePromise = (async () => {
 			this.isSyncing = true;
 			try {
-				const res = await fetch('/api/lists');
+				const res = await this.fetchFn('/api/lists');
 				if (res.status === 401 || res.status === 403) {
 					syncLogger.error('Session expired or invalid during reconciliation. Logging out.');
 					const { logout } = await import('$lib/client/auth');
@@ -306,28 +433,7 @@ class SyncManager {
 					throw new Error('Expected array of lists from API');
 				}
 
-				const serverListIds = new Set(serverLists.map(l => l.id));
-
-				const localLists = await db.lists.toArray();
-				for (const list of localLists) {
-					if (!serverListIds.has(list.id) && !list.isLocalOnly) {
-						await db.lists.delete(list.id);
-						await db.items.where('listId').equals(list.id).delete();
-					}
-				}
-
-				for (const sl of serverLists) {
-					const isPending = await this.isOperationPending(sl.id);
-					if (!isPending) {
-						await db.lists.put({
-							id: sl.id,
-							slug: sl.slug,
-							name: sl.name,
-							createdBy: sl.createdBy,
-							createdAt: new Date(sl.createdAt)
-						});
-					}
-				}
+				await this.reconcileWithServerLists(serverLists);
 			} catch (e) {
 				syncLogger.error('Reconciliation failed', {}, e);
 			} finally {
@@ -343,7 +449,7 @@ class SyncManager {
 		this.activePulls.push(listId);
 		this.isSyncing = true;
 		try {
-			const res = await fetch(`/api/lists/${listId}`);
+			const res = await this.fetchFn(`/api/lists/${listId}`);
 			if (res.status === 401 || res.status === 403) {
 				syncLogger.error('Session expired or invalid during pull. Logging out.');
 				const { logout } = await import('$lib/client/auth');
@@ -352,26 +458,23 @@ class SyncManager {
 			}
 			if (!res.ok) {
 				if (res.status === 404) {
-					await db.lists.delete(listId);
-					await db.items.where('listId').equals(listId).delete();
+					await this.db.lists.delete(listId);
+					await this.db.items.where('listId').equals(listId).delete();
 				}
 				return;
 			}
-			const data: { list: ApiList; items: ApiItem[] } = await res.json();
-			for (const si of data.items) {
-				const isPending = await this.isOperationPending(si.id);
-				if (!isPending) {
-					await db.items.put({
-						id: si.id,
-						listId: si.listId,
-						name: si.name,
-						groupName: si.groupName || "",
-						rank: si.rank,
-						done: si.done,
-						deletedAt: si.deletedAt ? new Date(si.deletedAt) : null,
-						updatedAt: new Date(si.updatedAt)
-					});
-				}
+			const data: { list: ApiList; items?: ApiItem[] } = await res.json();
+			for (const si of data.items ?? []) {
+				await this.applyServerItem({
+					id: si.id,
+					listId: si.listId,
+					name: si.name,
+					groupName: si.groupName || "",
+					rank: si.rank,
+					done: si.done,
+					deletedAt: si.deletedAt ? new Date(si.deletedAt) : null,
+					updatedAt: new Date(si.updatedAt)
+				});
 			}
 		} catch (e) {
 			syncLogger.error(`Pull failed for list ${listId}`, {}, e);
@@ -380,6 +483,11 @@ class SyncManager {
 			if (this.activePulls.length === 0 && !this.reconcilePromise) this.isSyncing = false;
 		}
 	}
+}
+
+/** Factory for a fresh, isolated SyncManager (injectable Dexie) — used by the async test harness. */
+export function createSyncManager(database?: ListDatabase, fetchFn?: typeof fetch) {
+	return new SyncManager(database, fetchFn);
 }
 
 export const syncManager = new SyncManager();

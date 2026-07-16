@@ -1,4 +1,8 @@
-import { pgTable, text, timestamp, boolean, doublePrecision, primaryKey, unique, integer, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, doublePrecision, primaryKey, unique, integer, index, bigint, pgSequence } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+
+/** Server-assigned monotonic cursor source — bumped on every item/list upsert in the sync CTE. */
+export const syncSeq = pgSequence('sync_seq');
 
 export const users = pgTable('users', {
 	id: text('id').primaryKey(),
@@ -34,7 +38,9 @@ export const lists = pgTable(
 		createdBy: text('created_by')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
-		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+		updatedSeq: bigint('updated_seq', { mode: 'number' }).notNull().default(sql`nextval('sync_seq')`)
 	},
 	(t) => ({
 		unq: unique().on(t.createdBy, t.slug),
@@ -78,7 +84,8 @@ export const items = pgTable('items', {
 	rank: doublePrecision('rank').notNull(),
 	done: boolean('done').notNull().default(false),
 	deletedAt: timestamp('deleted_at', { withTimezone: true }),
-	updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+	updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+	updatedSeq: bigint('updated_seq', { mode: 'number' }).notNull().default(sql`nextval('sync_seq')`)
 }, (t) => ({
 	listIdIdx: index('items_list_id_idx').on(t.listId)
 }));

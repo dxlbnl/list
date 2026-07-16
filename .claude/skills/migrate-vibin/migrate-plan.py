@@ -9,9 +9,9 @@ What it does, end to end:
   1. Reads BASE from .vibin-version, fetches LATEST (head of dxlbnl/vibin main).
   2. Compares BASE..LATEST via the GitHub API to get the changed files.
   3. Classifies every changed file:
-       - seed-meta (migrations/**, CHANGELOG.md, docs/**, root README.md) -> never
-         written into the project; newly-added migrations are staged for the agent to
-         read their content-aware steps.
+       - seed-meta (.vibin/** — migrations, changelog, docs, the design wiki — and the
+         root README.md) -> never written into the project; newly-added migrations are
+         staged for the agent to read their content-aware steps.
        - child-machinery (.claude/**, CLAUDE.md, the two wiki template READMEs) ->
          compared against the seed at BASE:
            * unchanged locally (local == seed@BASE)  -> APPLIED here (safe, reversible).
@@ -42,16 +42,20 @@ BRANCH = "main"
 STAGING = ".vibin-migrate"
 
 # Child-machinery that is safe to adopt wholesale when unchanged locally.
+# (wiki/** is NOT here: the template becomes project content the moment
+# /bootstrap populates it, so wiki changes are always content-aware steps.)
 APPLY_PREFIXES = (".claude/",)
-APPLY_EXACT = {"CLAUDE.md", "wiki/specs/README.md", "wiki/backlog/README.md"}
+APPLY_EXACT = {"CLAUDE.md"}
 
 # Seed-meta: documents Vibin's own evolution, never written into a project.
 def is_seed_meta(path):
     return (
-        path.startswith("migrations/")
+        path.startswith(".vibin/")
+        or path == "README.md"
+        # pre-v2 locations, still seen in old BASE..LATEST diffs:
+        or path.startswith("migrations/")
         or path.startswith("docs/")
         or path == "CHANGELOG.md"
-        or path == "README.md"
     )
 
 
@@ -160,7 +164,7 @@ def main():
         status = entry["status"]  # added | modified | removed | renamed
 
         if is_seed_meta(path):
-            if path.startswith("migrations/") and status in ("added", "renamed"):
+            if path.startswith((".vibin/migrations/", "migrations/")) and status in ("added", "renamed"):
                 text = raw_text(latest, path)
                 if text is not None:
                     write_file(STAGING, os.path.join("migrations", os.path.basename(path)), text)

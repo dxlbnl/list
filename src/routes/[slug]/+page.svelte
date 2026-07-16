@@ -10,6 +10,7 @@
 		shareList,
 	} from "$lib/client/actions";
 	import { db as dexieDb } from "$lib/client/db";
+	import { rankBetween } from "$lib/utils";
 	import { liveQuery } from "dexie";
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
@@ -152,22 +153,22 @@
 
 		localGroups[groupName] = newItems;
 
-		const updates: { id: string; data: Partial<LocalItem> }[] = [];
-
-		Object.entries(localGroups).forEach(([gName, items]) => {
-			const actualGroupName = gName === "GENERAL" ? "" : gName;
-			items.forEach((item, index) => {
-				if (item.rank !== index || item.groupName !== actualGroupName) {
-					updates.push({
-						id: item.id,
-						data: { rank: index, groupName: actualGroupName },
-					});
-				}
-			});
-		});
-
-		if (updates.length > 0) {
-			await updateItems(updates);
+		// Persist ONLY the moved item, with a midpoint (fractional-index) rank between its new
+		// neighbours — an O(1) write instead of renumbering the whole list on every drop.
+		const movedId = e.detail.info?.id;
+		const idx = movedId ? newItems.findIndex((i) => i.id === movedId) : -1;
+		if (idx !== -1) {
+			const actualGroupName = groupName === "GENERAL" ? "" : groupName;
+			const moved = newItems[idx];
+			const newRank = rankBetween(
+				newItems[idx - 1]?.rank ?? null,
+				newItems[idx + 1]?.rank ?? null,
+			);
+			if (moved.rank !== newRank || moved.groupName !== actualGroupName) {
+				await updateItems([
+					{ id: movedId, data: { rank: newRank, groupName: actualGroupName } },
+				]);
+			}
 		}
 
 		// Debounce setting dragInProgress to false to allow all finalize events to settle and DB to update

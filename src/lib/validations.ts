@@ -110,7 +110,8 @@ export const syncOperationSchema = z.discriminatedUnion('entity', [
 
 export const syncRequestSchema = z.object({
 	operations: z.array(syncOperationSchema).max(500),
-	clientId: z.string().optional()
+	clientId: z.string().optional(),
+	cursor: z.number().optional()
 });
 
 export type SyncOperation = z.infer<typeof syncOperationSchema>;

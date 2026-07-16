@@ -12,8 +12,8 @@ export class ListDatabase extends Dexie {
 	items!: Table<LocalItem>;
 	syncQueue!: Table<QueuedSyncOperation>;
 
-	constructor() {
-		super('ListAppDB');
+	constructor(name = 'ListAppDB') {
+		super(name);
 		this.version(4).stores({
 			lists: 'id, slug, createdBy, [createdBy+slug], createdAt',
 			items: 'id, listId, name, groupName, rank, done, deletedAt, updatedAt, [listId+groupName]',

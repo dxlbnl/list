@@ -16,21 +16,22 @@ customizations.
 
 The seed repo contains two kinds of files. Classify every changed file before touching it:
 
-- **Child machinery (propagates — adopt or reconcile):** everything under `.claude/**`,
-  `CLAUDE.md`, and the seed-owned **wiki template / README** pages (e.g.
-  `wiki/specs/README.md`, `wiki/backlog/README.md`). These are the pipeline itself, so a
-  project needs the latest version.
-- **Seed-meta (NEVER written into a project):** `migrations/**`, `CHANGELOG.md`, `docs/**`,
-  and the repo-root `README.md`. These document Vibin's own evolution; a project needs only
-  the *effects* of a migration, not the migration files or Vibin's changelog/proposals. The
-  skill **reads** `migrations/NNNN-*.md` from GitHub to learn each migration's content-aware
-  steps and **applies** those steps, but it **never creates** these files in the project.
+- **Child machinery (propagates — adopt or reconcile):** everything under `.claude/**` and
+  `CLAUDE.md`. These are the workflow itself, so a project needs the latest version. (The
+  `wiki/**` template is **not** machinery: it becomes project content the moment `/bootstrap`
+  populates it, so wiki changes only ever arrive as content-aware migration steps.)
+- **Seed-meta (NEVER written into a project):** `.vibin/**` (migrations, changelog, docs, the
+  v2 design wiki) and the repo-root `README.md`. These document Vibin's own evolution; a
+  project needs only the *effects* of a migration, not the files. The skill **reads**
+  `.vibin/migrations/NNNN-*.md` from GitHub to learn each migration's content-aware steps and
+  **applies** those steps, but it **never creates** these files in the project.
   (`.vibin-version` is the one marker a project keeps — this skill updates it.)
 
-## STEP 0 — read the wiki (mandatory, enforced)
+## STEP 0 — read the knowledge (mandatory, enforced)
 
-**Read `wiki/INDEX.md` first.** A `PreToolUse` hook blocks writes and Bash until you do. The
-migration touches the wiki, so you must be working from the current source of truth.
+**Read `wiki/knowledge/index.md` (and the atoms relevant to the migration) first.** The
+knowledge gate blocks writes and Bash until you do. On a pre-v2 project the gate may still be
+the v1 wiki-gate — then read `wiki/INDEX.md`.
 
 ## How versioning works
 
@@ -47,10 +48,9 @@ migration touches the wiki, so you must be working from the current source of tr
   than improvising `curl`/`python3 -c` calls — keeps it to one approval, deterministic, and
   CLAUDE.md-compliant (a committed project tool, not an ad-hoc invocation).
 - **The diff itself tells you what to run.** Which migrations apply = the
-  `migrations/NNNN-*.md` files that are *newly added* between BASE and LATEST. There is no
-  version-number arithmetic — the script stages each new migration so you read it and follow
-  its content-aware steps (e.g. 0001 says to triage `wiki/decisions.md` and promote the
-  standing constraints into `architecture.md`'s Rules section).
+  `.vibin/migrations/NNNN-*.md` files that are *newly added* between BASE and LATEST. There is
+  no version-number arithmetic — the script stages each new migration so you read it and
+  follow its content-aware steps (e.g. 0004 describes the full v1 → v2 wiki migration).
 
 ## Procedure
 
@@ -64,8 +64,8 @@ safe child-machinery files itself** (those unchanged locally — adopting LATEST
 safe and git-reversible), and **stages** everything you still need under `.vibin-migrate/`.
 It writes nothing else and does not commit. Read its printed plan; it has five buckets:
 
-- **APPLIED** — child-machinery files (`.claude/**`, `CLAUDE.md`, the wiki template READMEs)
-  that were unchanged locally and have already been overwritten with LATEST. Nothing to do.
+- **APPLIED** — child-machinery files (`.claude/**`, `CLAUDE.md`) that were unchanged locally
+  and have already been overwritten with LATEST. Nothing to do.
 - **RECONCILE BY HAND** — child-machinery files the project customized. The script staged
   `.vibin-migrate/base/<path>` and `.vibin-migrate/latest/<path>`; reconcile against the
   local file (a 3-way merge), preserving the local customization. Prioritize the load-bearing
@@ -84,8 +84,9 @@ the user for the commit the project was cloned from and re-run with it as an arg
 ### 2. Apply each new migration's content-aware steps
 For every file under `.vibin-migrate/migrations/`, read it and follow its
 `## Apply — project content` steps against the project's **own** wiki (`Read`/`Edit`/`Write`
-— no network). This is the judgment work the script deliberately leaves to you. **Never
-rewrite the body of a past `wiki/decisions.md` entry** (append-only).
+— no network). This is the judgment work the script deliberately leaves to you. Respect each
+migration's own cautions (e.g. while migrating v1 content, never rewrite the body of a past
+`wiki/decisions.md` entry).
 
 ### 3. Reconcile the customized files
 For each **RECONCILE** file, read `.vibin-migrate/base/<path>`, `.vibin-migrate/latest/<path>`,
@@ -111,10 +112,10 @@ State: BASE → LATEST hashes, files applied wholesale, files reconciled by hand
 content-aware wiki steps applied, and anything that needs the user's attention.
 
 ## Rules
-- **Never write seed-meta into the project.** `migrations/**`, `CHANGELOG.md`, `docs/**`,
-  and the repo-root `README.md` are Vibin's own evolution log — a project gets the *effects*
-  of a migration, never the files. Read migrations from GitHub for their steps; do not copy
-  them, the changelog, the proposals, or Vibin's README into the project.
+- **Never write seed-meta into the project.** `.vibin/**` and the repo-root `README.md` are
+  Vibin's own evolution log — a project gets the *effects* of a migration, never the files.
+  Read migrations from GitHub for their steps; do not copy them, the changelog, the design
+  wiki, or Vibin's README into the project.
 - **The planner classifies; it only auto-writes the safe set.** It overwrites a
   child-machinery file only when the local copy is identical to the seed at BASE (no
   customization to lose). Customized files are staged, never auto-applied — you reconcile
@@ -126,7 +127,8 @@ content-aware wiki steps applied, and anything that needs the user's attention.
   `Read`/`Edit`/`Write`.
 - **Important files first.** Agents, skills, hooks, and `CLAUDE.md` are the ones that must be
   correct; don't block the whole migration over cosmetic doc drift.
-- **Respect `decisions.md` append-only** — header/format-template text may be updated, past
-  entry bodies may not.
+- **Replace hook scripts by writing over them** — never delete-then-recreate; the harness
+  caches hook config per session and a missing script hard-blocks every tool (see 0004's
+  stub note).
 - **This seed repo is its own latest**, so running `/migrate-vibin` here is a no-op (and the
   seed carries no `.vibin-version`). The skill is for downstream clones.
