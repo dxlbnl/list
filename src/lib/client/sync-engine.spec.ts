@@ -75,6 +75,17 @@ describe('SyncManager invariants (characterisation / lock-down)', () => {
 		await db.delete();
 	});
 
+	it('reconcileAllLists fetches + applies even before a Supabase token is set (cold-link 404 fix)', async () => {
+		const db = freshDb();
+		const payload = [{ id: 'test', slug: 'test', name: 'Test', createdBy: 'u', createdAt: new Date().toISOString() }];
+		const fetchFn = (async () => new Response(JSON.stringify(payload), { status: 200 })) as unknown as typeof fetch;
+		const sm = createSyncManager(db, fetchFn);
+		// No init()/token — currentToken is null; the reconcile must still run off the session cookie.
+		await sm.reconcileAllLists();
+		expect(await db.lists.get('test')).toBeDefined();
+		await db.delete();
+	});
+
 	it('reconcile deletes locally-known lists absent from the server, but keeps isLocalOnly', async () => {
 		const db = freshDb();
 		const sm = createSyncManager(db);

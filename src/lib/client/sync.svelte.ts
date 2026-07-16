@@ -410,7 +410,10 @@ class SyncManager {
 	}
 
 	async reconcileAllLists() {
-		if (!this.isOnline || !this.currentToken) return;
+		// No currentToken (Supabase JWT) requirement: GET /api/lists authenticates via the session
+		// cookie, so the [slug] load's miss-fallback can pull a just-opened/just-joined list even before
+		// Realtime auth is ready. Requiring the token here caused a spurious 404 on direct/cold link opens.
+		if (!this.isOnline) return;
 		if (this.reconcilePromise) return this.reconcilePromise;
 
 		this.reconcilePromise = (async () => {
