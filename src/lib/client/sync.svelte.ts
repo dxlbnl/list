@@ -1,4 +1,4 @@
-import { db, type ListDatabase, type LocalItem } from '$lib/client/db';
+import { db, type ListDatabase, type LocalItem, type LocalList } from '$lib/client/db';
 import { logger } from '$lib/logger';
 import { supabase } from '$lib/client/supabase';
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
@@ -24,12 +24,20 @@ class SyncManager {
 	private currentToken: string | null = null;
 	private tokenRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 	private isRefreshingToken = false;
+	private fetchFn: typeof fetch;
+	private cursor = 0;
+	private consecutiveFailures = 0;
 	activePulls = $state<string[]>([]);
 
-	constructor(database: ListDatabase = db) {
+	constructor(database: ListDatabase = db, fetchFn: typeof fetch = (...args) => fetch(...args)) {
 		this.db = database;
+		this.fetchFn = fetchFn;
 		if (typeof window !== 'undefined') {
 			this.isOnline = navigator.onLine;
+			try {
+				const c = localStorage.getItem('syncCursor');
+				if (c) this.cursor = Number(c) || 0;
+			} catch { /* no localStorage */ }
 
 			window.addEventListener('online', async () => {
 				this.isOnline = true;
@@ -39,7 +47,7 @@ class SyncManager {
 				await Promise.all([
 					this.processQueue(),
 					this.reconcileAllLists(),
-					...Array.from(this.activeListIds).map(id => this.pull(id))
+					this.pullDelta()
 				]);
 			});
 
@@ -51,6 +59,7 @@ class SyncManager {
 			document.addEventListener('visibilitychange', () => {
 				if (document.visibilityState === 'visible' && this.isOnline) {
 					this.reconcileAllLists();
+					this.pullDelta();
 				}
 			});
 
@@ -193,22 +202,24 @@ class SyncManager {
 
 	async startLoop() {
 		let loopCount = 0;
-		let backoffMs = 10000;
+		const BASE_MS = 2000;
+		let backoffMs = BASE_MS;
 		while (true) {
 			try {
 				await this.processQueue();
-				// Reconcile all lists every 6 loops (~1 minute at base interval)
-				if (loopCount % 6 === 0) {
+				await this.pullDelta(); // cursor backfill — reconverge items even if a realtime event was missed
+				// Reconcile the authoritative list set (membership + hard deletes) ~every 60s.
+				if (loopCount % 30 === 0) {
 					await this.reconcileAllLists();
 				}
 				loopCount++;
-				backoffMs = 10000;
+				backoffMs = BASE_MS; // healthy cadence is decoupled from the error backoff
 			} catch (e) {
 				syncLogger.error('Sync loop error', {}, e);
-				// Exponential backoff with jitter, capped at 2 minutes
-				backoffMs = Math.min(backoffMs * 2, 120000);
+				// Gentle incremental backoff capped at 30s — no 20s cliff on the first failure.
+				backoffMs = Math.min(backoffMs * 2, 30000);
 			}
-			const jitter = Math.random() * 2000;
+			const jitter = Math.random() * 500;
 			await new Promise(resolve => setTimeout(resolve, backoffMs + jitter));
 		}
 	}
@@ -235,6 +246,63 @@ class SyncManager {
 		await this.db.items.put(candidate);
 	}
 
+	/** Apply a server list row (rename / new list from the cursor delta). Pending local op wins. */
+	async applyServerList(candidate: LocalList): Promise<void> {
+		if (await this.isOperationPending(candidate.id)) return;
+		await this.db.lists.put(candidate);
+	}
+
+	/** Apply the cursor-delta `changes` (member-visible rows since our cursor) and advance the cursor. */
+	private async applyChanges(
+		changes: { items?: DatabaseItem[]; lists?: DatabaseList[] } | undefined,
+		newCursor: number | undefined
+	): Promise<void> {
+		for (const si of changes?.items ?? []) {
+			await this.applyServerItem({
+				id: si.id,
+				listId: si.list_id,
+				name: si.name,
+				groupName: si.group_name || "",
+				rank: si.rank,
+				done: si.done,
+				deletedAt: si.deleted_at ? new Date(si.deleted_at) : null,
+				updatedAt: new Date(si.updated_at)
+			});
+		}
+		for (const sl of changes?.lists ?? []) {
+			await this.applyServerList({
+				id: sl.id,
+				slug: sl.slug,
+				name: sl.name,
+				createdBy: sl.created_by,
+				createdAt: new Date(sl.created_at)
+			});
+		}
+		if (typeof newCursor === 'number' && newCursor > this.cursor) {
+			this.cursor = newCursor;
+			try {
+				if (typeof localStorage !== 'undefined') localStorage.setItem('syncCursor', String(this.cursor));
+			} catch { /* no localStorage */ }
+		}
+	}
+
+	/** Idle / backfill pull: POST an empty batch with the cursor and apply what changed since. */
+	async pullDelta(): Promise<void> {
+		if (!this.isOnline) return;
+		try {
+			const res = await this.fetchFn('/api/sync', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ operations: [], clientId: this.clientId, cursor: this.cursor })
+			});
+			if (!res.ok) return;
+			const data: { changes?: { items?: DatabaseItem[]; lists?: DatabaseList[] }; cursor?: number } = await res.json();
+			await this.applyChanges(data.changes, data.cursor);
+		} catch (e) {
+			syncLogger.error('pullDelta failed', {}, e);
+		}
+	}
+
 	async processQueue() {
 		if (!this.isOnline) return;
 		if (this.pushPromise) return this.pushPromise;
@@ -248,10 +316,10 @@ class SyncManager {
 
 			try {
 				const ops = await this.db.syncQueue.toArray();
-				const response = await fetch('/api/sync', {
+				const response = await this.fetchFn('/api/sync', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ operations: ops, clientId: this.clientId })
+					body: JSON.stringify({ operations: ops, clientId: this.clientId, cursor: this.cursor })
 				});
 
 				if (response.status === 400) {
@@ -272,18 +340,31 @@ class SyncManager {
 
 				if (!response.ok) throw new Error(`Sync failed: ${response.statusText}`);
 
-				const data: { results: SyncResult[] } = await response.json();
+				const data: { results: SyncResult[]; changes?: { items?: DatabaseItem[]; lists?: DatabaseList[] }; cursor?: number } = await response.json();
 				// 'success' = written to DB; 'ignored' = rejected (auth/stale) — both are removed from queue.
-				// 'error' would stay in queue for retry, but the server currently only emits success/ignored.
 				const ackedIds = new Set(data.results.filter(r => r.status === 'success' || r.status === 'ignored').map(r => r.id));
 
 				if (ackedIds.size > 0) {
 					const localIdsToDelete = ops.filter(op => ackedIds.has(op.id)).map(op => op.localId).filter((id): id is number => id !== undefined);
 					await this.db.syncQueue.bulkDelete(localIdsToDelete);
 				}
+
+				// Fold the pull into the push response: apply changed rows + advance the cursor.
+				await this.applyChanges(data.changes, data.cursor);
+				this.consecutiveFailures = 0;
 			} catch (e) {
-				syncLogger.error(`Sync failed`, { count }, e);
+				this.consecutiveFailures++;
+				syncLogger.error(`Sync failed`, { count, consecutiveFailures: this.consecutiveFailures }, e);
 				this.lastSyncError = (e as Error).message;
+				// Poison-op quarantine: after repeated failures drop the wedged batch so other work can
+				// flow instead of re-failing the same ops forever behind the backoff.
+				if (this.consecutiveFailures >= 5) {
+					const stuck = await this.db.syncQueue.toArray();
+					syncLogger.warn('Quarantining batch after repeated sync failures', { count: stuck.length });
+					await this.db.syncQueue.bulkDelete(stuck.map(o => o.localId).filter((id): id is number => id !== undefined));
+					this.consecutiveFailures = 0;
+					return;
+				}
 				throw e;
 			} finally {
 				this.pushPromise = null;
@@ -391,8 +472,8 @@ class SyncManager {
 }
 
 /** Factory for a fresh, isolated SyncManager (injectable Dexie) — used by the async test harness. */
-export function createSyncManager(database?: ListDatabase) {
-	return new SyncManager(database);
+export function createSyncManager(database?: ListDatabase, fetchFn?: typeof fetch) {
+	return new SyncManager(database, fetchFn);
 }
 
 export const syncManager = new SyncManager();

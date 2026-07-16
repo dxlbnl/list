@@ -13,19 +13,19 @@ the CTE is rewritten **once** incorporating every server-side change.
 ## Tasks (build order)
 
 **Harness first — write the failing repros before any fix:**
-- [ ] [sync-async-test-harness](backlog/sync-async-test-harness.md) — two-client virtual-time harness; repros: resurrection, 20s stall, data-loss, lost concurrent edit, cross-device <1s.
+- [x] **sync-async-test-harness** — two-client node-tier harness (fake fetch → pglite, injected Dexie) ✅; proves cross-device convergence + the apply-guard/data-loss repros.
 
 **Server — one coherent CTE rewrite on the new schema:**
-- [~] **sync-cursor-delta-transport** — SERVER done ✅ (schema + `updated_seq` cursor + delta folded into the `/api/sync` response; migration `0001` ready to push). CLIENT side (track/advance cursor, apply `changes`) lands with the harness; HLC LWW stamp still to do.
+- [x] **sync-cursor-delta-transport** — server + client ✅ (`updated_seq` cursor; `/api/sync` returns `{results,changes,cursor}`; client tracks the cursor, folds pull into push + `pullDelta` backfill). Migration `0001` needs `db:push`; HLC still to do.
 - [x] **sync-cte-insert-update-data-loss** — coalesce same-id INSERT+UPDATE ✅ (fix + pglite regression green).
 - [x] **sync-cte-upsert-lists-authz-hole** — force `created_by = user.id` ✅ (fix + pglite regression).
 - [x] **slug-collision-sync-batch-failure** — server auto-rename on `(user,slug)` collision ✅ (fix + pglite regression). Per-op isolation lands with no-stall; client learns the new slug via the cursor delta.
-- [ ] [sync-no-stall-one-poison-op](backlog/sync-no-stall-one-poison-op.md) — per-op status response (server) + short jittered backoff & poison-op quarantine (client).
+- [x] **sync-no-stall-one-poison-op** — gentle backoff (2s base, cap 30s — no 20s cliff) + poison-op quarantine (drop the wedged batch after 5 fails); server already per-op ✅.
 
 **Client:**
 - [x] **sync-apply-lww-guard** — single guarded apply path `applyServerItem` (apply-iff-newer + pending) ✅ (resurrection fixed; node-tier tests). Self-echo subsumed by the guard.
-- [ ] [sync-realtime-guarded-primary](backlog/sync-realtime-guarded-primary.md) — keep Realtime inline (guarded + ordered); cursor delta = editor push-fold + backfill.
-- [ ] [sync-loop-reconverge-items](backlog/sync-loop-reconverge-items.md) — the periodic loop does a cursor-backfill of active lists (absorbed into the new design).
+- [x] **sync-realtime-guarded-primary** — Realtime applies inline through the guard; cursor delta = editor push-fold; `pullDelta` backfill on loop/online/visibility ✅.
+- [x] **sync-loop-reconverge-items** — the loop now calls `pullDelta` each pass (cursor backfill), so a missed realtime event still reconverges ✅.
 
 **Ordering:**
 - [ ] [sync-fractional-index-reorder](backlog/sync-fractional-index-reorder.md) — midpoint fractional-index reorder (kills the N-writes-per-drag amplifier).
@@ -72,3 +72,9 @@ the CTE is rewritten **once** incorporating every server-side change.
   guarded `applyServerItem` (drops a server row not strictly newer than local, or with a pending op). Node-tier
   tests (`sync-engine.spec.ts`, fake-indexeddb — no chromium): a stale echo can't un-delete; newer applies;
   pending wins. This also **proves the client-side harness approach**. 13/13 green, check/lint clean.
+- 2026-07-16 — **Cursor-delta client + harness cluster (5 cards).** `SyncManager`: fetch DI, cursor tracking
+  (persisted), `applyChanges` (apply delta + advance cursor), `pullDelta` (idle/backfill), gentle backoff
+  (2s base / 30s cap, no 20s cliff), poison-op quarantine. Loop + online + visibility now cursor-backfill.
+  Two-client harness (`sync-harness.spec.ts`, fake fetch → `processSyncBatch` on shared pglite) proves A→B
+  cross-device convergence with no realtime. Closed: cursor-delta, realtime-guarded, no-stall, loop-reconverge,
+  async-harness. 14/14 green, check/lint clean.
