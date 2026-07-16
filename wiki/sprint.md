@@ -19,7 +19,7 @@ the CTE is rewritten **once** incorporating every server-side change.
 - [ ] [sync-cursor-delta-transport](backlog/sync-cursor-delta-transport.md) — **backbone**: migration (`updated_seq` + HLC stamp on items/lists, `lists.updated_at`); `POST /api/sync` returns `{results, changes, cursor}`.
 - [x] **sync-cte-insert-update-data-loss** — coalesce same-id INSERT+UPDATE ✅ (fix + pglite regression green).
 - [x] **sync-cte-upsert-lists-authz-hole** — force `created_by = user.id` ✅ (fix + pglite regression).
-- [ ] [slug-collision-sync-batch-failure](backlog/slug-collision-sync-batch-failure.md) — per-op isolation + auto-rename (`nanoid(4)` suffix).
+- [x] **slug-collision-sync-batch-failure** — server auto-rename on `(user,slug)` collision ✅ (fix + pglite regression). Per-op isolation lands with no-stall; client learns the new slug via the cursor delta.
 - [ ] [sync-no-stall-one-poison-op](backlog/sync-no-stall-one-poison-op.md) — per-op status response (server) + short jittered backoff & poison-op quarantine (client).
 
 **Client:**
@@ -35,8 +35,8 @@ the CTE is rewritten **once** incorporating every server-side change.
 - [ ] [sync-engine-invariant-safety-net](backlog/sync-engine-invariant-safety-net.md) — client engine invariants: pending-wins, apply-guard, reconciliation.
 - [ ] [harness-pull-non-items-response](backlog/harness-pull-non-items-response.md) — pull hardening.
 
-**Next:** `slug-collision-sync-batch-failure` (per-op isolation + server auto-rename), then the
-`updated_seq`/HLC schema + cursor delta. The two-client harness follows for the client-side cards.
+**Next:** the `updated_seq`/HLC schema backbone + cursor delta (`sync-cursor-delta-transport`), then the
+two-client harness for the client-side cards (apply-guard, realtime, no-stall, loop, reorder).
 
 ## Run log
 
@@ -52,3 +52,7 @@ the CTE is rewritten **once** incorporating every server-side change.
   wins) — red repro → green; `pnpm test`/`check`/`lint` all pass.
 - 2026-07-16 — Closed `sync-cte-upsert-lists-authz-hole`: list INSERT now forces `created_by = user.id`
   (client-supplied value ignored) — red repro → green.
+- 2026-07-16 — Closed `slug-collision-sync-batch-failure`: the CTE renames a colliding `(created_by, slug)`
+  (in-batch dupe or already-owned) with an id-derived suffix instead of aborting on the UNIQUE violation —
+  red repro (23505) → green. The createList local-dedup foundation test + client-learns-new-slug fold into
+  the harness/cursor cards. Server CTE correctness cluster done (3 cards).

@@ -87,3 +87,30 @@ describe('processSyncBatch — list INSERT authz (created_by cannot be spoofed)'
 		expect(rows[0].createdBy).toBe(ATTACKER); // not the spoofed VICTIM
 	}, 30_000);
 });
+
+describe('processSyncBatch — concurrent list create with same (user, slug)', () => {
+	let h: TestDb;
+	afterEach(async () => {
+		await h?.close();
+	});
+
+	it('renames the colliding slug instead of aborting the whole batch', async () => {
+		h = await createTestDb();
+		await h.db.insert(users).values({ id: USER, email: null });
+
+		const at = new Date('2026-01-01T00:00:00.000Z').toISOString();
+		const ops: SyncOperation[] = [
+			{ id: 'op-a', entity: 'list', type: 'INSERT', data: { id: 'list-a', slug: 'groceries', name: 'A', created_by: USER, created_at: at } },
+			{ id: 'op-b', entity: 'list', type: 'INSERT', data: { id: 'list-b', slug: 'groceries', name: 'B', created_by: USER, created_at: at } }
+		];
+
+		const { results } = await processSyncBatch(h.db, USER, ops);
+
+		const rows = await h.db.select().from(lists).where(eq(lists.createdBy, USER));
+		expect(rows).toHaveLength(2); // both lists land — no aborted batch
+		const slugs = rows.map((r) => r.slug).sort();
+		expect(slugs.filter((s) => s === 'groceries')).toHaveLength(1); // one keeps it
+		expect(slugs.some((s) => s !== 'groceries' && s.startsWith('groceries-'))).toBe(true); // other renamed
+		expect(results.every((r) => r.status !== 'ignored')).toBe(true);
+	}, 30_000);
+});

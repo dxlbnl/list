@@ -79,11 +79,27 @@ export async function processSyncBatch(
 		list_deletes AS (SELECT DISTINCT value as id FROM jsonb_array_elements_text(${listDeletesJson}::jsonb)),
 		item_deletes AS (SELECT DISTINCT value as id FROM jsonb_array_elements_text(${itemDeletesJson}::jsonb)),
 
+		list_resolved AS (
+			-- Resolve UNIQUE(created_by, slug) collisions so a concurrent same-slug create
+			-- doesn't abort the whole batch: rename the loser (an in-batch duplicate, or a
+			-- slug already owned by a different list id) with an id-derived suffix. The
+			-- client learns its renamed slug via reconcile / the cursor delta.
+			SELECT
+				d.id, d.name, d.created_at,
+				CASE
+					WHEN (row_number() OVER (PARTITION BY d.slug ORDER BY d.id)) > 1
+						OR EXISTS (SELECT 1 FROM ${lists} l WHERE l.created_by = ${userId} AND l.slug = d.slug AND l.id <> d.id)
+					THEN d.slug || '-' || substr(d.id, 1, 6)
+					ELSE d.slug
+				END AS slug
+			FROM list_input d
+		),
+
 		upsert_lists AS (
 			INSERT INTO ${lists} (id, slug, name, created_by, created_at)
 			-- Force created_by to the authenticated user: the client-supplied created_by
 			-- is ignored on INSERT so ownership can't be spoofed to another user id.
-			SELECT id, slug, name, ${userId}, created_at FROM list_input d
+			SELECT id, slug, name, ${userId}, created_at FROM list_resolved d
 			WHERE NOT EXISTS (SELECT 1 FROM ${lists} l WHERE l.id = d.id)
 			   OR EXISTS (SELECT 1 FROM ${lists} l WHERE l.id = d.id AND l.created_by = ${userId})
 			ON CONFLICT (id) DO UPDATE SET
@@ -93,7 +109,7 @@ export async function processSyncBatch(
 		),
 		upsert_members AS (
 			INSERT INTO ${listUsers} (list_id, user_id)
-			SELECT id, ${userId} FROM list_input
+			SELECT id, ${userId} FROM list_resolved
 			ON CONFLICT DO NOTHING
 		),
 		upsert_items AS (
