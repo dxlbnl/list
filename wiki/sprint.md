@@ -17,7 +17,7 @@ the CTE is rewritten **once** incorporating every server-side change.
 
 **Server — one coherent CTE rewrite on the new schema:**
 - [ ] [sync-cursor-delta-transport](backlog/sync-cursor-delta-transport.md) — **backbone**: migration (`updated_seq` + HLC stamp on items/lists, `lists.updated_at`); `POST /api/sync` returns `{results, changes, cursor}`.
-- [ ] [sync-cte-insert-update-data-loss](backlog/sync-cte-insert-update-data-loss.md) — coalesce same-id INSERT+UPDATE.
+- [x] **sync-cte-insert-update-data-loss** — coalesce same-id INSERT+UPDATE ✅ (fix + pglite regression green).
 - [ ] [sync-cte-upsert-lists-authz-hole](backlog/sync-cte-upsert-lists-authz-hole.md) — force `created_by = user.id`.
 - [ ] [slug-collision-sync-batch-failure](backlog/slug-collision-sync-batch-failure.md) — per-op isolation + auto-rename (`nanoid(4)` suffix).
 - [ ] [sync-no-stall-one-poison-op](backlog/sync-no-stall-one-poison-op.md) — per-op status response (server) + short jittered backoff & poison-op quarantine (client).
@@ -35,9 +35,9 @@ the CTE is rewritten **once** incorporating every server-side change.
 - [ ] [sync-engine-invariant-safety-net](backlog/sync-engine-invariant-safety-net.md) — client engine invariants: pending-wins, apply-guard, reconciliation.
 - [ ] [harness-pull-non-items-response](backlog/harness-pull-non-items-response.md) — pull hardening.
 
-**Next:** Awaiting go-ahead to start. On approval → build the harness + failing repros first, then work the
-list top-to-bottom; the CTE-touching server cards land as a single rewrite. All review gates are cleared, so
-the sprint interior runs autonomously until done, a real fork, or a blocker.
+**Next:** Server CTE correctness continues — `sync-cte-upsert-lists-authz-hole` then
+`slug-collision-sync-batch-failure` (both pglite-testable against `processSyncBatch`), then the
+`updated_seq`/HLC schema + cursor delta. The two-client harness follows for the client-side cards.
 
 ## Run log
 
@@ -47,3 +47,7 @@ the sprint interior runs autonomously until done, a real fork, or a blocker.
   **separate claim channels**. All Sprint 1 review flags cleared.
 - 2026-07-16 — Scope decision: do the **whole rework (Stages 0+1+2) in one sprint**, not staged across
   sprints. Sprint = all 13 sync cards; CTE rewritten once on the `updated_seq`/HLC backbone.
+- 2026-07-16 — **Started.** Extracted the sync CTE into `src/lib/server/sync.ts`
+  `processSyncBatch(db, userId, ops)` (pglite-testable; the `/api/sync` endpoint is now a thin wrapper).
+  Closed `sync-cte-insert-update-data-loss`: same-id INSERT+UPDATE now coalesce per-field (latest non-null
+  wins) — red repro → green; `pnpm test`/`check`/`lint` all pass.
