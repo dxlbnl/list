@@ -2,7 +2,7 @@
 title: Cursor-delta transport — fold pull into the push response
 type: feature
 priority: high
-flags: [review]
+flags: []
 created: 2026-07-16
 ---
 
@@ -35,8 +35,8 @@ as normal rows with `deleted_at` set.
 ## Notes
 
 Epic: [Sync overhaul](sync-single-roundtrip-overhaul.md) — **Stage 1 (Transport)**. Depends on
-the Stage-0 [apply-guard](sync-apply-lww-guard.md); enables [sync-realtime-as-nudge](sync-realtime-as-nudge.md)
-and the per-viewer filtering that gift lists require. Coordinates with the Stage-0 server CTE
+the Stage-0 [apply-guard](sync-apply-lww-guard.md); enables [sync-realtime-guarded-primary](sync-realtime-guarded-primary.md)
+and (later) the per-viewer filtering gift lists will need. Coordinates with the Stage-0 server CTE
 cards ([insert+update coalesce](sync-cte-insert-update-data-loss.md),
 [slug rename](slug-collision-sync-batch-failure.md),
 [authz](sync-cte-upsert-lists-authz-hole.md)) whose fixes the delta `SELECT` inherits.
@@ -48,5 +48,5 @@ Atoms: [sync-redesign](../knowledge/architecture/sync-redesign.md) (Design A + c
 Validate against the [async harness](sync-async-test-harness.md): B converges within <1s virtual
 after A commits, in a single round-trip.
 
-`flags: [review]`: additive schema migration + a new `/api/sync` request/response contract.
+**Approved 2026-07-16** — migration + new `/api/sync` contract OK; membership stays on the reconcile path (per user).
 </parameter>

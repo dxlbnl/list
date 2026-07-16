@@ -2,7 +2,7 @@
 title: Sync overhaul (epic) — correct, <1s, single round-trip
 type: feature
 priority: high
-flags: [review]
+flags: []
 created: 2026-07-15
 ---
 
