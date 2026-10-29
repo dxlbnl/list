@@ -16,7 +16,17 @@ export const POST: RequestHandler = async ({ params, locals, request, url }) => 
   await requireMember(tx, params.id, locals.user?.id);
   const token = secretToken(), id = nanoid();
   await tx.insert(aiLinks).values({ id, listId: params.id, tokenHash: hashToken(token) });
-  return { id, url: `${url.origin}/api/ai/connect#token=${token}`, token, openapi: `${url.origin}/api/ai/openapi.json` };
+  const connectionUrl = `${url.origin}/api/ai/connect#token=${token}`;
+  const openapi = `${url.origin}/api/ai/openapi.json`;
+  const agentRequest = [
+   'Stel boodschappen voor op mijn List-lijst. Voeg niets rechtstreeks toe: ik keur de voorstellen zelf goed.',
+   `Lees eerst de API-documentatie: ${openapi}`,
+   `Gebruik deze geheime koppeling: ${connectionUrl}`,
+   'Lees het token uit het URL-fragment en gebruik het uitsluitend volgens de API-documentatie. Bewaar het bewerkingstoken en versienummer uit het antwoord voor eventuele wijzigingen.',
+   'Deel de geheime koppeling niet en zet tokens niet in request-URLs of logs.',
+   'Vraag mij welke boodschappen ik wil laten voorstellen.'
+  ].join('\n\n');
+  return { id, url: connectionUrl, token, openapi, request: agentRequest };
  }), 201);
 };
 export const DELETE: RequestHandler = async ({ params, locals, request, url }) => {

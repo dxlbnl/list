@@ -18,6 +18,7 @@
 	import { syncManager } from "$lib/client/sync.svelte";
 	import { onMount } from "svelte";
 	import { DropdownMenu } from "bits-ui";
+	import * as Menu from "$lib/components/ui/Menu";
 	import { menuState } from "$lib/client/menu.svelte";
 	import ListGroup from "$lib/components/ui/ListGroup.svelte";
 	import { fade } from "svelte/transition";
@@ -271,7 +272,14 @@
 </script>
 
 {#snippet contextualMenuItems()}
- <DropdownMenu.Item class="menu-item" onSelect={() => (aiOpen = true)}>Koppel met AI</DropdownMenu.Item>
+	<Menu.Item onSelect={() => (aiOpen = true)}>
+		<div class="icon-container">
+			<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="m12 3 2.7 6.3L21 12l-6.3 2.7L12 21l-2.7-6.3L3 12l6.3-2.7Z" />
+			</svg>
+		</div>
+		<span>Koppel met AI</span>
+	</Menu.Item>
 	<DropdownMenu.Item
 		class="menu-item"
 		onSelect={() => (isShareDialogOpen = true)}

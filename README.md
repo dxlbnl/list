@@ -96,7 +96,7 @@ Built with ❤️ by the List Team.
 
 ## AI proposals
 
-Each list has **Koppel met AI** in its menu. Create a permanent proposal-only link and copy it to your agent. Secrets are shown once; only SHA-256 hashes are stored. Any current list member can revoke all AI links for that list. Revocation also blocks agent access to existing proposals; members can still review them.
+Each list has **Koppel met AI** in its menu. Create a permanent proposal-only link and use the copy action to paste a complete request into your AI chat. The copied request includes the secret connection link and the OpenAPI URL; the dialog itself only shows user-facing instructions. Secrets are shown once; only SHA-256 hashes are stored. Any current list member can revoke all AI links for that list. Revocation also blocks agent access to existing proposals; members can still review them.
 
 The public machine contract is **GET /api/ai/openapi.json** (source: `static/ai-openapi.json`). The link's `#token=...` fragment supplies `Authorization: Bearer ...`; it is not sent to the landing page server. POST `/api/ai/proposals` with `{"items":[{"name":"Milk","groupName":""}]}`. Save the returned `id`, `editToken`, and `version`. GET/PATCH `/api/ai/proposals/{id}` require both the list bearer token and `X-Proposal-Token: <editToken>`. PATCH replaces all items and requires the current `version`. Never put tokens in query strings or logs.
 
