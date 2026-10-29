@@ -18,6 +18,7 @@
 	import { syncManager } from "$lib/client/sync.svelte";
 	import { onMount } from "svelte";
 	import { DropdownMenu } from "bits-ui";
+	import * as Menu from "$lib/components/ui/Menu";
 	import { menuState } from "$lib/client/menu.svelte";
 	import ListGroup from "$lib/components/ui/ListGroup.svelte";
 	import { fade } from "svelte/transition";
@@ -32,7 +33,9 @@
 	import type { DndEvent } from "svelte-dnd-action";
 	import type { LocalItem } from "$lib/client/db";
 
-	let { data } = $props();
+	import AiPanel from '$lib/components/AiPanel.svelte';
+ let aiOpen = $state(false);
+ let { data } = $props();
 
 	// Live query for the list details
 	const list = liveQuery(() =>
@@ -269,6 +272,14 @@
 </script>
 
 {#snippet contextualMenuItems()}
+	<Menu.Item onSelect={() => (aiOpen = true)}>
+		<div class="icon-container">
+			<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="m12 3 2.7 6.3L21 12l-6.3 2.7L12 21l-2.7-6.3L3 12l6.3-2.7Z" />
+			</svg>
+		</div>
+		<span>Koppel met AI</span>
+	</Menu.Item>
 	<DropdownMenu.Item
 		class="menu-item"
 		onSelect={() => (isShareDialogOpen = true)}
@@ -347,7 +358,8 @@
 			/>
 		</div>
 
-		<section class="items-section">
+		{#key data.listId}<AiPanel listId={data.listId} bind:open={aiOpen} />{/key}
+  <section class="items-section">
 			{#if syncManager.activePulls.includes(data.listId) && (!$items || $items.length === 0)}
 				<LoadingState message="FETCHING LIST DATA" />
 			{:else if $items && $items.length > 0}

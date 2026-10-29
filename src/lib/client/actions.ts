@@ -2,6 +2,7 @@ import { db, type LocalList, type LocalItem } from '$lib/client/db';
 import { slugify, isReservedSlug, nanoid } from '$lib/utils';
 import { syncManager } from './sync.svelte';
 import { now as hlcNow } from './hlc';
+import { aiListStateSchema } from '$lib/validations';
 
 export async function createList(name: string, userId: string) {
 	const id = nanoid();
@@ -182,4 +183,22 @@ export async function shareList(listId: string, expiresAt: string | null) {
 	}
 	
 	return await res.json();
+}
+
+/** AI workflow stays server-authoritative; accepted items arrive through normal sync. */
+export async function aiListAction(listId: string, method: 'GET' | 'POST' | 'DELETE' = 'GET', proposal?: { id: string; version: number; decision: 'accepted' | 'rejected' }) {
+ await syncManager.processQueue();
+ const response = await fetch(`/api/lists/${encodeURIComponent(listId)}/ai${proposal ? `/proposals/${encodeURIComponent(proposal.id)}` : ''}`, {
+  method, headers: { 'Content-Type': 'application/json' },
+  body: proposal ? JSON.stringify({ version: proposal.version, decision: proposal.decision }) : undefined
+ });
+ if (!response.ok) throw new Error(response.status === 409 ? 'Voorstel gewijzigd of verlopen. Vernieuw en beoordeel opnieuw.' : 'AI-verzoek mislukt. Controleer je verbinding en lijsttoegang.');
+ if (proposal?.decision === 'accepted') await syncManager.pullDelta();
+ const result = await response.json();
+ if (method === 'GET') {
+  const parsed = aiListStateSchema.safeParse(result);
+  if (!parsed.success) throw new Error('AI-voorstellen konden niet worden geladen.');
+  return parsed.data;
+ }
+ return result;
 }

@@ -17,7 +17,15 @@ if (!dev) {
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
-	const start = Date.now();
+	// Agent API and public instructions must never create anonymous users/sessions.
+ if (event.url.pathname.startsWith('/api/ai/')) {
+  const response = await resolve(event);
+  response.headers.set('Cache-Control', 'no-store');
+  response.headers.set('Referrer-Policy', 'no-referrer');
+  await logger.flush();
+  return response;
+ }
+ const start = Date.now();
 	
 	const sessionId = event.cookies.get('auth_session');
 	const tAuthStart = Date.now();

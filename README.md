@@ -93,3 +93,13 @@ The app follows a **Local-First** architecture:
 ---
 
 Built with ❤️ by the List Team.
+
+## AI proposals
+
+Each list has **Koppel met AI** in its menu. Create a permanent proposal-only link and use the copy action to paste a complete request into your AI chat. The copied request includes the secret connection link and the OpenAPI URL; the dialog itself only shows user-facing instructions. Secrets are shown once; only SHA-256 hashes are stored. Any current list member can revoke all AI links for that list. Revocation also blocks agent access to existing proposals; members can still review them.
+
+The public machine contract is **GET /api/ai/openapi.json** (source: `static/ai-openapi.json`). The link's `#token=...` fragment supplies `Authorization: Bearer ...`; it is not sent to the landing page server. POST `/api/ai/proposals` with `{"items":[{"name":"Milk","groupName":""}]}`. Save the returned `id`, `editToken`, and `version`. GET/PATCH `/api/ai/proposals/{id}` require both the list bearer token and `X-Proposal-Token: <editToken>`. PATCH replaces all items and requires the current `version`. Never put tokens in query strings or logs.
+
+Proposals expire seven days after creation. A stale version or terminal proposal returns 409; GET the current state before retrying. Acceptance/rejection requires a current list membership and same-origin session request. Acceptance and the existing server sync batch commit atomically. Retries of the same completed decision are idempotent. Accepted items propagate through the existing realtime/cursor sync. Pending proposals refresh every 15 seconds while a list is open; review requires connectivity.
+
+Deployment preparation (not executed by this change): apply the generated additive Drizzle migration through the normal release process. Existing **Vercel WAF/function rate limiting must cover `/api/ai/proposals` and `/api/ai/proposals/*`**, including unauthenticated failures; also cover link management `/api/lists/*/ai`. No in-app limiter is added. Vercel settings are external to this repository and must be checked in the project's existing configuration. Do not deploy these public routes without that coverage. No production data or settings are needed to run the PGlite tests.
