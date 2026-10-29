@@ -32,7 +32,9 @@
 	import type { DndEvent } from "svelte-dnd-action";
 	import type { LocalItem } from "$lib/client/db";
 
-	let { data } = $props();
+	import AiPanel from '$lib/components/AiPanel.svelte';
+ let aiOpen = $state(false);
+ let { data } = $props();
 
 	// Live query for the list details
 	const list = liveQuery(() =>
@@ -269,6 +271,7 @@
 </script>
 
 {#snippet contextualMenuItems()}
+ <DropdownMenu.Item class="menu-item" onSelect={() => (aiOpen = true)}>Koppel met AI</DropdownMenu.Item>
 	<DropdownMenu.Item
 		class="menu-item"
 		onSelect={() => (isShareDialogOpen = true)}
@@ -347,7 +350,8 @@
 			/>
 		</div>
 
-		<section class="items-section">
+		{#key data.listId}<AiPanel listId={data.listId} bind:open={aiOpen} />{/key}
+  <section class="items-section">
 			{#if syncManager.activePulls.includes(data.listId) && (!$items || $items.length === 0)}
 				<LoadingState message="FETCHING LIST DATA" />
 			{:else if $items && $items.length > 0}

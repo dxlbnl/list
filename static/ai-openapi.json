@@ -1,0 +1,443 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "List AI Proposal API",
+    "version": "1.0.0",
+    "description": "Proposal-only capability. No list reads/writes or approval endpoints for agents. Link tokens are permanent until revoked by a list member. Both tokens required for GET/PATCH. Terminal proposals are immutable. PATCH never extends the seven-day expiry. Vercel enforces rate limits. Tokens must be sent in headers, never query strings. No CORS access. All responses are no-store."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "paths": {
+    "/api/ai/proposals": {
+      "post": {
+        "operationId": "createProposal",
+        "summary": "Submit items to the token-bound list; expires in 7 days",
+        "security": [
+          {
+            "ListToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "items"
+                ],
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "groupName": {
+                          "type": "string",
+                          "maxLength": 100,
+                          "default": ""
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created; save editToken",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "listId",
+                    "items",
+                    "version",
+                    "status",
+                    "expiresAt",
+                    "editToken"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "listId": {
+                      "type": "string"
+                    },
+                    "items": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 50,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "name"
+                        ],
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "groupName": {
+                            "type": "string",
+                            "maxLength": 100,
+                            "default": ""
+                          }
+                        }
+                      }
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "accepted",
+                        "rejected",
+                        "expired"
+                      ]
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "editToken": {
+                      "type": "string",
+                      "description": "Returned once. Only its SHA-256 hash is stored."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON or validation failure"
+          },
+          "401": {
+            "description": "Missing/invalid/revoked credential"
+          },
+          "404": {
+            "description": "Proposal not found within credential scope"
+          },
+          "409": {
+            "description": "Terminal/expired proposal or stale version; GET before retry"
+          },
+          "413": {
+            "description": "Body exceeds 32 KiB"
+          },
+          "415": {
+            "description": "Use application/json"
+          },
+          "429": {
+            "description": "Vercel rate limit exceeded"
+          }
+        }
+      }
+    },
+    "/api/ai/proposals/{id}": {
+      "get": {
+        "security": [
+          {
+            "ListToken": [],
+            "ProposalToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "operationId": "getProposal",
+        "summary": "Read proposal status and current version",
+        "responses": {
+          "200": {
+            "description": "Proposal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "listId",
+                    "items",
+                    "version",
+                    "status",
+                    "expiresAt"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "listId": {
+                      "type": "string"
+                    },
+                    "items": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 50,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "name"
+                        ],
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "groupName": {
+                            "type": "string",
+                            "maxLength": 100,
+                            "default": ""
+                          }
+                        }
+                      }
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "accepted",
+                        "rejected",
+                        "expired"
+                      ]
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON or validation failure"
+          },
+          "401": {
+            "description": "Missing/invalid/revoked credential"
+          },
+          "404": {
+            "description": "Proposal not found within credential scope"
+          },
+          "409": {
+            "description": "Terminal/expired proposal or stale version; GET before retry"
+          },
+          "413": {
+            "description": "Body exceeds 32 KiB"
+          },
+          "415": {
+            "description": "Use application/json"
+          },
+          "429": {
+            "description": "Vercel rate limit exceeded"
+          }
+        }
+      },
+      "patch": {
+        "security": [
+          {
+            "ListToken": [],
+            "ProposalToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "operationId": "updateProposal",
+        "summary": "Replace all items while pending using the last observed version",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "items",
+                  "version"
+                ],
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "groupName": {
+                          "type": "string",
+                          "maxLength": 100,
+                          "default": ""
+                        }
+                      }
+                    }
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated proposal; version incremented",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "listId",
+                    "items",
+                    "version",
+                    "status",
+                    "expiresAt"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "listId": {
+                      "type": "string"
+                    },
+                    "items": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 50,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "name"
+                        ],
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "groupName": {
+                            "type": "string",
+                            "maxLength": 100,
+                            "default": ""
+                          }
+                        }
+                      }
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "accepted",
+                        "rejected",
+                        "expired"
+                      ]
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON or validation failure"
+          },
+          "401": {
+            "description": "Missing/invalid/revoked credential"
+          },
+          "404": {
+            "description": "Proposal not found within credential scope"
+          },
+          "409": {
+            "description": "Terminal/expired proposal or stale version; GET before retry"
+          },
+          "413": {
+            "description": "Body exceeds 32 KiB"
+          },
+          "415": {
+            "description": "Use application/json"
+          },
+          "429": {
+            "description": "Vercel rate limit exceeded"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ListToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "32-byte secret from the AI link URL fragment #token=..."
+      },
+      "ProposalToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Proposal-Token",
+        "description": "Proposal-specific editToken returned at creation"
+      }
+    }
+  }
+}
