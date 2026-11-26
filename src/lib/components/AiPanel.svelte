@@ -12,21 +12,28 @@
 	let agentRequest = $state('');
 	let copied = $state(false);
 	let message = $state('');
+	let loadFailed = $state(false);
 	let busy = $state(false);
 
 	async function refresh() {
 		const result = await aiListAction(listId);
 		proposals = result.proposals;
 		links = result.links;
+		loadFailed = false;
 	}
 
-	async function run(action: () => Promise<void>) {
+	async function run(action: () => Promise<void>, background = false) {
 		if (busy) return;
 		busy = true;
-		message = '';
-		try { await action(); }
-		catch (e) { message = e instanceof Error ? e.message : 'Request failed.'; }
-		finally { busy = false; }
+		if (!background) message = '';
+		try {
+			await action();
+		} catch (error) {
+			if (background) loadFailed = true;
+			else message = error instanceof Error ? error.message : 'Request failed.';
+		} finally {
+			busy = false;
+		}
 	}
 
 	async function createLink() {
@@ -70,7 +77,7 @@
 	}
 
 	onMount(() => {
-		const poll = () => { if (!busy && navigator.onLine) void run(refresh); };
+		const poll = () => { if (navigator.onLine) void run(refresh, true); };
 		poll();
 		const timer = setInterval(poll, 15000);
 		return () => clearInterval(timer);
@@ -127,7 +134,12 @@
 			</div>
 		{/if}
 
-		{#if message}<p class="ai-connect-error small" role="alert">{message}</p>{/if}
+		{#if message || loadFailed}
+			<p class="ai-connect-error small" role="alert">{message || 'Could not refresh AI proposals and links.'}</p>
+		{/if}
+		{#if loadFailed}
+			<button class="btn-primary ai-connect-retry" disabled={busy} onclick={() => run(refresh)}>Try again</button>
+		{/if}
 		<p class="ai-connect-note small muted">Links stay active until revoked. Proposals expire after 7 days.</p>
 	</div>
 </Dialog>
@@ -142,6 +154,7 @@
 
 			.ai-connect-copy { display: flex; flex-direction: column; gap: var(--space-3); }
 			.ai-connect-create { width: 100%; }
+			.ai-connect-retry { align-self: flex-start; }
 			.ai-connect-manage { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-3); }
 			.ai-connect-revoke { background: transparent; border-color: var(--border); color: var(--danger); text-align: left; }
 			.ai-connect-revoke:hover:not(:disabled) { border-color: var(--danger); background: var(--danger-muted); color: var(--danger); }

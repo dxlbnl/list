@@ -45,6 +45,21 @@ describe('AI connection dialog', () => {
 		await expect.element(page.getByRole('button', { name: 'Create AI link' })).toBeEnabled();
 	});
 
+	it('keeps background load errors inside Connect AI and retries when asked', async () => {
+		vi.mocked(aiListAction).mockRejectedValueOnce(new Error('AI request failed.'));
+		const { rerender } = render(AiPanel, { listId: list.id, open: false });
+
+		await expect.poll(() => vi.mocked(aiListAction).mock.calls.length).toBe(1);
+		await expect.element(page.getByRole('alert')).not.toBeInTheDocument();
+
+		await rerender({ listId: list.id, open: true });
+		const dialog = page.getByRole('dialog');
+		await expect.element(dialog.getByRole('alert')).toHaveTextContent('Could not refresh AI proposals and links.');
+		await dialog.getByRole('button', { name: 'Try again' }).click();
+		await expect.element(dialog.getByRole('alert')).not.toBeInTheDocument();
+		expect(aiListAction).toHaveBeenCalledTimes(2);
+	});
+
 	it('shows connection failures inside the open dialog and allows retrying', async () => {
 		vi.mocked(aiListAction).mockImplementation(async (_id, method = 'GET') => {
 			if (method === 'POST') throw new Error('Connection failed');
