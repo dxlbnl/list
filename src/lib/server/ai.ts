@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { and, eq, isNull, gt, sql } from 'drizzle-orm';
+import { and, count, eq, isNull, asc, sql } from 'drizzle-orm';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import * as schema from './db/schema';
 import { aiLinks, aiProposals, listUsers } from './db/schema';
@@ -10,6 +10,8 @@ import { processSyncBatch } from './sync';
 
 // All functions run inside the caller's transaction. Link locks serialize revocation
 // with agent requests; proposal locks serialize edits and human decisions.
+const MAX_PENDING_PROPOSALS = 100;
+
 export type AiDb = Pick<PgDatabase<PgQueryResultHKT, typeof schema>, 'select' | 'insert' | 'update' | 'execute'>;
 export const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 export const secretToken = () => randomBytes(32).toString('base64url');
@@ -27,8 +29,17 @@ export async function requireLink(db: AiDb, token: string) {
  return link;
 }
 
+function activeProposals(listId: string) {
+ return and(eq(aiProposals.listId, listId), eq(aiProposals.status, 'pending'),
+  sql`${aiProposals.expiresAt} > statement_timestamp()`);
+}
+
 export async function createProposal(db: AiDb, token: string, items: AiProposal['items']) {
  const link = await requireLink(db, token);
+ // Different tokens for the same list must share a lock for the capacity check.
+ await db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${'ai-proposals:' + link.listId}, 0))`);
+ const [{ total }] = await db.select({ total: count() }).from(aiProposals).where(activeProposals(link.listId));
+ if (total >= MAX_PENDING_PROPOSALS) error(409, 'This list has 100 pending proposals. Try again after one is reviewed or expires.');
  const editToken = secretToken();
  const [row] = await db.insert(aiProposals).values({
   id: nanoid(), listId: link.listId, linkId: link.id, editTokenHash: hashToken(editToken),
@@ -68,8 +79,8 @@ export async function decideProposal(db: AiDb, listId: string, userId: string | 
  const [found] = await db.select().from(aiProposals).where(and(eq(aiProposals.id, id), eq(aiProposals.listId, listId))).for('update');
  if (!found) error(404, 'Proposal not found');
  const row = await expireProposal(db, found);
- // Retries of an already completed decision are harmless, even with the old version.
- if (row.status === decision) return publicProposal(row);
+ // A retry must refer to the exact version that the completed decision reviewed.
+ if (row.status === decision && row.version === version + 1) return publicProposal(row);
  if (row.status !== 'pending' || row.version !== version) return null;
  if (decision === 'accepted') {
   const now = new Date();
@@ -91,5 +102,6 @@ export async function pendingProposals(db: AiDb, listId: string, userId?: string
  await db.update(aiProposals).set({ status: 'expired', version: sql`${aiProposals.version} + 1` }).where(and(
   eq(aiProposals.listId, listId), eq(aiProposals.status, 'pending'), sql`${aiProposals.expiresAt} <= now()`
  ));
- return (await db.select().from(aiProposals).where(and(eq(aiProposals.listId, listId), eq(aiProposals.status, 'pending'), gt(aiProposals.expiresAt, new Date()))).limit(100)).map(publicProposal);
+ return (await db.select().from(aiProposals).where(activeProposals(listId))
+  .orderBy(asc(aiProposals.createdAt), asc(aiProposals.id)).limit(MAX_PENDING_PROPOSALS)).map(publicProposal);
 }

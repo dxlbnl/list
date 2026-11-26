@@ -19,12 +19,12 @@ export const POST: RequestHandler = async ({ params, locals, request, url }) => 
   const connectionUrl = `${url.origin}/api/ai/connect#token=${token}`;
   const openapi = `${url.origin}/api/ai/openapi.json`;
   const agentRequest = [
-   'Stel boodschappen voor op mijn List-lijst. Voeg niets rechtstreeks toe: ik keur de voorstellen zelf goed.',
-   `Lees eerst de API-documentatie: ${openapi}`,
-   `Gebruik deze geheime koppeling: ${connectionUrl}`,
-   'Lees het token uit het URL-fragment en gebruik het uitsluitend volgens de API-documentatie. Bewaar het bewerkingstoken en versienummer uit het antwoord voor eventuele wijzigingen.',
-   'Deel de geheime koppeling niet en zet tokens niet in request-URLs of logs.',
-   'Vraag mij welke boodschappen ik wil laten voorstellen.'
+   'Suggest groceries for my List. Submit them as proposals for me to review.',
+   `Read the API documentation first: ${openapi}`,
+   `Use this secret link: ${connectionUrl}`,
+   'Read the token from the URL fragment and use it as described in the API documentation. Save the edit token and version from the response for future changes.',
+   'Keep the secret link private and keep tokens out of request URLs and logs.',
+   'Ask me which groceries to propose.'
   ].join('\n\n');
   return { id, url: connectionUrl, token, openapi, request: agentRequest };
  }), 201);

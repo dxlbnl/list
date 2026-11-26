@@ -278,7 +278,7 @@
 				<path d="m12 3 2.7 6.3L21 12l-6.3 2.7L12 21l-2.7-6.3L3 12l6.3-2.7Z" />
 			</svg>
 		</div>
-		<span>Koppel met AI</span>
+		<span>Connect AI</span>
 	</Menu.Item>
 	<DropdownMenu.Item
 		class="menu-item"

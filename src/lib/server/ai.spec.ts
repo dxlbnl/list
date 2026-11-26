@@ -4,7 +4,7 @@ import { createTestDb, type TestDb } from '$lib/test/pglite';
 import { world } from '$lib/test/fixtures';
 import { listSchema, aiCreateSchema, aiPatchSchema } from '$lib/validations';
 import { users, lists, listUsers, aiLinks, aiProposals, items } from './db/schema';
-import { createProposal, agentProposal, patchProposal, decideProposal, hashToken, secretToken } from './ai';
+import { createProposal, agentProposal, patchProposal, decideProposal, hashToken, secretToken, pendingProposals } from './ai';
 
 const list = world.generate(listSchema);
 const otherList = world.generate(listSchema);
@@ -44,6 +44,7 @@ describe('AI proposal capabilities and lifecycle', () => {
   await expect(h.db.transaction((tx) => decideProposal(tx, list.id, otherList.createdBy, proposal.id, 2, 'accepted'))).rejects.toMatchObject({ status: 403 });
   const results = await Promise.all([1, 2].map(() => h.db.transaction((tx) => decideProposal(tx, list.id, list.createdBy, proposal.id, 2, 'accepted'))));
   expect(results.every((r) => r?.status === 'accepted')).toBe(true);
+  expect(await h.db.transaction((tx) => decideProposal(tx, list.id, list.createdBy, proposal.id, 1, 'accepted'))).toBeNull();
   const rows = await h.db.select().from(items).where(eq(items.listId, list.id));
   expect(rows).toHaveLength(input.items.length);
   expect(rows.every((r) => r.updatedSeq > 0)).toBe(true);
@@ -75,6 +76,25 @@ describe('AI proposal capabilities and lifecycle', () => {
   await expect(h.db.transaction((tx) => createProposal(tx, token, input.items))).rejects.toMatchObject({ status: 401 });
   await expect(h.db.transaction((tx) => agentProposal(tx, token, proposal.id, proposal.editToken))).rejects.toMatchObject({ status: 401 });
   await expect(h.db.transaction((tx) => patchProposal(tx, token, proposal.id, proposal.editToken, 1, input.items))).rejects.toMatchObject({ status: 401 });
+ });
+ it('caps proposals per list across links and frees a slot on expiration', async () => {
+  const additionalToken = secretToken();
+  const first = await h.db.transaction((tx) => createProposal(tx, otherToken, input.items));
+  const [seed] = await h.db.select().from(aiProposals).where(eq(aiProposals.id, first.id));
+  await h.db.insert(aiLinks).values({
+   id: secretToken(), listId: seed.listId, tokenHash: hashToken(additionalToken)
+  });
+  await h.db.insert(aiProposals).values(Array.from({ length: 98 }, () => ({ ...seed, id: secretToken() })));
+
+  const submissions = await Promise.allSettled([otherToken, additionalToken].map((token) =>
+   h.db.transaction((tx) => createProposal(tx, token, input.items))
+  ));
+  expect(submissions.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
+  expect(submissions).toContainEqual(expect.objectContaining({ status: 'rejected', reason: expect.objectContaining({ status: 409 }) }));
+  expect(await h.db.transaction((tx) => pendingProposals(tx, otherList.id, otherList.createdBy))).toHaveLength(100);
+
+  await h.db.update(aiProposals).set({ expiresAt: new Date(0) }).where(eq(aiProposals.id, first.id));
+  expect((await h.db.transaction((tx) => createProposal(tx, additionalToken, input.items))).status).toBe('pending');
  });
  it('validates bounded item payloads and excludes scope/status injection', () => {
   expect(aiCreateSchema.safeParse({ ...input, listId: otherList.id }).success).toBe(false);

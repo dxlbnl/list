@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { aiListAction } from '$lib/client/actions';
+	import { aiListAction, AiProposalConflict } from '$lib/client/actions';
 	import type { AiProposal } from '$lib/validations';
 	import Dialog from '$lib/components/ui/Dialog.svelte';
 	import InputGroup from '$lib/components/ui/InputGroup.svelte';
@@ -25,7 +25,7 @@
 		busy = true;
 		message = '';
 		try { await action(); }
-		catch (e) { message = e instanceof Error ? e.message : 'Verzoek mislukt'; }
+		catch (e) { message = e instanceof Error ? e.message : 'Request failed.'; }
 		finally { busy = false; }
 	}
 
@@ -43,7 +43,7 @@
 			copied = true;
 			message = '';
 		} catch {
-			message = 'Kopiëren is niet gelukt. Probeer het opnieuw.';
+			message = 'Could not copy the AI request. Try again.';
 		}
 	}
 
@@ -56,7 +56,16 @@
 	}
 
 	async function decide(proposal: AiProposal, decision: 'accepted' | 'rejected') {
-		await aiListAction(listId, 'POST', { id: proposal.id, version: proposal.version, decision });
+		try {
+			await aiListAction(listId, 'POST', { id: proposal.id, version: proposal.version, decision });
+		} catch (error) {
+			if (!(error instanceof AiProposalConflict)) throw error;
+			await refresh();
+			message = proposals.some(({ id }) => id === proposal.id)
+				? 'This proposal changed. Review the updated items before deciding.'
+				: 'This proposal was already reviewed or has expired.';
+			return;
+		}
 		await refresh();
 	}
 
@@ -69,57 +78,57 @@
 </script>
 
 {#if proposals.length || (message && !open)}
-	<section class="ai-proposals" aria-label="AI-voorstellen">
+	<section class="ai-proposals" aria-label="AI proposals">
 		{#if proposals.length}
-			<h2 class="mono small muted">AI-voorstellen</h2>
+			<h2 class="mono small muted">AI proposals</h2>
 			{#each proposals as proposal (proposal.id)}
 				<article class="ai-proposals-card">
 					<ul>{#each proposal.items as item, index (index)}<li>{item.groupName ? `[${item.groupName}] ` : ''}{item.name}</li>{/each}</ul>
-					<p class="small muted">Versie {proposal.version} · vervalt {new Date(proposal.expiresAt).toLocaleString()}</p>
+					<p class="small muted">Expires {new Date(proposal.expiresAt).toLocaleString()}</p>
 					<div class="ai-proposals-actions">
-						<button class="btn-primary" disabled={busy} onclick={() => run(() => decide(proposal, 'accepted'))}>Accepteren</button>
-						<button class="btn-primary ai-proposals-secondary" disabled={busy} onclick={() => run(() => decide(proposal, 'rejected'))}>Afwijzen</button>
+						<button class="btn-primary" disabled={busy} onclick={() => run(() => decide(proposal, 'accepted'))}>Accept</button>
+						<button class="btn-primary ai-proposals-secondary" disabled={busy} onclick={() => run(() => decide(proposal, 'rejected'))}>Reject</button>
 					</div>
 				</article>
 			{/each}
 		{/if}
 		{#if message && !open}
 			<p class="small muted" role="alert">{message}</p>
-			<button class="btn-primary ai-proposals-secondary" disabled={busy} onclick={() => run(refresh)}>Vernieuwen</button>
+			<button class="btn-primary ai-proposals-secondary" disabled={busy} onclick={() => run(refresh)}>Refresh</button>
 		{/if}
 	</section>
 {/if}
 
-<Dialog bind:open title="Koppel met AI" description="Laat je AI boodschappen voorstellen. Jij bepaalt wat er op deze lijst komt.">
+<Dialog bind:open title="Connect AI" description="Let your AI suggest groceries. You decide what goes on this list.">
 	<div class="ai-connect">
 		{#if link}
 			<div class="ai-connect-copy">
-				<p class="small muted">Kopieer het verzoek en plak het in je AI-chat.</p>
+				<p class="small muted">Copy the request and paste it into your AI chat.</p>
 				<InputGroup
 					prefix="→"
 					readonly
-					aria-label="Geheime AI-koppeling"
+					aria-label="Secret AI link"
 					value={link}
-					actionLabel={copied ? 'Gekopieerd' : 'Kopieer'}
+					actionLabel={copied ? 'Request copied' : 'Copy AI request'}
 					onAction={copyRequest}
 				/>
-				<p class="small muted" role="status">{copied ? 'Het verzoek staat klaar om te plakken.' : 'Bewaar dit verzoek veilig. Deze geheime koppeling wordt alleen nu getoond.'}</p>
+				<p class="small muted" role="status">{copied ? 'The request is ready to paste.' : 'Keep the request private. Copy it now if you need it later.'}</p>
 			</div>
 		{:else}
 			<button class="btn-primary ai-connect-create" disabled={busy} onclick={() => run(createLink)}>
-				{busy ? 'Even geduld…' : 'Koppeling maken'}
+				{busy ? 'Please wait…' : 'Create AI link'}
 			</button>
 		{/if}
 
 		{#if links.length}
 			<div class="ai-connect-manage">
-				<p class="small muted">{links.length === 1 ? 'Er is 1 actieve koppeling.' : `Er zijn ${links.length} actieve koppelingen.`}</p>
-				<button class="btn-primary ai-connect-revoke" disabled={busy} onclick={() => run(revokeLinks)}>Alle koppelingen intrekken</button>
+				<p class="small muted">{links.length === 1 ? '1 active link' : `${links.length} active links`}</p>
+				<button class="btn-primary ai-connect-revoke" disabled={busy} onclick={() => run(revokeLinks)}>Revoke all AI links</button>
 			</div>
 		{/if}
 
 		{#if message}<p class="ai-connect-error small" role="alert">{message}</p>{/if}
-		<p class="ai-connect-note small muted">De koppeling blijft geldig tot je die intrekt. Voorstellen vervallen na 7 dagen.</p>
+		<p class="ai-connect-note small muted">Links stay active until revoked. Proposals expire after 7 days.</p>
 	</div>
 </Dialog>
 

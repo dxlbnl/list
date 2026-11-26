@@ -58,7 +58,8 @@
                 }
               }
             }
-          }
+          },
+          "description": "The entire UTF-8 JSON body, including JSON syntax and escaping, must fit within 32 KiB (32,768 bytes)."
         },
         "responses": {
           "201": {
@@ -139,11 +140,8 @@
           "401": {
             "description": "Missing/invalid/revoked credential"
           },
-          "404": {
-            "description": "Proposal not found within credential scope"
-          },
           "409": {
-            "description": "Terminal/expired proposal or stale version; GET before retry"
+            "description": "This list already has 100 unexpired pending proposals. Try again after one is reviewed or expires."
           },
           "413": {
             "description": "Body exceeds 32 KiB"
@@ -330,7 +328,8 @@
                 }
               }
             }
-          }
+          },
+          "description": "The entire UTF-8 JSON body, including JSON syntax and escaping, must fit within 32 KiB (32,768 bytes)."
         },
         "responses": {
           "200": {

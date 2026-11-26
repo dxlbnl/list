@@ -2,12 +2,15 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import AiPanel from './AiPanel.svelte';
-import { aiListAction } from '$lib/client/actions';
+import { aiListAction, AiProposalConflict } from '$lib/client/actions';
 import { world } from '$lib/test/fixtures';
-import { listSchema } from '$lib/validations';
+import { aiProposalSchema, listSchema } from '$lib/validations';
 import '../../app.css';
 
-vi.mock('$lib/client/actions', () => ({ aiListAction: vi.fn() }));
+vi.mock('$lib/client/actions', () => ({
+	aiListAction: vi.fn(),
+	AiProposalConflict: class extends Error {}
+}));
 const list = world.generate(listSchema);
 
 beforeEach(() => {
@@ -21,7 +24,7 @@ describe('AI connection dialog', () => {
 	it('copies a complete agent request and removes the secret after revocation', async () => {
 		const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
 		const link = `${location.origin}/api/ai/connect#token=test-only`;
-		const request = `Stel boodschappen voor. Lees ${location.origin}/api/ai/openapi.json en gebruik ${link}`;
+		const request = `Suggest groceries. Read ${location.origin}/api/ai/openapi.json and use ${link}`;
 		let connected = false;
 		vi.mocked(aiListAction).mockImplementation(async (_id, method = 'GET') => {
 			if (method === 'POST') { connected = true; return { url: link, request }; }
@@ -30,26 +33,49 @@ describe('AI connection dialog', () => {
 		});
 		await page.viewport(390, 844);
 		render(AiPanel, { listId: list.id, open: true });
-		await expect.element(page.getByRole('button', { name: 'Koppeling maken' })).toBeEnabled();
-		await expect.element(page.getByRole('link', { name: 'OpenAPI-documentatie' })).not.toBeInTheDocument();
-		await page.getByRole('button', { name: 'Koppeling maken' }).click();
-		await page.getByRole('button', { name: 'Kopieer', exact: true }).click();
+		await expect.element(page.getByRole('button', { name: 'Create AI link' })).toBeEnabled();
+		await expect.element(page.getByRole('link', { name: 'OpenAPI documentation' })).not.toBeInTheDocument();
+		await page.getByRole('button', { name: 'Create AI link' }).click();
+		await page.getByRole('button', { name: 'Copy AI request', exact: true }).click();
 		expect(writeText).toHaveBeenCalledWith(request);
-		await expect.element(page.getByRole('status')).toHaveTextContent('Het verzoek staat klaar om te plakken.');
-		await page.getByRole('button', { name: 'Alle koppelingen intrekken' }).click();
-		await expect.element(page.getByRole('textbox', { name: 'Geheime AI-koppeling' })).not.toBeInTheDocument();
-		await expect.element(page.getByRole('button', { name: 'Koppeling maken' })).toBeEnabled();
+		await expect.element(page.getByRole('status')).toHaveTextContent('The request is ready to paste.');
+		await page.getByRole('button', { name: 'Revoke all AI links' }).click();
+		await expect.element(page.getByRole('textbox', { name: 'Secret AI link' })).not.toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Create AI link' })).toBeEnabled();
 	});
 
 	it('shows connection failures inside the open dialog and allows retrying', async () => {
 		vi.mocked(aiListAction).mockImplementation(async (_id, method = 'GET') => {
-			if (method === 'POST') throw new Error('Verbinding mislukt');
+			if (method === 'POST') throw new Error('Connection failed');
 			return { proposals: [], links: [] };
 		});
 		render(AiPanel, { listId: list.id, open: true });
-		await expect.element(page.getByRole('button', { name: 'Koppeling maken' })).toBeEnabled();
-		await page.getByRole('button', { name: 'Koppeling maken' }).click();
-		await expect.element(page.getByRole('dialog').getByRole('alert')).toHaveTextContent('Verbinding mislukt');
-		await expect.element(page.getByRole('button', { name: 'Koppeling maken' })).toBeEnabled();
+		await expect.element(page.getByRole('button', { name: 'Create AI link' })).toBeEnabled();
+		await page.getByRole('button', { name: 'Create AI link' }).click();
+		await expect.element(page.getByRole('dialog').getByRole('alert')).toHaveTextContent('Connection failed');
+		await expect.element(page.getByRole('button', { name: 'Create AI link' })).toBeEnabled();
 	});
+});
+
+it('refreshes a stale proposal and asks the member to review the updated items', async () => {
+	const proposal = world.generate(aiProposalSchema, {
+		overrides: { status: 'pending', version: 1, items: [{ name: 'Milk', groupName: '' }] }
+	});
+	let updated = false;
+	vi.mocked(aiListAction).mockImplementation(async (_id, method = 'GET') => {
+		if (method === 'POST') {
+			updated = true;
+			throw new AiProposalConflict();
+		}
+		return {
+			proposals: [updated ? { ...proposal, version: 2, items: [{ name: 'Oat milk', groupName: '' }] } : proposal],
+			links: []
+		};
+	});
+
+	render(AiPanel, { listId: list.id });
+	await expect.element(page.getByText('Milk', { exact: true })).toBeVisible();
+	await page.getByRole('button', { name: 'Accept', exact: true }).click();
+	await expect.element(page.getByText('Oat milk', { exact: true })).toBeVisible();
+	await expect.element(page.getByRole('alert')).toHaveTextContent('Review the updated items before deciding.');
 });
