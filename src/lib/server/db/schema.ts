@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, doublePrecision, primaryKey, unique, integer, index, bigint, pgSequence } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, doublePrecision, primaryKey, unique, integer, index, bigint, pgSequence, jsonb, check } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 /** Server-assigned monotonic cursor source — bumped on every item/list upsert in the sync CTE. */
@@ -95,3 +95,27 @@ export const rateLimits = pgTable('rate_limits', {
 	count: integer('count').notNull().default(0),
 	resetAt: timestamp('reset_at', { withTimezone: true }).notNull()
 });
+
+export const aiLinks = pgTable('ai_links', {
+ id: text('id').primaryKey(),
+ listId: text('list_id').notNull().references(() => lists.id, { onDelete: 'cascade' }),
+ tokenHash: text('token_hash').notNull().unique(),
+ revokedAt: timestamp('revoked_at', { withTimezone: true }),
+ createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+}, (t) => ({ listIdx: index('ai_links_list_idx').on(t.listId) })).enableRLS();
+
+export const aiProposals = pgTable('ai_proposals', {
+ id: text('id').primaryKey(),
+ linkId: text('link_id').notNull().references(() => aiLinks.id),
+ listId: text('list_id').notNull().references(() => lists.id, { onDelete: 'cascade' }),
+ editTokenHash: text('edit_token_hash').notNull(),
+ items: jsonb('items').$type<import('$lib/validations').AiProposal['items']>().notNull(),
+ version: integer('version').notNull().default(1),
+ status: text('status').$type<import('$lib/validations').AiProposal['status']>().notNull().default('pending'),
+ expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+ createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+}, (t) => ({
+ listIdx: index('ai_proposals_list_status_idx').on(t.listId, t.status),
+ statusCheck: check('ai_proposals_status_check', sql`${t.status} in ('pending', 'accepted', 'rejected', 'expired')`),
+ versionCheck: check('ai_proposals_version_check', sql`${t.version} > 0`)
+})).enableRLS();

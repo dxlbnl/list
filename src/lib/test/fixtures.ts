@@ -20,13 +20,14 @@
  *     `world.registry.pick(listSchema)`.
  */
 import { createWorld } from 'zod4-mock';
-import { itemSchema, listSchema } from '$lib/validations';
+import { itemSchema, listSchema, aiCreateSchema } from '$lib/validations';
 
 /** Fixed seed → byte-identical fixtures on every run / machine. */
 export const FIXTURE_SEED = 42;
 
 /** Shared, deterministic generator world. See module doc for usage. */
 export const world = createWorld({ seed: FIXTURE_SEED })
+	.withSchema(aiCreateSchema)
 	.withSchema(listSchema)
 	.withSchema(itemSchema, {
 		relations: { list: listSchema },
