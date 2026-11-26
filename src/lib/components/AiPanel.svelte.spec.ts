@@ -21,10 +21,10 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('AI connection dialog', () => {
-	it('copies a complete agent request and removes the secret after revocation', async () => {
+	it('copies the connection instructions and removes the secret after revocation', async () => {
 		const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
 		const link = `${location.origin}/api/ai/connect#token=test-only`;
-		const request = `Suggest groceries. Read ${location.origin}/api/ai/openapi.json and use ${link}`;
+		const request = `This connection is for the list named "Weekend trip". API documentation: ${location.origin}/api/ai/openapi.json. Private connection link: ${link}`;
 		let connected = false;
 		vi.mocked(aiListAction).mockImplementation(async (_id, method = 'GET') => {
 			if (method === 'POST') { connected = true; return { url: link, request }; }
@@ -33,12 +33,13 @@ describe('AI connection dialog', () => {
 		});
 		await page.viewport(390, 844);
 		render(AiPanel, { listId: list.id, open: true });
+		await expect.element(page.getByRole('dialog')).toHaveTextContent('propose items for you to review');
 		await expect.element(page.getByRole('button', { name: 'Create AI link' })).toBeEnabled();
 		await expect.element(page.getByRole('link', { name: 'OpenAPI documentation' })).not.toBeInTheDocument();
 		await page.getByRole('button', { name: 'Create AI link' }).click();
-		await page.getByRole('button', { name: 'Copy AI request', exact: true }).click();
+		await page.getByRole('button', { name: 'Copy AI instructions', exact: true }).click();
 		expect(writeText).toHaveBeenCalledWith(request);
-		await expect.element(page.getByRole('status')).toHaveTextContent('The request is ready to paste.');
+		await expect.element(page.getByRole('status')).toHaveTextContent('The instructions are ready to paste.');
 		await page.getByRole('button', { name: 'Revoke all AI links' }).click();
 		await expect.element(page.getByRole('textbox', { name: 'Secret AI link' })).not.toBeInTheDocument();
 		await expect.element(page.getByRole('button', { name: 'Create AI link' })).toBeEnabled();

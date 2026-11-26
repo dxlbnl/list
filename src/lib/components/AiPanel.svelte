@@ -43,7 +43,7 @@
 			copied = true;
 			message = '';
 		} catch {
-			message = 'Could not copy the AI request. Try again.';
+			message = 'Could not copy the AI instructions. Try again.';
 		}
 	}
 
@@ -99,20 +99,20 @@
 	</section>
 {/if}
 
-<Dialog bind:open title="Connect AI" description="Let your AI suggest groceries. You decide what goes on this list.">
+<Dialog bind:open title="Connect AI" description="Connect your AI so it can propose items for you to review.">
 	<div class="ai-connect">
 		{#if link}
 			<div class="ai-connect-copy">
-				<p class="small muted">Copy the request and paste it into your AI chat.</p>
+				<p class="small muted">Copy these instructions into your AI chat.</p>
 				<InputGroup
 					prefix="→"
 					readonly
 					aria-label="Secret AI link"
 					value={link}
-					actionLabel={copied ? 'Request copied' : 'Copy AI request'}
+					actionLabel={copied ? 'Instructions copied' : 'Copy AI instructions'}
 					onAction={copyRequest}
 				/>
-				<p class="small muted" role="status">{copied ? 'The request is ready to paste.' : 'Keep the request private. Copy it now if you need it later.'}</p>
+				<p class="small muted" role="status">{copied ? 'The instructions are ready to paste.' : 'Keep these instructions private. Copy them now if you need them later.'}</p>
 			</div>
 		{:else}
 			<button class="btn-primary ai-connect-create" disabled={busy} onclick={() => run(createLink)}>

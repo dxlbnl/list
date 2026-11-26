@@ -1,5 +1,5 @@
 import { db } from '$lib/server/db';
-import { aiLinks } from '$lib/server/db/schema';
+import { aiLinks, lists } from '$lib/server/db/schema';
 import { hashToken, secretToken, requireMember, pendingProposals } from '$lib/server/ai';
 import { aiJson, sameOrigin } from '$lib/server/ai-http';
 import { nanoid } from '$lib/utils';
@@ -14,17 +14,18 @@ export const POST: RequestHandler = async ({ params, locals, request, url }) => 
  sameOrigin(request, url);
  return aiJson(await db.transaction(async (tx) => {
   await requireMember(tx, params.id, locals.user?.id);
+  const [list] = await tx.select({ name: lists.name }).from(lists).where(eq(lists.id, params.id));
   const token = secretToken(), id = nanoid();
   await tx.insert(aiLinks).values({ id, listId: params.id, tokenHash: hashToken(token) });
   const connectionUrl = `${url.origin}/api/ai/connect#token=${token}`;
   const openapi = `${url.origin}/api/ai/openapi.json`;
   const agentRequest = [
-   'Suggest groceries for my List. Submit them as proposals for me to review.',
-   `Read the API documentation first: ${openapi}`,
-   `Use this secret link: ${connectionUrl}`,
-   'Read the token from the URL fragment and use it as described in the API documentation. Save the edit token and version from the response for future changes.',
-   'Keep the secret link private and keep tokens out of request URLs and logs.',
-   'Ask me which groceries to propose.'
+   `This connection is for the list named ${JSON.stringify(list.name)} in List.`,
+   'When I ask you to add items to this list, you can submit a proposal for me to review.',
+   `API documentation: ${openapi}`,
+   `Private connection link: ${connectionUrl}`,
+   'The API uses the token from the URL fragment as a Bearer token in the Authorization header. The response includes an edit token and version for future changes.',
+   'Keep the connection link private and keep API credentials out of request URLs and logs.'
   ].join('\n\n');
   return { id, url: connectionUrl, token, openapi, request: agentRequest };
  }), 201);
