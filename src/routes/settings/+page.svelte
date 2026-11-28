@@ -35,7 +35,7 @@
 				</div>
 			{:else}
 				<AccessCard 
-					{form}
+					form={form?.connectionError ? null : form}
 					action="?/secureAccount"
 					title="Register"
 					subtitle="Account security"
@@ -46,6 +46,36 @@
 					successTitle="Security link sent"
 					successMessage="Check your email for the magic link to secure your account and merge your anonymous data."
 				/>
+			{/if}
+		</div>
+	</section>
+
+	<section class="settings-section">
+		<h2 class="mono tiny uppercase tracking-widest">AI connections</h2>
+		<div class="settings-card">
+			{#if data.aiConnections.length}
+				{#each data.aiConnections as connection (connection.id)}
+					<div class="info-row">
+						<div class="connection-details">
+							<span>{connection.name}</span>
+							<span class="small muted">
+								{connection.revoked ? 'Disconnected' : 'Active'} · Connected
+								<time datetime={connection.activatedAt.toISOString()}>{connection.activatedAt.toISOString().slice(0, 10)}</time>
+							</span>
+						</div>
+						{#if !connection.revoked}
+							<form method="POST" action="?/disconnectAi">
+								<input type="hidden" name="id" value={connection.id} />
+								<button class="theme-btn mono tiny" type="submit" aria-label={`Disconnect ${connection.name}`}>Disconnect</button>
+							</form>
+						{/if}
+					</div>
+				{/each}
+			{:else}
+				<p class="small muted">No AI apps connected. Add List as a connector in your AI app to get started.</p>
+			{/if}
+			{#if form?.connectionError}
+				<p class="small error-text" role="alert">{form.connectionError}</p>
 			{/if}
 		</div>
 	</section>
@@ -194,6 +224,8 @@
 		.mb-2 { margin-bottom: var(--space-2); }
 		.block { display: block; }
 		.success { color: var(--success); }
+
+		.connection-details { display: grid; gap: var(--space-1); overflow-wrap: anywhere; }
 
 		.theme-toggle-group {
 			display: flex;
