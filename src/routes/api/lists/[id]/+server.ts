@@ -12,31 +12,22 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 
 	const listId = params.id;
 
-	// 1. Check if list exists at all
-	const listData = await db.query.lists.findFirst({
-		where: eq(lists.id, listId)
-	});
+	const [result] = await db
+		.select({ list: lists, memberId: listUsers.userId })
+		.from(lists)
+		.leftJoin(listUsers, and(eq(listUsers.listId, lists.id), eq(listUsers.userId, user.id)))
+		.where(eq(lists.id, listId));
 
-	if (!listData) throw error(404, 'List not found');
+	if (!result) throw error(404, 'List not found');
+	if (result.memberId === null) throw error(403, 'Forbidden');
 
-	// 2. Verify access
-	const access = await db
-		.select()
-		.from(listUsers)
-		.where(and(eq(listUsers.listId, listId), eq(listUsers.userId, user.id)));
-	
-	if (access.length === 0) {
-		throw error(403, 'Forbidden');
-	}
-
-	const itemData = await db.query.items.findMany({
-		where: eq(items.listId, listId)
-	});
-
-	await recordAccountActivity(db, user.id);
+	const [itemData] = await Promise.all([
+		db.query.items.findMany({ where: eq(items.listId, listId) }),
+		recordAccountActivity(db, user.id)
+	]);
 	await logger.flush();
 	return json({
-		list: listData,
+		list: result.list,
 		items: itemData
 	});
 };

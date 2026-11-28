@@ -158,3 +158,29 @@ it('routes a realtime list update through the atomic pending-delete check', asyn
 		await db.delete();
 	}
 });
+
+it('applies a list snapshot while retaining pending edits and newer deletions', async () => {
+	const db = freshDb();
+	const pending = world.generate(itemSchema, { overrides: { updatedAt: new Date('2030-01-01') } });
+	const deletedAt = new Date('2031-01-01');
+	const deleted = world.generate(itemSchema, { overrides: { deletedAt, updatedAt: deletedAt } });
+	const added = world.generate(itemSchema, { overrides: { deletedAt: null } });
+	const manager = createSyncManager(db, async () => Response.json({
+		items: [
+			{ ...pending, name: 'Remote edit', updatedAt: new Date('2032-01-01') },
+			{ ...deleted, deletedAt: null, updatedAt: new Date('2030-01-01') },
+			added
+		]
+	}));
+	try {
+		await db.items.bulkPut([pending, deleted]);
+		await db.syncQueue.add({ id: 'pending-edit', entity: 'item', type: 'UPDATE', data: pending });
+		await manager.pull(added.listId);
+		const [pendingRow, deletedRow, addedRow] = await db.items.bulkGet([pending.id, deleted.id, added.id]);
+		expect(pendingRow).toEqual(pending);
+		expect(deletedRow).toEqual(deleted);
+		expect(addedRow).toMatchObject({ id: added.id, name: added.name, deletedAt: null });
+	} finally {
+		await db.delete();
+	}
+});
