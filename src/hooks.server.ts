@@ -1,4 +1,5 @@
-import { getSession, createAnonymousSession } from '$lib/server/auth';
+import { ACCOUNT_CHANGED_HEADER, ACCOUNT_HEADER, LOCAL_ACCOUNT_COOKIE } from '$lib/account';
+import { getSession, createAnonymousSession, setLocalAccountCookie } from '$lib/server/auth';
 import { retiredAiResponse } from '$lib/server/ai-http';
 import { createSupabaseToken } from '$lib/server/supabase-auth';
 import type { Handle, HandleServerError } from '@sveltejs/kit';
@@ -64,6 +65,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const sessionId = event.cookies.get('auth_session');
 	const tAuthStart = Date.now();
 	let auth = await getSession(event);
+	const expectedAccount = event.request.headers.get(ACCOUNT_HEADER);
+	if (under(path, '/api') && expectedAccount && expectedAccount !== auth?.user.id) {
+		return privateResponse(new Response(null, { status: 409, headers: { [ACCOUNT_CHANGED_HEADER]: '1' } }));
+	}
 	let sessionInvalid = false;
 
 	if (!auth && sessionId) {
@@ -72,6 +77,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	if (!auth) {
 		auth = await createAnonymousSession(event);
+	} else if (event.cookies.get(LOCAL_ACCOUNT_COOKIE) !== auth.user.id) {
+		setLocalAccountCookie(event.cookies, auth.user.id);
 	}
 	const tAuth = Date.now() - tAuthStart;
 

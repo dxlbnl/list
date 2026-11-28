@@ -1,6 +1,5 @@
 <script lang="ts">
 	import AccessCard from '$lib/components/ui/AccessCard.svelte';
-	import { enhance } from '$app/forms';
 
 	let { data } = $props();
 	let isLoading = $state(false);
@@ -19,13 +18,7 @@
 	>
 		<form 
 			method="POST" 
-			use:enhance={() => {
-				isLoading = true;
-				return async ({ update }) => {
-					await update();
-					isLoading = false;
-				};
-			}}
+			onsubmit={() => { isLoading = true; }}
 		>
 			<div class="confirm-content">
 				<div class="token-display mono tiny muted">

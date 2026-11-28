@@ -1,3 +1,5 @@
+import { LOCAL_ACCOUNT_COOKIE } from '$lib/account';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { db } from '$lib/server/db';
 import { users, sessions } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
@@ -60,6 +62,8 @@ export async function createAnonymousSession(event: RequestEvent) {
 		secure: !dev
 	});
 
+	setLocalAccountCookie(event.cookies, userId);
+
 	logger.info('Created anonymous session', { userId });
 
 	return {
@@ -73,7 +77,7 @@ import { and, inArray } from 'drizzle-orm';
 export async function mergeUsers(sourceUserId: string, targetUserId: string, anonymousOnly = false) {
 	if (sourceUserId === targetUserId) return;
 
-	await db.transaction(async (tx) => {
+	return db.transaction(async (tx) => {
 		if (anonymousOnly) {
 			const [source] = await tx.select({ email: users.email }).from(users)
 				.where(eq(users.id, sourceUserId)).for('update');
@@ -139,5 +143,38 @@ export async function mergeUsers(sourceUserId: string, targetUserId: string, ano
 		await tx.delete(users).where(eq(users.id, sourceUserId));
 
 		logger.info('User merge complete', { sourceUserId, targetUserId, listsMerged: anonLists.length });
+		return true;
 	});
+}
+
+
+export function setLocalAccountCookie(cookies: RequestEvent['cookies'], account: string) {
+	cookies.set(LOCAL_ACCOUNT_COOKIE, account, {
+		path: '/', expires: new Date('9999-12-31'), httpOnly: false, sameSite: 'lax', secure: !dev
+	});
+}
+
+const LOCAL_MERGE_COOKIE = 'list_local_merge';
+
+function signLocalMerge(source: string, sessionId: string) {
+	return createHmac('sha256', sessionId).update('list-local-merge:').update(source).digest();
+}
+
+export function setLocalMergeCookie(cookies: RequestEvent['cookies'], source: string, sessionId: string) {
+	const sourceKey = Buffer.from(source).toString('base64url');
+	cookies.set(LOCAL_MERGE_COOKIE, `${sourceKey}.${signLocalMerge(sourceKey, sessionId).toString('base64url')}`, {
+		path: '/', maxAge: 120, httpOnly: true, sameSite: 'lax', secure: !dev
+	});
+}
+
+export function readLocalMergeCookie(cookies: RequestEvent['cookies'], sessionId?: string) {
+	const value = cookies.get(LOCAL_MERGE_COOKIE);
+	if (!value || !sessionId) return;
+	const [source, signature, extra] = value.split('.');
+	if (!source || !signature || extra !== undefined) return;
+	const expected = signLocalMerge(source, sessionId);
+	const actual = Buffer.from(signature, 'base64url');
+	if (actual.length === expected.length && timingSafeEqual(expected, actual)) {
+		return Buffer.from(source, 'base64url').toString();
+	}
 }

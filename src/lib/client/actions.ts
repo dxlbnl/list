@@ -1,3 +1,4 @@
+import { accountFetch } from './account-fetch';
 import { db, type LocalList, type LocalItem } from '$lib/client/db';
 import { slugify, isReservedSlug, nanoid } from '$lib/utils';
 import { syncManager } from './sync.svelte';
@@ -173,7 +174,7 @@ export async function deleteGroup(listId: string, groupName: string) {
 }
 
 export async function shareList(listId: string, expiresAt: string | null) {
-	const res = await fetch(`/api/lists/${listId}/share`, {
+	const res = await accountFetch(`/api/lists/${listId}/share`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ expiresAt }),
@@ -201,7 +202,7 @@ const groupConflictSchema = z.object({
 });
 
 export async function getAiProposals(listId: string) {
-	const response = await fetch(`/api/lists/${encodeURIComponent(listId)}/ai`);
+	const response = await accountFetch(`/api/lists/${encodeURIComponent(listId)}/ai`);
 	if (!response.ok) throw new Error('Could not load AI proposals.');
 	const parsed = aiListStateSchema.safeParse(await response.json());
 	if (!parsed.success) throw new Error('Could not load AI proposals.');
@@ -209,7 +210,7 @@ export async function getAiProposals(listId: string) {
 }
 
 export async function decideAiProposal(listId: string, proposalId: string, decision: AiDecision) {
-	const response = await fetch(`/api/lists/${encodeURIComponent(listId)}/ai/proposals/${encodeURIComponent(proposalId)}`, {
+	const response = await accountFetch(`/api/lists/${encodeURIComponent(listId)}/ai/proposals/${encodeURIComponent(proposalId)}`, {
 		method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(decision)
 	});
 	if (response.status === 409) {

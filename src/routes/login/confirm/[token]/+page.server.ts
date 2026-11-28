@@ -1,6 +1,6 @@
 import { db } from '$lib/server/db';
 import { users, sessions, magicLinks } from '$lib/server/db/schema';
-import { mergeUsers } from '$lib/server/auth';
+import { mergeUsers, setLocalAccountCookie, setLocalMergeCookie } from '$lib/server/auth';
 import { nanoid } from '$lib/utils';
 import { eq } from 'drizzle-orm';
 import { error, redirect } from '@sveltejs/kit';
@@ -53,6 +53,7 @@ export const actions: Actions = {
 		}
 
 		let targetUserId: string;
+		let localMergeSource: string | undefined;
 		const currentUserId = locals.user?.id;
 		
 		if (link.email) {
@@ -96,7 +97,7 @@ export const actions: Actions = {
 			
 			// If the scanning device has an anonymous session, merge its data into the cloned account
 			if (currentUserId && locals.user?.email === null && currentUserId !== targetUserId) {
-				await mergeUsers(currentUserId, targetUserId, true);
+				if (await mergeUsers(currentUserId, targetUserId, true)) localMergeSource = currentUserId;
 			}
 		} else {
 			throw error(400, MESSAGES.AUTH.CONTEXT_MISSING);
@@ -122,6 +123,9 @@ export const actions: Actions = {
 			sameSite: 'lax',
 			secure: !dev
 		});
+
+		setLocalAccountCookie(cookies, targetUserId);
+		if (localMergeSource) setLocalMergeCookie(cookies, localMergeSource, sessionId);
 
 		const ticket = cookies.get(oauthCookie);
 		if (link.email && ticket && await resumeOAuthLogin(db, ticket, token, sessionId)) {
