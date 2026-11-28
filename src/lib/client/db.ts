@@ -6,7 +6,10 @@ import type { SyncOperationInput, LocalList, LocalItem } from '$lib/validations'
 export type { LocalList, LocalItem };
 
 // We wrap the SyncOperationInput to include Dexie's auto-incrementing local ID
-export type QueuedSyncOperation = SyncOperationInput & { localId?: number };
+export type QueuedSyncOperation = SyncOperationInput & {
+	localId?: number;
+	rejection?: { status: number; rejectedAt: number };
+};
 
 export class ListDatabase extends Dexie {
 	lists!: Table<LocalList>;

@@ -1,19 +1,44 @@
 import { accountFetch } from './account-fetch';
 import { db } from './db';
 
+let logoutPromise: Promise<void> | undefined;
+
 /**
- * Clears local data and redirects to server logout
+ * Revoke the server session before removing its local data.
  */
-export async function logout() {
-	// Clear local database to prevent data leaking
+export function logout() {
+	if (!logoutPromise) {
+		logoutPromise = revokeAndClear().finally(() => {
+			logoutPromise = undefined;
+		});
+	}
+	return logoutPromise;
+}
+
+async function revokeAndClear() {
+	try {
+		const response = await fetch('/logout', {
+			method: 'POST',
+			headers: { Accept: 'application/json' },
+			body: new URLSearchParams()
+		});
+		if (response.status !== 204) throw new Error(`Logout failed: HTTP ${response.status}`);
+	} catch (error) {
+		console.error('Failed to revoke the session:', error);
+		window.alert('Could not sign out. Your local data was kept. Please try again.');
+		return;
+	}
+
 	try {
 		db.close();
 		await db.delete();
-	} catch (e) {
-		console.error("Failed to purge local database:", e);
+	} catch (error) {
+		console.error('Failed to purge local data:', error);
+		window.alert('Your session ended, but local data could not be cleared. Please try signing out again.');
+		return;
 	}
-	// Redirect to server-side logout
-	window.location.href = "/logout";
+
+	window.location.replace('/');
 }
 
 /**
