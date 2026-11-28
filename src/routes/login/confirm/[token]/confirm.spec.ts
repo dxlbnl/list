@@ -27,7 +27,7 @@ it.each([
 			token, email: null, userIdToMerge: targetId,
 			expiresAt: new Date(Date.now() + 60_000)
 		});
-		const event = { params: { token }, cookies: { set: vi.fn() }, locals: { user: source } };
+		const event = { params: { token }, cookies: { get: vi.fn(), set: vi.fn() }, locals: { user: source } };
 		expect(await load(event as unknown as Parameters<typeof load>[0])).toMatchObject({
 			switchingAccount: email !== null && !sameAccount
 		});
