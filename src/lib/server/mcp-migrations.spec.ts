@@ -20,7 +20,7 @@ it('preserves old proposals and migration history through the expand and cleanup
 		await withMigrationsThrough('0002_overconfident_cerebro', (folder: string) =>
 			migrate(db, { migrationsFolder: folder })
 		);
-		await db.insert(schema.users).values({ id: list.createdBy });
+		await db.execute(sql`insert into users (id) values (${list.createdBy})`);
 		await db.insert(schema.lists).values(list);
 		await db.insert(schema.listUsers).values({ listId: list.id, userId: list.createdBy });
 		await db.execute(sql`insert into ai_links (id, list_id, token_hash) values ('old-link', ${list.id}, 'old-hash')`);
@@ -72,7 +72,9 @@ it('preserves old proposals and migration history through the expand and cleanup
 			version: 3, decision: 'accepted'
 		}))).resolves.toMatchObject({ status: 'accepted', version: 4 });
 		expect((await db.select().from(schema.items)).map(({ name }) => name).sort()).toEqual(['New item', 'Old item']);
-		await expect(migrateListDb(db)).resolves.toBe(1);
+		await expect(migrateListDb(db)).resolves.toBe(2);
+		const { rows: legacyActivity } = await db.execute(sql`select last_activity_at from users where id = ${list.createdBy}`);
+		expect(legacyActivity).toEqual([{ last_activity_at: null }]);
 		const { rows: cursorIndexes } = await db.execute(sql`
 			select indexname from pg_indexes
 			where schemaname = 'public' and indexname in ('items_updated_seq_idx', 'lists_updated_seq_idx')
