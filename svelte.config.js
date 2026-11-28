@@ -8,6 +8,8 @@ const config = {
 	},
 	kit: {
 		adapter: adapter(),
+		// The server hook checks browser form origins, except for OAuth back-channel endpoints.
+		csrf: { trustedOrigins: ['*'] },
 		typescript: {
 			config: (config) => ({
 				...config,

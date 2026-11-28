@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, doublePrecision, primaryKey, unique, integer, index, bigint, pgSequence, jsonb, check } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, doublePrecision, primaryKey, unique, uniqueIndex, integer, index, bigint, pgSequence, jsonb, check } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 /** Server-assigned monotonic cursor source — bumped on every item/list upsert in the sync CTE. */
@@ -98,19 +98,59 @@ export const rateLimits = pgTable('rate_limits', {
 	resetAt: timestamp('reset_at', { withTimezone: true }).notNull()
 });
 
-export const aiLinks = pgTable('ai_links', {
- id: text('id').primaryKey(),
- listId: text('list_id').notNull().references(() => lists.id, { onDelete: 'cascade' }),
- tokenHash: text('token_hash').notNull().unique(),
- revokedAt: timestamp('revoked_at', { withTimezone: true }),
- createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-}, (t) => ({ listIdx: index('ai_links_list_idx').on(t.listId) })).enableRLS();
+export const aiConnections = pgTable('ai_connections', {
+	id: text('id').primaryKey(),
+	userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+	clientId: text('client_id').notNull(),
+	scopes: text('scopes').array().notNull(),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+	activatedAt: timestamp('activated_at', { withTimezone: true }),
+	revokedAt: timestamp('revoked_at', { withTimezone: true })
+}, (t) => ({
+	activeConnection: uniqueIndex('ai_connections_active_user_client').on(t.userId, t.clientId)
+		.where(sql`${t.activatedAt} is not null and ${t.revokedAt} is null`)
+})).enableRLS();
+
+export const aiOAuthRequests = pgTable('ai_oauth_requests', {
+	hash: text('hash').primaryKey(),
+	sessionHash: text('session_hash'),
+	loginTokenHash: text('login_token_hash'),
+	clientId: text('client_id').notNull(),
+	query: jsonb('query').$type<Record<string, string>>().notNull(),
+	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+	consumedAt: timestamp('consumed_at', { withTimezone: true })
+}).enableRLS();
+
+export const aiOAuthCodes = pgTable('ai_oauth_codes', {
+	hash: text('hash').primaryKey(),
+	connectionId: text('connection_id').notNull().references(() => aiConnections.id, { onDelete: 'cascade' }),
+	redirectUri: text('redirect_uri').notNull(),
+	challenge: text('challenge').notNull(),
+	resource: text('resource').notNull(),
+	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+	consumedAt: timestamp('consumed_at', { withTimezone: true })
+}).enableRLS();
+
+export const aiOAuthTokens = pgTable('ai_oauth_tokens', {
+	hash: text('hash').primaryKey(),
+	connectionId: text('connection_id').notNull().references(() => aiConnections.id, { onDelete: 'cascade' }),
+	kind: text('kind').$type<'access' | 'refresh'>().notNull(),
+	resource: text('resource').notNull(),
+	scopes: text('scopes').array().notNull(),
+	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+	consumedAt: timestamp('consumed_at', { withTimezone: true })
+}, (t) => ({
+	connectionIdx: index('ai_oauth_tokens_connection_idx').on(t.connectionId),
+	expiryIdx: index('ai_oauth_tokens_expiry_idx').on(t.expiresAt),
+	kindCheck: check('ai_oauth_tokens_kind_check', sql`${t.kind} in ('access', 'refresh')`)
+})).enableRLS();
 
 export const aiProposals = pgTable('ai_proposals', {
  id: text('id').primaryKey(),
- linkId: text('link_id').notNull().references(() => aiLinks.id),
+ connectionId: text('connection_id').references(() => aiConnections.id, { onDelete: 'set null' }),
+ requestId: text('request_id'),
+ requestHash: text('request_hash'),
  listId: text('list_id').notNull().references(() => lists.id, { onDelete: 'cascade' }),
- editTokenHash: text('edit_token_hash').notNull(),
  items: jsonb('items').$type<import('$lib/validations').AiProposal['items']>().notNull(),
  version: integer('version').notNull().default(1),
  status: text('status').$type<import('$lib/validations').AiProposal['status']>().notNull().default('pending'),
@@ -118,6 +158,7 @@ export const aiProposals = pgTable('ai_proposals', {
  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 }, (t) => ({
  listIdx: index('ai_proposals_list_status_idx').on(t.listId, t.status),
+ requestIdx: uniqueIndex('ai_proposals_connection_request_idx').on(t.connectionId, t.requestId),
  statusCheck: check('ai_proposals_status_check', sql`${t.status} in ('pending', 'accepted', 'rejected', 'expired')`),
  versionCheck: check('ai_proposals_version_check', sql`${t.version} > 0`)
 })).enableRLS();

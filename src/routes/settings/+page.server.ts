@@ -5,6 +5,8 @@ import { fail, redirect } from '@sveltejs/kit';
 import { MESSAGES } from '$lib/constants/messages';
 import { sendMagicLink } from '$lib/server/email';
 import { checkRateLimit } from '$lib/server/ratelimit';
+import { disconnectAiConnection, getAiConnections } from '$lib/server/oauth';
+import { sameOrigin } from '$lib/server/ai-http';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -13,11 +15,22 @@ export const load: PageServerLoad = async ({ locals }) => {
 	}
 
 	return {
-		user: locals.user
+		user: locals.user,
+		aiConnections: await getAiConnections(db, locals.user.id)
 	};
 };
 
 export const actions: Actions = {
+	disconnectAi: async ({ request, locals, url }) => {
+		sameOrigin(request, url);
+		if (!locals.user) return fail(401, { connectionError: 'Sign in to manage your AI connections.' });
+		const id = (await request.formData()).get('id');
+		if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(id)) {
+			return fail(400, { connectionError: 'This connection is unavailable.' });
+		}
+		await disconnectAiConnection(db, id, locals.user.id);
+		redirect(303, '/settings');
+	},
 	secureAccount: async ({ request, locals, url, getClientAddress }) => {
 		// Rate limit: 3 emails per 10 minutes per IP
 		const ip = getClientAddress();
