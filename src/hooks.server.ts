@@ -55,11 +55,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const tResolve = Date.now() - tResolveStart;
 	
 	const duration = Date.now() - start;
+	const path = event.route.id ?? '<unmatched>';
 	
 	// Log request summary with detailed tracing
-	logger.info(`${event.request.method} ${event.url.pathname} - ${response.status} (${duration}ms)`, {
+	logger.info(`${event.request.method} ${path} - ${response.status} (${duration}ms)`, {
 		method: event.request.method,
-		path: event.url.pathname,
+		path,
 		status: response.status,
 		duration,
 		tAuth,
@@ -75,11 +76,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 	return response;
 };
 
-export const handleError: HandleServerError = async ({ error, event }) => {
-	logger.error(`Unhandled server error: ${event.url.pathname}`, {
-		path: event.url.pathname,
+export const handleError: HandleServerError = async ({ event }) => {
+	const path = event.route.id ?? '<unmatched>';
+	logger.error(`Unhandled server error: ${path}`, {
+		path,
 		userId: event.locals.user?.id
-	}, error);
+	});
 
 	if (!dev) {
 		await logger.flush();
