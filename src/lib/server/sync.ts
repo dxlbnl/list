@@ -112,11 +112,13 @@ export async function processSyncBatch(
 				slug = COALESCE(EXCLUDED.slug, ${lists.slug}),
 				updated_at = now(),
 				updated_seq = nextval('sync_seq')
+			WHERE ${lists.createdBy} = ${userId}
 			RETURNING id
 		),
 		upsert_members AS (
 			INSERT INTO ${listUsers} (list_id, user_id)
-			SELECT id, ${userId} FROM list_resolved
+			SELECT written.id, ${userId} FROM upsert_lists written
+			WHERE NOT EXISTS (SELECT 1 FROM ${lists} existing WHERE existing.id = written.id)
 			ON CONFLICT DO NOTHING
 		),
 		upsert_items AS (
