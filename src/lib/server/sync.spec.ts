@@ -26,7 +26,7 @@ it('requires membership in both the current and destination list', async () => {
 			{ id: 'there', listId: other, name: 'There', rank: 1 }
 		]);
 		const move = (id: string, list_id: string) => processSyncBatch(h.db, USER, [{
-			id, entity: 'item', type: 'UPDATE', data: { id, list_id, updated_at: '2090-01-01T00:00:00Z' }
+			id, entity: 'item', type: 'UPDATE', data: { id, list_id, name: 'Updated item', updated_at: '2090-01-01T00:00:00Z' }
 		}]);
 		expect((await move('here', other)).results[0].status).toBe('ignored');
 		expect((await move('there', LIST)).results[0].status).toBe('ignored');
