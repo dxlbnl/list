@@ -173,3 +173,22 @@ it('only grants membership for newly created lists', async () => {
 		await h.close();
 	}
 }, 30_000);
+
+it('keeps one owner membership when concurrent creates are retried', async () => {
+	const h = await createTestDb();
+	try {
+		await h.db.insert(users).values({ id: USER });
+		const create: SyncOperation = {
+			id: 'create-list', entity: 'list', type: 'INSERT',
+			data: { id: LIST, name: 'Groceries', slug: 'groceries', created_at: new Date().toISOString() }
+		};
+		const results = await Promise.all([
+			processSyncBatch(h.db, USER, [create]),
+			processSyncBatch(h.db, USER, [create])
+		]);
+		expect(results.map(({ results }) => results[0].status)).toEqual(['success', 'success']);
+		expect(await h.db.select().from(listUsers)).toEqual([{ listId: LIST, userId: USER }]);
+	} finally {
+		await h.close();
+	}
+}, 30_000);
