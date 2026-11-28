@@ -5,6 +5,8 @@ All three platforms use the same remote MCP server at
 `https://list.dexterlabs.nl`. Use this canonical host directly, including
 `/mcp` on the server URL.
 
+For public ChatGPT distribution, start with [Build the upload ZIP](#build-the-upload-zip).
+
 ## Configure the List side
 
 1. Create a separate OAuth client ID and random secret for each platform and
@@ -32,6 +34,73 @@ for configuration details.
 
 ## ChatGPT
 
+### Build the upload ZIP
+
+The repository includes two templates. [`plugin.json`](mcp/chatgpt/plugin.json)
+describes the public listing and points to the icon. [`mcp.json`](mcp/chatgpt/mcp.json)
+configures the production MCP endpoint and OAuth. OpenAI's portal reads the
+advanced OAuth settings from `mcp.json`. Keep `extensions["com.openai"].auth`
+in that file for upload. The generic Agent Plugins 1.0.0 MCP schema is stricter
+than OpenAI’s documented extension format, so a generic schema validator may
+flag that field. Use the OpenAI portal to validate the full submission.
+
+1. From the repository root, prepare a working directory:
+
+   ```sh
+   package_dir="$(mktemp -d)"
+   mkdir -p "$package_dir/assets"
+   cp docs/mcp/chatgpt/plugin.json docs/mcp/chatgpt/mcp.json "$package_dir/"
+   cp static/apple-touch-icon.png "$package_dir/assets/list.png"
+   printf 'Edit the manifests in %s\n' "$package_dir"
+   ```
+
+2. In that directory, edit both files:
+
+   | File | Values to fill in |
+   | --- | --- |
+   | `plugin.json` | Replace the three `replace-me.invalid` URLs with public HTTPS pages for List support, privacy and terms. Confirm the developer name matches your verified publishing identity. |
+   | `mcp.json` | Replace `REPLACE_WITH_LIST_OAUTH_CLIENT_ID` with the client ID for this public plugin in `LIST_OAUTH_CLIENTS`. The template already uses the production endpoint, its current `client_secret_basic` method, and List's three scopes. Use OAuth discovery for the authorization and token endpoints. |
+
+   The client secret goes in the OpenAI portal during connection setup. The
+   client ID is the public value that belongs in the ZIP.
+
+3. In the same terminal, create a fresh ZIP and list the contents:
+
+   ```sh
+   if grep -qE 'replace-me[.]invalid|REPLACE_WITH_LIST_OAUTH_CLIENT_ID' \
+       "$package_dir/plugin.json" "$package_dir/mcp.json"; then
+     printf '%s\n' 'Fill in the remaining manifest placeholders before packaging.'
+   else
+     (cd "$package_dir" && zip list-chatgpt.zip plugin.json mcp.json assets/list.png)
+     unzip -l "$package_dir/list-chatgpt.zip"
+     printf 'Upload %s/list-chatgpt.zip\n' "$package_dir"
+   fi
+   ```
+
+   The ZIP should list `plugin.json`, `mcp.json` and `assets/list.png` at
+   those exact paths. Use a fresh working directory for each build.
+
+[OpenAI package format](https://developers.openai.com/plugins/build/plugins)
+
+### Submit to the public directory
+
+1. In the [OpenAI Plugins portal](https://platform.openai.com/plugins), select
+   **Upload new or existing plugin**, choose a verified publisher identity and
+   upload the ZIP.
+2. Open **MCPs → Connect**, complete the domain verification challenge shown
+   in the portal, and register the exact callback URI for this public plugin
+   in List. Once the List OAuth change is deployed, enter the secret in the
+   portal and finish consent and the tool scan.
+3. Complete the review details with five positive and three negative test
+   cases and a walkthrough video. Provide a dedicated reviewer account with
+   sample lists. OpenAI requires direct reviewer sign-in without mailbox
+   access or magic links. Normal List sign-in uses magic links, so the
+   reviewer sign-in flow still needs to be provided.
+4. Submit for review and publish after approval. Users can then discover List
+   in the directory, install it and connect their own List account.
+
+[OpenAI submission and review](https://developers.openai.com/plugins/deploy/submission)
+
 ### Test a custom connection
 
 1. Open **Plugins → + → Add custom MCP server** in ChatGPT web. Use a Business
@@ -45,28 +114,6 @@ for configuration details.
    can publish the custom connection for the workspace.
 
 [Custom MCP setup](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt)
-
-### Register for the public directory
-
-1. In the [OpenAI Plugins portal](https://platform.openai.com/plugins), choose
-   **Upload new or existing plugin** under the intended organization and use a
-   verified publisher identity. Upload a ZIP with a root `plugin.json` and
-   `mcp.json` pointing at List. Use OAuth client registration mode `provided`
-   and declare the client ID, authentication method and scopes. Enter the
-   secret in the portal.
-2. Open **MCPs → Connect**, complete the domain verification challenge shown
-   in the portal, register the exact OAuth callback in List, and complete
-   consent and the tool scan.
-3. Add genuine privacy and support URLs and complete the review details. Use a
-   dedicated reviewer account with sample lists. OpenAI requires a way for
-   reviewers to sign in directly without mailbox access or magic links. Normal
-   List sign-in uses magic links, so this reviewer flow still needs to be
-   provided. Include the test cases and a walkthrough.
-4. Submit for review and publish after approval. Users can then discover List
-   in the directory, install it and connect their own List account.
-
-[Package format](https://developers.openai.com/plugins/build/plugins) ·
-[Submission and review](https://developers.openai.com/plugins/deploy/submission)
 
 ## Claude
 

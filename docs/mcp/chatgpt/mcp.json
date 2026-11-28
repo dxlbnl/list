@@ -1,0 +1,22 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "list": {
+      "type": "streamable-http",
+      "url": "https://list.dexterlabs.nl/mcp",
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "oauth",
+            "client": {
+              "mode": "provided",
+              "clientId": "REPLACE_WITH_LIST_OAUTH_CLIENT_ID",
+              "tokenEndpointAuthMethod": "client_secret_basic"
+            },
+            "baseScopes": ["lists:read", "proposals:create", "offline_access"]
+          }
+        }
+      }
+    }
+  }
+}
