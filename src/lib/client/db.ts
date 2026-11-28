@@ -24,6 +24,7 @@ export class ListDatabase extends Dexie {
 			items: 'id, listId, name, groupName, rank, done, deletedAt, updatedAt, [listId+groupName]',
 			syncQueue: '++localId, entity, type, timestamp'
 		});
+		this.version(5).stores({ syncQueue: '++localId, entity, type, timestamp, data.id' });
 		this.version(6).stores({ localMeta: 'key' });
 	}
 }

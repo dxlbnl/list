@@ -156,18 +156,13 @@ class SyncManager {
 					this.reconcileAllLists();
 				} else if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
 					const serverList = payload.new as DatabaseList;
-					const isPending = await this.isOperationPending(listId);
-					if (!isPending) {
-						await this.db.lists.put({
-							id: serverList.id,
-							slug: serverList.slug,
-							name: serverList.name,
-							createdBy: serverList.created_by,
-							createdAt: new Date(serverList.created_at)
-						});
-					} else {
-						this.reconcileAllLists();
-					}
+					await this.applyServerList({
+						id: serverList.id,
+						slug: serverList.slug,
+						name: serverList.name,
+						createdBy: serverList.created_by,
+						createdAt: new Date(serverList.created_at)
+					});
 				}
 			})
 			.on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, async (payload: RealtimePostgresChangesPayload<DatabaseItem>) => {
@@ -241,29 +236,26 @@ class SyncManager {
 	private pushPromise: Promise<void> | null = null;
 
 	private async isOperationPending(entityId: string) {
-		const ops = await this.db.syncQueue.toArray();
-		return ops.some(op => op.data.id === entityId);
+		return (await this.db.syncQueue.where('data.id').equals(entityId).first()) !== undefined;
 	}
 
-	/**
-	 * The single client apply path for a server item row — used by both the Realtime
-	 * handler and pull. Last-write-wins guard: skip if a local op is still pending for this
-	 * id, or if the local row is newer-or-equal than the incoming one. This is what stops a
-	 * stale/reordered echo (e.g. an item's own delayed creation echo) from resurrecting a
-	 * deleted item or reverting a newer field edit — the client apply path had no such guard.
-	 */
-	async applyServerItem(candidate: LocalItem): Promise<void> {
-		hlcObserve(candidate.updatedAt); // keep our clock ahead of observed stamps
-		if (await this.isOperationPending(candidate.id)) return; // local in-flight wins
-		const local = await this.db.items.get(candidate.id);
-		if (local && local.updatedAt >= candidate.updatedAt) return; // stale echo — drop it
-		await this.db.items.put(candidate);
+	/** Skip pending edits and stale server echoes, atomically with the local write. */
+	async applyServerItem(candidate: LocalItem, pending?: Set<string>): Promise<void> {
+		hlcObserve(candidate.updatedAt);
+		await this.db.transaction('rw', this.db.syncQueue, this.db.items, async () => {
+			if (pending ? pending.has(candidate.id) : await this.isOperationPending(candidate.id)) return;
+			const local = await this.db.items.get(candidate.id);
+			if (local && local.updatedAt >= candidate.updatedAt) return;
+			await this.db.items.put(candidate);
+		});
 	}
 
-	/** Apply a server list row (rename / new list from the cursor delta). Pending local op wins. */
-	async applyServerList(candidate: LocalList): Promise<void> {
-		if (await this.isOperationPending(candidate.id)) return;
-		await this.db.lists.put(candidate);
+	/** Apply a server list row while preserving pending local edits. */
+	async applyServerList(candidate: LocalList, pending?: Set<string>): Promise<void> {
+		await this.db.transaction('rw', this.db.syncQueue, this.db.lists, async () => {
+			if (pending ? pending.has(candidate.id) : await this.isOperationPending(candidate.id)) return;
+			await this.db.lists.put(candidate);
+		});
 	}
 
 	/** Apply the cursor-delta `changes` (member-visible rows since our cursor) and advance the cursor. */
@@ -271,25 +263,30 @@ class SyncManager {
 		changes: { items?: DatabaseItem[]; lists?: DatabaseList[] } | undefined,
 		newCursor: number | undefined
 	): Promise<void> {
-		for (const si of changes?.items ?? []) {
-			await this.applyServerItem({
-				id: si.id,
-				listId: si.list_id,
-				name: si.name,
-				groupName: si.group_name || "",
-				rank: si.rank,
-				done: si.done,
-				deletedAt: si.deleted_at ? new Date(si.deleted_at) : null,
-				updatedAt: new Date(si.updated_at)
-			});
-		}
-		for (const sl of changes?.lists ?? []) {
-			await this.applyServerList({
-				id: sl.id,
-				slug: sl.slug,
-				name: sl.name,
-				createdBy: sl.created_by,
-				createdAt: new Date(sl.created_at)
+		if (changes?.items?.length || changes?.lists?.length) {
+			await this.db.transaction('rw', this.db.syncQueue, this.db.items, this.db.lists, async () => {
+				const pending = new Set<string>(await this.db.syncQueue.orderBy('data.id').uniqueKeys() as string[]);
+				for (const si of changes?.items ?? []) {
+					await this.applyServerItem({
+						id: si.id,
+						listId: si.list_id,
+						name: si.name,
+						groupName: si.group_name || "",
+						rank: si.rank,
+						done: si.done,
+						deletedAt: si.deleted_at ? new Date(si.deleted_at) : null,
+						updatedAt: new Date(si.updated_at)
+					}, pending);
+				}
+				for (const sl of changes?.lists ?? []) {
+					await this.applyServerList({
+						id: sl.id,
+						slug: sl.slug,
+						name: sl.name,
+						createdBy: sl.created_by,
+						createdAt: new Date(sl.created_at)
+					}, pending);
+				}
 			});
 		}
 		if (typeof newCursor === 'number' && newCursor > this.cursor) {
@@ -336,8 +333,7 @@ class SyncManager {
 			}
 		}
 		for (const sl of serverLists) {
-			if (await this.isOperationPending(sl.id)) continue;
-			await this.db.lists.put({
+			await this.applyServerList({
 				id: sl.id,
 				slug: sl.slug,
 				name: sl.name,
