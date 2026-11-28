@@ -6,10 +6,11 @@ import { fail } from '@sveltejs/kit';
 import { MESSAGES } from '$lib/constants/messages';
 import { sendMagicLink } from '$lib/server/email';
 import { checkRateLimit } from '$lib/server/ratelimit';
+import { oauthCookie, stageOAuthLogin } from '$lib/server/oauth';
 import type { Actions } from './$types';
 
 export const actions: Actions = {
-	default: async ({ request, locals, url, getClientAddress }) => {
+	default: async ({ request, locals, url, getClientAddress, cookies }) => {
 		// Rate limit: 3 emails per 10 minutes per IP
 		const ip = getClientAddress();
 		const allowed = await checkRateLimit(`login-email:${ip}`, 3, 10);
@@ -49,11 +50,15 @@ export const actions: Actions = {
 			expiresAt
 		});
 
+		const oauthTicket = cookies.get(oauthCookie);
+		const oauthLogin = !!oauthTicket && url.searchParams.get('oauth') === '1';
+		if (oauthLogin) await stageOAuthLogin(db, oauthTicket, token);
+
 		// Build confirmation URL
 		const confirmUrl = `${url.origin}/login/confirm/${token}`;
 
 		// Send Email
-		await sendMagicLink(email, confirmUrl, 'login');
+		await sendMagicLink(email, confirmUrl, 'login', oauthLogin);
 
 		return { success: true };
 	}

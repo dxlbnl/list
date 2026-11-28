@@ -1,4 +1,5 @@
 import { getSession, createAnonymousSession } from '$lib/server/auth';
+import { retiredAiResponse } from '$lib/server/ai-http';
 import { createSupabaseToken } from '$lib/server/supabase-auth';
 import type { Handle, HandleServerError } from '@sveltejs/kit';
 import { logger } from '$lib/logger';
@@ -16,17 +17,46 @@ if (!dev) {
 	}
 }
 
+function under(path: string, prefix: string) {
+	return path === prefix || path.startsWith(prefix + '/');
+}
+
+function oauthEndpoint(path: string) {
+	return under(path, '/mcp') || under(path, '/oauth') || path.startsWith('/.well-known/oauth-');
+}
+
+function authPath(path: string) {
+	return ['/login', '/logout', '/settings', '/api/lists'].some((prefix) => under(path, prefix));
+}
+
+function privateResponse(response: Response) {
+	const headers = new Headers(response.headers);
+	headers.set('Cache-Control', 'no-store');
+	headers.set('Referrer-Policy', 'no-referrer');
+	return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
-	// Agent API and public instructions must never create anonymous users/sessions.
- if (event.url.pathname.startsWith('/api/ai/')) {
-  const response = await resolve(event);
-  response.headers.set('Cache-Control', 'no-store');
-  response.headers.set('Referrer-Policy', 'no-referrer');
-  await logger.flush();
-  return response;
- }
- const start = Date.now();
-	
+	const path = event.url.pathname;
+	if (path === '/ai-openapi.json') return retiredAiResponse();
+	if (under(path, '/api/ai')) return resolve(event);
+	if (path !== '/oauth/token' && path !== '/oauth/revoke' &&
+		['POST', 'PUT', 'PATCH', 'DELETE'].includes(event.request.method) &&
+		/^(application\/x-www-form-urlencoded|multipart\/form-data|text\/plain)$/i.test(
+			event.request.headers.get('content-type')?.split(';')[0].trim() ?? ''
+		) && event.request.headers.get('origin') !== event.url.origin) {
+		return privateResponse(new Response('Cross-site form submission is forbidden.', { status: 403 }));
+	}
+	if (oauthEndpoint(path)) {
+		const auth = under(path, '/oauth/authorize') ? await getSession(event) : null;
+		event.locals.user = auth?.user ?? null;
+		event.locals.session = auth?.session ?? null;
+		const response = await resolve(event);
+		if (!dev) await logger.flush();
+		return privateResponse(response);
+	}
+
+	const start = Date.now();
 	const sessionId = event.cookies.get('auth_session');
 	const tAuthStart = Date.now();
 	let auth = await getSession(event);
@@ -55,12 +85,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const tResolve = Date.now() - tResolveStart;
 	
 	const duration = Date.now() - start;
-	const path = event.route.id ?? '<unmatched>';
+	const loggedPath = event.route.id ?? '<unmatched>';
 	
 	// Log request summary with detailed tracing
-	logger.info(`${event.request.method} ${path} - ${response.status} (${duration}ms)`, {
+	logger.info(`${event.request.method} ${loggedPath} - ${response.status} (${duration}ms)`, {
 		method: event.request.method,
-		path,
+		path: loggedPath,
 		status: response.status,
 		duration,
 		tAuth,
@@ -73,7 +103,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		await logger.flush();
 	}
 
-	return response;
+	return authPath(path) ? privateResponse(response) : response;
 };
 
 export const handleError: HandleServerError = async ({ event }) => {
