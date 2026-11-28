@@ -12,7 +12,11 @@ export async function logout() {
 		console.error("Failed to purge local database:", e);
 	}
 	// Redirect to server-side logout
-	window.location.href = "/logout";
+	const form = document.createElement('form');
+	form.method = 'POST';
+	form.action = '/logout';
+	document.body.append(form);
+	form.submit();
 }
 
 /**

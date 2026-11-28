@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm';
 import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = async ({ cookies }) => {
+export const POST: RequestHandler = async ({ cookies }) => {
 	const sessionId = cookies.get('auth_session');
 	if (sessionId) {
 		await db.delete(sessions).where(eq(sessions.id, sessionId));
