@@ -343,9 +343,17 @@ class SyncManager {
 			body: JSON.stringify({ operations: ops, clientId: this.clientId, cursor: this.cursor })
 		});
 
-		if (response.status === 400) {
-			// Keep invalid operations available locally while allowing valid operations through.
-			if (ops.length === 1) return false;
+		if (response.status === 400 || response.status === 422) {
+			// Split only known input failures. Keep rejected records for inspection, but do not
+			// send them again automatically or back off subsequent healthy writes.
+			if (ops.length === 1) {
+				const localId = ops[0].localId;
+				if (localId === undefined) return false;
+				await this.db.syncQueue.update(localId, {
+					rejection: { status: response.status, rejectedAt: Date.now() }
+				});
+				return true;
+			}
 			const middle = Math.floor(ops.length / 2);
 			const first = await this.pushBatch(ops.slice(0, middle));
 			const second = await this.pushBatch(ops.slice(middle));
@@ -368,18 +376,19 @@ class SyncManager {
 
 		this.pushPromise = (async () => {
 			try {
-				let batch = await this.db.syncQueue.limit(MAX_SYNC_OPERATIONS).toArray();
-				if (batch.length === 0) return;
-				this.isSyncing = true;
-				this.lastSyncError = null;
+				const pending = (op: QueuedSyncOperation) => !op.rejection;
+				let batch = await this.db.syncQueue.filter(pending).limit(MAX_SYNC_OPERATIONS).toArray();
+				if (batch.length > 0) this.isSyncing = true;
 				let allAcknowledged = true;
 				while (this.isOnline && batch.length > 0) {
 					allAcknowledged = (await this.pushBatch(batch)) && allAcknowledged;
 					const lastKey = batch.at(-1)?.localId;
 					if (lastKey === undefined) break;
-					batch = await this.db.syncQueue.where(':id').above(lastKey).limit(MAX_SYNC_OPERATIONS).toArray();
+					batch = await this.db.syncQueue.where(':id').above(lastKey).and(pending).limit(MAX_SYNC_OPERATIONS).toArray();
 				}
-				if (!allAcknowledged) throw new Error('Some sync operations were rejected and are still queued.');
+				if (!allAcknowledged) throw new Error('Some sync operations were not acknowledged.');
+				const rejected = await this.db.syncQueue.filter((op) => Boolean(op.rejection)).first();
+				this.lastSyncError = rejected ? 'Some sync operations were rejected and saved locally.' : null;
 				this.consecutiveFailures = 0;
 				this.retryPushAfter = 0;
 			} catch (error) {
