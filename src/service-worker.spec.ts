@@ -16,7 +16,7 @@ it('evicts old caches and only intercepts public assets', async () => {
 		clients: { claim: vi.fn() }
 	});
 	vi.stubGlobal('caches', {
-		keys: async () => ['cache-old', 'cache-fixture'],
+		keys: async () => ['cache-old', 'list-public-fixture'],
 		delete: remove,
 		open: async () => ({ match })
 	});
