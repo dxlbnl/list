@@ -18,7 +18,8 @@ it('accepts native same-origin forms and rejects a form from another origin', as
 		try {
 			const url = new URL(incoming.url!, `http://${incoming.headers.host}`);
 			const request = new Request(url, { method: incoming.method, headers: incoming.headers as Record<string, string> });
-			const event = { url, request, locals: {}, cookies: { get: () => undefined } } as unknown as RequestEvent;
+			const routeId = url.pathname.startsWith('/login/confirm/') ? '/login/confirm/[token]' : url.pathname;
+			const event = { url, request, route: { id: routeId }, locals: {}, cookies: { get: () => undefined } } as unknown as RequestEvent;
 			const response = await handle({
 				event,
 				resolve: async () => incoming.method === 'GET'

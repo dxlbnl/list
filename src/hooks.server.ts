@@ -29,10 +29,6 @@ function authPath(path: string) {
 	return ['/login', '/logout', '/settings', '/api/lists'].some((prefix) => under(path, prefix));
 }
 
-function safePath(path: string) {
-	return path.startsWith('/login/confirm/') ? '/login/confirm/[token]' : path;
-}
-
 function privateResponse(response: Response, browserPage = false) {
 	const headers = new Headers(response.headers);
 	headers.set('Cache-Control', 'no-store');
@@ -92,7 +88,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const tResolve = Date.now() - tResolveStart;
 	
 	const duration = Date.now() - start;
-	const loggedPath = safePath(path);
+	const loggedPath = event.route.id ?? '<unmatched>';
 	
 	// Log request summary with detailed tracing
 	logger.info(`${event.request.method} ${loggedPath} - ${response.status} (${duration}ms)`, {
@@ -113,14 +109,19 @@ export const handle: Handle = async ({ event, resolve }) => {
 	return authPath(path) ? privateResponse(response, true) : response;
 };
 
-export const handleError: HandleServerError = async ({ error, event }) => {
-	const path = safePath(event.url.pathname);
-	const sensitive = oauthEndpoint(path) || authPath(path);
+export const handleError: HandleServerError = async ({ error, event, status }) => {
+	const path = event.route.id ?? '<unmatched>';
+	const errorKind = error instanceof TypeError ? 'type_error'
+		: error instanceof RangeError ? 'range_error'
+		: error instanceof SyntaxError ? 'syntax_error'
+		: error instanceof Error ? 'application_error'
+		: 'unknown_error';
 	logger.error(`Unhandled server error: ${path}`, {
 		path,
-		userId: event.locals.user?.id,
-		...(sensitive && error instanceof Error ? { errorType: error.name } : {})
-	}, sensitive ? undefined : error);
+		status,
+		errorKind,
+		userId: event.locals.user?.id
+	});
 
 	if (!dev) {
 		await logger.flush();
