@@ -8,7 +8,7 @@ import { MESSAGES } from '$lib/constants/messages';
 import { dev } from '$app/environment';
 import type { PageServerLoad, Actions } from './$types';
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
 	const { token } = params;
 
 	const result = await db
@@ -26,7 +26,10 @@ export const load: PageServerLoad = async ({ params }) => {
 		throw error(400, MESSAGES.AUTH.EXPIRED_TOKEN);
 	}
 
-	return { token };
+	return {
+		token,
+		switchingAccount: !link.email && Boolean(locals.user?.email) && locals.user?.id !== link.userIdToMerge
+	};
 };
 
 export const actions: Actions = {
@@ -91,7 +94,7 @@ export const actions: Actions = {
 			targetUserId = link.userIdToMerge;
 			
 			// If the scanning device has an anonymous session, merge its data into the cloned account
-			if (currentUserId && currentUserId !== targetUserId) {
+			if (currentUserId && locals.user?.email === null && currentUserId !== targetUserId) {
 				await mergeUsers(currentUserId, targetUserId);
 			}
 		} else {

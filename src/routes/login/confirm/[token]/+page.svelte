@@ -13,7 +13,9 @@
 <div class="confirm-page">
 	<AccessCard 
 		title="Confirm session" 
-		subtitle="Please confirm you want to sign in on this device to secure your lists."
+		subtitle={data.switchingAccount
+			? "Switch to the account from the QR code. Your current account and its lists will be kept."
+			: "Please confirm you want to sign in on this device to secure your lists."}
 	>
 		<form 
 			method="POST" 
@@ -35,7 +37,7 @@
 					class="btn-primary w-full mono tracking-widest"
 					disabled={isLoading}
 				>
-					{isLoading ? "Authorizing..." : "Confirm & sync"}
+					{isLoading ? "Authorizing..." : data.switchingAccount ? "Switch account" : "Confirm & sync"}
 				</button>
 				
 			</div>
