@@ -29,10 +29,13 @@ function authPath(path: string) {
 	return ['/login', '/logout', '/settings', '/api/lists'].some((prefix) => under(path, prefix));
 }
 
-function privateResponse(response: Response) {
+function privateResponse(response: Response, browserPage = false) {
 	const headers = new Headers(response.headers);
 	headers.set('Cache-Control', 'no-store');
-	headers.set('Referrer-Policy', 'no-referrer');
+	// A native form can send Origin: null under no-referrer, even on the same origin.
+	// strict-origin preserves the Origin check without exposing paths or query strings.
+	const html = headers.get('Content-Type')?.split(';')[0] === 'text/html';
+	headers.set('Referrer-Policy', browserPage && html ? 'strict-origin' : 'no-referrer');
 	return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
@@ -53,7 +56,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		event.locals.session = auth?.session ?? null;
 		const response = await resolve(event);
 		if (!dev) await logger.flush();
-		return privateResponse(response);
+		return privateResponse(response, under(path, '/oauth/authorize'));
 	}
 
 	const start = Date.now();
@@ -103,7 +106,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		await logger.flush();
 	}
 
-	return authPath(path) ? privateResponse(response) : response;
+	return authPath(path) ? privateResponse(response, true) : response;
 };
 
 export const handleError: HandleServerError = async ({ event }) => {

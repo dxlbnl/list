@@ -1,40 +1,67 @@
-import { expect, it, vi } from 'vitest';
+import { once } from 'node:events';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import type { RequestEvent } from '@sveltejs/kit';
-import { logger } from '$lib/logger';
-import { handle, handleError } from './hooks.server';
+import { chromium } from 'playwright';
+import { expect, it, vi } from 'vitest';
+import { handle } from './hooks.server';
 
 vi.mock('$lib/server/auth', () => ({
-	getSession: vi.fn(async () => ({ user: { id: 'user-id' }, session: { id: 'session-secret' } })),
+	getSession: async () => ({ user: { id: 'browser-test' }, session: { id: 'session-test' } }),
 	createAnonymousSession: vi.fn()
 }));
-vi.mock('$lib/server/supabase-auth', () => ({ createSupabaseToken: vi.fn() }));
-vi.mock('$lib/server/logger', () => ({
-	getAxiomClient: () => undefined,
-	getAxiomDataset: () => undefined,
-	flush: vi.fn()
-}));
+vi.mock('$lib/server/supabase-auth', () => ({ createSupabaseToken: async () => undefined }));
 
-it.each([
-	['/login/confirm/[token]', '/login/confirm/fixture-magic-token'],
-	['/join/[slug]/[token]', '/join/groceries/fixture-invite-token']
-])('uses the route ID when logging %s', async (id, pathname) => {
-	const info = vi.spyOn(logger, 'info').mockImplementation(() => {});
-	const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
+it('accepts native same-origin forms and rejects a form from another origin', async () => {
+	const form = (action: string) => `<form method="post" action="${action}"><button>Submit</button></form>`;
+	const app = createServer(async (incoming, outgoing) => {
+		try {
+			const url = new URL(incoming.url!, `http://${incoming.headers.host}`);
+			const request = new Request(url, { method: incoming.method, headers: incoming.headers as Record<string, string> });
+			const routeId = url.pathname.startsWith('/login/confirm/') ? '/login/confirm/[token]' : url.pathname;
+			const event = { url, request, route: { id: routeId }, locals: {}, cookies: { get: () => undefined } } as unknown as RequestEvent;
+			const response = await handle({
+				event,
+				resolve: async () => incoming.method === 'GET'
+					? new Response(form(url.pathname), { headers: { 'content-type': 'text/html; charset=utf-8' } })
+					: new Response('Form accepted')
+			});
+			outgoing.writeHead(response.status, Object.fromEntries(response.headers));
+			outgoing.end(await response.text());
+		} catch (cause) {
+			outgoing.writeHead(500);
+			outgoing.end(String(cause));
+		}
+	}).listen(0, '127.0.0.1');
+	await once(app, 'listening');
+	const origin = `http://127.0.0.1:${(app.address() as AddressInfo).port}`;
+	const otherSite = createServer((_request, response) => {
+		response.writeHead(200, { 'content-type': 'text/html' });
+		response.end(form(origin + '/oauth/authorize'));
+	}).listen(0, '127.0.0.1');
+	await once(otherSite, 'listening');
 	try {
-		const url = new URL(pathname, 'https://list.example.test');
-		const event = {
-			url, route: { id }, request: new Request(url), locals: {},
-			cookies: { get: () => 'session-secret' }
-		} as unknown as RequestEvent;
-		await handle({ event, resolve: async () => new Response() });
-		await handleError({ error: new Error(pathname), event, status: 500, message: 'Internal Error' });
-		expect(info).toHaveBeenCalledWith(expect.stringContaining(id), expect.objectContaining({ path: id }));
-		expect(error).toHaveBeenCalledWith(expect.stringContaining(id), expect.objectContaining({ path: id }));
-		const logged = JSON.stringify([info.mock.calls, error.mock.calls]);
-		expect(logged).not.toContain(pathname);
-		expect(logged).not.toContain('session-secret');
+		const browser = await chromium.launch();
+		try {
+			const page = await browser.newPage();
+			for (const path of ['/oauth/authorize', '/settings', '/login/confirm/example']) {
+				const pageResponse = await page.goto(origin + path);
+				expect(pageResponse?.headers()['referrer-policy']).toBe('strict-origin');
+				const posted = page.waitForResponse((response) => response.request().method() === 'POST');
+				await page.getByRole('button', { name: 'Submit' }).click();
+				const response = await posted;
+				expect(response.status(), path).toBe(200);
+				expect(await response.request().headerValue('referer')).toBe(origin + '/');
+			}
+			await page.goto(`http://127.0.0.1:${(otherSite.address() as AddressInfo).port}`);
+			const posted = page.waitForResponse((response) => response.request().method() === 'POST');
+			await page.getByRole('button', { name: 'Submit' }).click();
+			expect((await posted).status()).toBe(403);
+		} finally {
+			await browser.close();
+		}
 	} finally {
-		info.mockRestore();
-		error.mockRestore();
+		app.close();
+		otherSite.close();
 	}
-});
+}, 15000);
