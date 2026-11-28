@@ -131,13 +131,29 @@ export const cloneSessionRequestSchema = z.object({});
 // Agent input never controls list scope, entity IDs, status or expiry.
 export const aiItemsSchema = z.array(z.object({
  name: z.string().trim().min(1).max(200),
- groupName: z.string().trim().max(100).default('')
+ groupName: z.string().max(100).default('')
 }).strict()).min(1).max(50);
-export const aiCreateSchema = z.object({ items: aiItemsSchema }).strict();
-export const aiPatchSchema = aiCreateSchema.extend({ version: z.number().int().positive() }).strict();
-export const aiDecisionSchema = z.object({
- version: z.number().int().positive(), decision: z.enum(['accepted', 'rejected'])
+export const mcpProposalInputSchema = z.object({
+ listId: z.string().min(1).max(128),
+ items: aiItemsSchema,
+ requestId: z.string().min(1).max(128).optional()
 }).strict();
+export type McpProposalInput = z.output<typeof mcpProposalInputSchema>;
+
+export const mcpListCursorSchema = z.object({
+ listId: z.string().min(1).max(128),
+ id: z.string().min(1).max(128),
+ rank: z.number()
+}).strict();
+export type McpListCursor = z.output<typeof mcpListCursorSchema>;
+export const aiDecisionSchema = z.object({
+ version: z.number().int().positive(),
+ decision: z.enum(['accepted', 'rejected']),
+ groupOverrides: z.array(z.object({
+  from: z.string().min(1).max(100), to: z.string().max(100)
+ }).strict()).max(50).optional()
+}).strict();
+export type AiDecision = z.output<typeof aiDecisionSchema>;
 export const aiProposalSchema = z.object({
  id: z.string(), listId: z.string(), items: aiItemsSchema,
  version: z.number().int().positive(),
@@ -147,6 +163,26 @@ export const aiProposalSchema = z.object({
 export type AiProposal = z.infer<typeof aiProposalSchema>;
 
 export const aiListStateSchema = z.object({
- proposals: z.array(aiProposalSchema),
- links: z.array(z.object({ id: z.string(), createdAt: z.coerce.date() }))
+ proposals: z.array(aiProposalSchema)
+});
+
+const mcpListSummarySchema = z.object({ id: z.string(), name: z.string() });
+export const mcpListsOutputSchema = z.object({
+	lists: z.array(mcpListSummarySchema),
+	nextCursor: z.string().nullable()
+});
+
+export const mcpContextOutputSchema = z.object({
+	list: mcpListSummarySchema,
+	groups: z.array(z.string()),
+	items: z.array(z.object({ name: z.string(), groupName: z.string(), done: z.boolean() })),
+	nextCursor: mcpListCursorSchema.nullable()
+});
+
+export const mcpProposalOutputSchema = z.object({
+	proposalId: z.string(),
+	listId: z.string(),
+	status: aiProposalSchema.shape.status,
+	itemCount: z.number().int(),
+	expiresAt: z.iso.datetime()
 });
