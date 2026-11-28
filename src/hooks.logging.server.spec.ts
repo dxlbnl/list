@@ -27,9 +27,10 @@ it.each([
 			cookies: { get: () => 'session-secret' }
 		} as unknown as RequestEvent;
 		await handle({ event, resolve: async () => new Response() });
-		await handleError({ error: new Error(pathname), event, status: 500, message: 'Internal Error' });
+		await handleError({ error: new TypeError(pathname), event, status: 500, message: 'Internal Error' });
 		expect(info).toHaveBeenCalledWith(expect.stringContaining(id), expect.objectContaining({ path: id }));
-		expect(error).toHaveBeenCalledWith(expect.stringContaining(id), expect.objectContaining({ path: id }));
+		expect(error).toHaveBeenCalledWith(expect.stringContaining(id),
+			expect.objectContaining({ path: id, status: 500, errorKind: 'type_error' }));
 		const logged = JSON.stringify([info.mock.calls, error.mock.calls]);
 		expect(logged).not.toContain(pathname);
 		expect(logged).not.toContain('session-secret');

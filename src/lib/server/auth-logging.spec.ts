@@ -47,14 +47,18 @@ it('reports unavailable email without logging a magic link', async () => {
 	expect(JSON.stringify([fixture.log.warn.mock.calls, fixture.log.info.mock.calls])).not.toContain(token);
 });
 
-it('keeps provider error data out of logs', async () => {
+it('retains provider codes and status without logging credential-bearing messages', async () => {
 	fixture.env.RESEND_API_KEY = 'fixture-resend-key';
 	const token = 'fixture-magic-token';
 	const url = `https://list.example.test/login/confirm/${token}`;
-	fixture.send.mockResolvedValueOnce({ error: { message: url } });
+	fixture.send.mockResolvedValueOnce({ error: { message: url, name: 'rate_limit_exceeded', statusCode: 429 } });
 	expect(await sendMagicLink('person@example.test', url)).toMatchObject({ success: false });
-	fixture.send.mockRejectedValueOnce(new Error(url));
+	fixture.send.mockRejectedValueOnce(new TypeError(url));
 	expect(await sendMagicLink('person@example.test', url)).toMatchObject({ success: false });
 	expect(fixture.log.error).toHaveBeenCalledTimes(2);
+	expect(fixture.log.error).toHaveBeenNthCalledWith(1, 'Resend error', {
+		providerCode: 'rate_limit_exceeded', providerStatus: 429
+	});
+	expect(fixture.log.error).toHaveBeenNthCalledWith(2, 'Email sending exception', { errorKind: 'transport_error' });
 	expect(JSON.stringify(fixture.log.error.mock.calls)).not.toContain(token);
 });

@@ -109,10 +109,17 @@ export const handle: Handle = async ({ event, resolve }) => {
 	return authPath(path) ? privateResponse(response, true) : response;
 };
 
-export const handleError: HandleServerError = async ({ event }) => {
+export const handleError: HandleServerError = async ({ error, event, status }) => {
 	const path = event.route.id ?? '<unmatched>';
+	const errorKind = error instanceof TypeError ? 'type_error'
+		: error instanceof RangeError ? 'range_error'
+		: error instanceof SyntaxError ? 'syntax_error'
+		: error instanceof Error ? 'application_error'
+		: 'unknown_error';
 	logger.error(`Unhandled server error: ${path}`, {
 		path,
+		status,
+		errorKind,
 		userId: event.locals.user?.id
 	});
 
