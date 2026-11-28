@@ -159,23 +159,31 @@ it('routes a realtime list update through the atomic pending-delete check', asyn
 	}
 });
 
-it('applies a list snapshot while retaining pending edits and newer deletions', async () => {
+it('applies a list snapshot in one commit while retaining pending edits and newer deletions', async () => {
 	const db = freshDb();
 	const pending = world.generate(itemSchema, { overrides: { updatedAt: new Date('2030-01-01') } });
 	const deletedAt = new Date('2031-01-01');
 	const deleted = world.generate(itemSchema, { overrides: { deletedAt, updatedAt: deletedAt } });
 	const added = world.generate(itemSchema, { overrides: { deletedAt: null } });
+	const alsoAdded = world.generate(itemSchema, { overrides: { deletedAt: null } });
 	const manager = createSyncManager(db, async () => Response.json({
 		items: [
 			{ ...pending, name: 'Remote edit', updatedAt: new Date('2032-01-01') },
 			{ ...deleted, deletedAt: null, updatedAt: new Date('2030-01-01') },
-			added
+			added,
+			alsoAdded
 		]
 	}));
 	try {
 		await db.items.bulkPut([pending, deleted]);
 		await db.syncQueue.add({ id: 'pending-edit', entity: 'item', type: 'UPDATE', data: pending });
+		const writeTransactions = new Set<IDBTransaction>();
+		db.items.hook('creating', (_key, _item, transaction) => {
+			writeTransactions.add(transaction.idbtrans);
+		});
 		await manager.pull(added.listId);
+		expect(writeTransactions.size).toBe(1);
+		expect(await db.items.get(alsoAdded.id)).toBeDefined();
 		const [pendingRow, deletedRow, addedRow] = await db.items.bulkGet([pending.id, deleted.id, added.id]);
 		expect(pendingRow).toEqual(pending);
 		expect(deletedRow).toEqual(deleted);
