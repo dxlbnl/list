@@ -8,6 +8,18 @@ import { processSyncBatch } from '$lib/server/sync';
 
 const syncLogger = logger.child({ module: 'sync' });
 
+// Missing values, invalid data and check constraints are input failures. In particular,
+// keep unique and foreign-key conflicts retryable because concurrent writes can cause them.
+const permanentInputFailures = new Set(['22003', '22007', '22021', '22P02', '23502', '23514']);
+
+function isPermanentInputFailure(cause: unknown): boolean {
+	if (typeof cause !== 'object' || cause === null) return false;
+	const databaseError = 'cause' in cause && cause.cause ? cause.cause : cause;
+	return typeof databaseError === 'object' && databaseError !== null
+		&& 'code' in databaseError && typeof databaseError.code === 'string'
+		&& permanentInputFailures.has(databaseError.code);
+}
+
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const user = locals.user;
 	if (!user) throw error(401, MESSAGES.AUTH.UNAUTHORIZED);
@@ -34,8 +46,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		return json({ results, changes, cursor: nextCursor });
 	} catch (e) {
-		const message = e instanceof Error ? e.message : String(e);
-		syncLogger.error('Sync failed', { userId: user.id, error: message });
-		throw error(500, `${MESSAGES.DATA.PROCESS_ERROR}: ${message}`);
+		if (isPermanentInputFailure(e)) {
+			syncLogger.warn('Sync input was rejected by the database', { userId: user.id });
+			throw error(422, 'One or more sync operations contain invalid data.');
+		}
+		syncLogger.error('Sync failed', { userId: user.id, error: e instanceof Error ? e.name : 'Unknown error' });
+		throw error(500, MESSAGES.DATA.PROCESS_ERROR);
 	}
 };

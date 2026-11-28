@@ -43,7 +43,7 @@ it('accepts native same-origin forms and rejects a form from another origin', as
 		const browser = await chromium.launch();
 		try {
 			const page = await browser.newPage();
-			for (const path of ['/oauth/authorize', '/settings', '/login/confirm/example']) {
+			for (const path of ['/oauth/authorize', '/settings', '/login/confirm/example', '/logout']) {
 				const pageResponse = await page.goto(origin + path);
 				expect(pageResponse?.headers()['referrer-policy']).toBe('strict-origin');
 				const posted = page.waitForResponse((response) => response.request().method() === 'POST');

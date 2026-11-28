@@ -112,11 +112,13 @@ export async function processSyncBatch(
 				slug = COALESCE(EXCLUDED.slug, ${lists.slug}),
 				updated_at = now(),
 				updated_seq = nextval('sync_seq')
+			WHERE ${lists.createdBy} = ${userId}
 			RETURNING id
 		),
 		upsert_members AS (
 			INSERT INTO ${listUsers} (list_id, user_id)
-			SELECT id, ${userId} FROM list_resolved
+			SELECT written.id, ${userId} FROM upsert_lists written
+			WHERE NOT EXISTS (SELECT 1 FROM ${lists} existing WHERE existing.id = written.id)
 			ON CONFLICT DO NOTHING
 		),
 		upsert_items AS (
@@ -133,9 +135,12 @@ export async function processSyncBatch(
 			FROM item_input d
 			LEFT JOIN ${items} i ON d.id = i.id
 			WHERE
-				(i.id IS NOT NULL AND EXISTS (SELECT 1 FROM ${listUsers} lu WHERE lu.list_id = i.list_id AND lu.user_id = ${userId}))
-				OR
-				(d.list_id IS NOT NULL AND d.name IS NOT NULL AND EXISTS (SELECT 1 FROM ${listUsers} lu WHERE lu.list_id = d.list_id AND lu.user_id = ${userId}))
+				(i.id IS NULL OR EXISTS (SELECT 1 FROM ${listUsers} lu WHERE lu.list_id = i.list_id AND lu.user_id = ${userId}))
+				AND (i.id IS NOT NULL OR d.name IS NOT NULL)
+				AND EXISTS (
+					SELECT 1 FROM ${listUsers} lu
+					WHERE lu.list_id = COALESCE(d.list_id, i.list_id) AND lu.user_id = ${userId}
+				)
 			ON CONFLICT (id) DO UPDATE SET
 				list_id = COALESCE(EXCLUDED.list_id, ${items.listId}),
 				name = COALESCE(EXCLUDED.name, ${items.name}),
@@ -146,6 +151,10 @@ export async function processSyncBatch(
 				updated_at = EXCLUDED.updated_at,
 				updated_seq = nextval('sync_seq')
 			WHERE ${items.updatedAt} < EXCLUDED.updated_at
+			  AND EXISTS (
+				SELECT 1 FROM ${listUsers} lu
+				WHERE lu.list_id = ${items.listId} AND lu.user_id = ${userId}
+			  )
 			RETURNING id
 		),
 		del_lists_owner AS (
