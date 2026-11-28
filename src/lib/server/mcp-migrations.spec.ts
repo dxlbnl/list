@@ -4,7 +4,7 @@ import { migrate } from 'drizzle-orm/pglite/migrator';
 import { sql } from 'drizzle-orm';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { expect, it } from 'vitest';
-import { withMigrationsThrough } from '../../../scripts/migrate-mcp-expand.mjs';
+import { migrateListDb, withMigrationsThrough } from '../../../scripts/migrate.mjs';
 import * as schema from './db/schema';
 import { createConnectedProposal, decideProposal, pendingProposals } from './ai';
 import { world } from '$lib/test/fixtures';
@@ -55,7 +55,7 @@ it('preserves old proposals and migration history through the expand and cleanup
 			version: 1, decision: 'accepted'
 		}))).toMatchObject({ status: 'accepted' });
 
-		await migrate(db, { migrationsFolder });
+		await expect(migrateListDb(db)).resolves.toBe(1);
 		const { rows: legacyTables } = await db.execute(sql`select to_regclass('public.ai_links') as name`);
 		expect(legacyTables).toEqual([{ name: null }]);
 		const { rows: legacyColumns } = await db.execute(sql`
@@ -79,9 +79,10 @@ it('preserves old proposals and migration history through the expand and cleanup
 
 it('applies the full journal to an empty database and enables RLS for OAuth state', async () => {
 	const client = new PGlite();
-	const db = drizzle(client);
+	const db = drizzle(client, { schema });
 	try {
-		await migrate(db, { migrationsFolder });
+		const results = await Promise.all([migrateListDb(db), migrateListDb(db)]);
+		expect(results.sort((a, b) => a - b)).toEqual([0, readMigrationFiles({ migrationsFolder }).length]);
 		const { rows } = await db.execute(sql`
 			select relname, relrowsecurity from pg_class
 			where relname in ('ai_connections','ai_oauth_requests','ai_oauth_codes','ai_oauth_tokens')

@@ -37,11 +37,10 @@ The test host should use the shared preview database and its own OAuth clients. 
 
 Custom connectors can be tested before any directory publication. Public distribution uses each platform’s registration and review workflow, with the same List endpoint. [OpenAI submission](https://developers.openai.com/plugins/deploy/submission) · [Google registration](https://developers.google.com/connected-apps/gpc/perform-the-steps)
 
-## Release sequence
+## Automatic migrations and release
 
-1. Verify the target database and Drizzle history through `0002_overconfident_cerebro`. Apply `pnpm db:migrate:mcp-expand` with that environment’s `DATABASE_URL`. The command uses the original files and journal through `0003_list_mcp_oauth`.
-2. Activate the deployment with the matching OAuth environment. Verify discovery and an OAuth connection with a test client. Review a proposal carried over from the old app and one created through MCP.
-3. Run `pnpm db:migrate` against the same database to apply `0004_remove_legacy_ai_links`. The migration keeps existing proposals and removes their former credential fields and table. The retired public API responds with `410 Gone` as soon as the new app is active.
-4. Verify the active Vercel deployment, Drizzle history, ordinary List sync, the ability to accept proposals and revocation from Settings.
+Vercel runs `pnpm db:migrate && pnpm build` for Preview and Production. Each environment uses its configured `DATABASE_URL`. The repository also sets the install command to `pnpm install --frozen-lockfile`. GitHub Actions runs the test suite with a local database.
 
-On a fresh database the full journal can be applied in one step. Local tests cover both migration phases, OAuth exchange and revocation, the MCP HTTP protocol, proposal sync and the grouped review UI. Each live chat connector must also be verified against the configured deployment.
+The migration runner uses Drizzle’s checked-in SQL and journal. It takes a transaction-scoped PostgreSQL advisory lock before reading the migration history, then applies pending SQL and records its history in the same transaction. This allows simultaneous builds to share the preview database. A failed migration stops the build.
+
+For the MCP release, `0003` adds the OAuth tables and `0004` removes the legacy AI links table and proposal credential columns. Both run during the build. The previously deployed AI link API can stop working between migration completion and activation of the new build. Existing proposal rows remain reviewable on the new deployment. Verify the deployment once it is active, including OAuth discovery, consent, proposal review and disconnect.
