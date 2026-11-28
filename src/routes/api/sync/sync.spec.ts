@@ -23,7 +23,7 @@ it('reports a permanent database input failure without committing the rest of th
 				body: JSON.stringify({ operations })
 			}),
 			locals: { user }
-		} as Parameters<typeof POST>[0]);
+		} as unknown as Parameters<typeof POST>[0]);
 
 		await expect(Promise.resolve().then(() => send(valid, invalid))).rejects.toMatchObject({ status: 422 });
 		expect(await h.db.select().from(lists).where(eq(lists.id, list.id))).toHaveLength(0);

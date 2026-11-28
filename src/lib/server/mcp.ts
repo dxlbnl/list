@@ -1,3 +1,4 @@
+import { recordAccountActivity } from './account-activity';
 import { createMcpHandler, McpServer, requireScopes } from '@modelcontextprotocol/server';
 import { isHttpError } from '@sveltejs/kit';
 import { z } from 'zod';
@@ -38,10 +39,12 @@ export function createListMcpHandler(db: ListDb) {
 				return result({ error: 'List authorization required' }, true);
 			}
 			try {
-				return result(await db.transaction(async (tx) => {
+				const data = await db.transaction(async (tx) => {
 					if (scope === 'lists:read') await requireActiveConnection(tx, connectionId, userId, scope);
 					return operation(tx, userId, connectionId);
-				}));
+				});
+				await recordAccountActivity(db, userId);
+				return result(data);
 			} catch (cause) {
 				if (cause instanceof ProposalGroupConflict) {
 					return result({ code: 'GROUP_NOT_FOUND', error: cause.message, missingGroups: cause.missingGroups, groups: cause.groups }, true);
