@@ -13,6 +13,7 @@
 	let copied = $state(false);
 	let message = $state('');
 	let busy = $state(false);
+	let finishRefresh: (() => void) | undefined;
 
 	async function refresh() {
 		const result = await aiListAction(listId);
@@ -26,7 +27,10 @@
 		message = '';
 		try { await action(); }
 		catch (e) { message = e instanceof Error ? e.message : 'Request failed.'; }
-		finally { busy = false; }
+		finally {
+			busy = false;
+			finishRefresh?.();
+		}
 	}
 
 	async function createLink() {
@@ -74,11 +78,10 @@
 		let refreshQueued = false;
 		const canPoll = () => mounted && navigator.onLine && document.visibilityState === 'visible';
 
-		async function poll() {
+		function poll() {
 			if (!canPoll() || busy) return;
 			refreshQueued = false;
-			await run(refresh);
-			if (refreshQueued) void poll();
+			void run(refresh);
 		}
 
 		const resume = () => {
@@ -87,12 +90,16 @@
 			void poll();
 		};
 
+		finishRefresh = () => {
+			if (refreshQueued) poll();
+		};
 		document.addEventListener('visibilitychange', resume);
 		window.addEventListener('online', resume);
 		void poll();
 		const timer = setInterval(poll, 15000);
 		return () => {
 			mounted = false;
+			finishRefresh = undefined;
 			clearInterval(timer);
 			document.removeEventListener('visibilitychange', resume);
 			window.removeEventListener('online', resume);

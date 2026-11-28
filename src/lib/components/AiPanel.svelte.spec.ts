@@ -79,3 +79,27 @@ it('refreshes a stale proposal and asks the member to review the updated items',
 	await expect.element(page.getByText('Oat milk', { exact: true })).toBeVisible();
 	await expect.element(page.getByRole('alert')).toHaveTextContent('Review the updated items before deciding.');
 });
+
+
+it('polls only while visible and online and detaches listeners on unmount', async () => {
+	const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+	const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+	const { unmount } = render(AiPanel, { listId: list.id });
+	expect(aiListAction).not.toHaveBeenCalled();
+
+	visibility.mockReturnValue('visible');
+	document.dispatchEvent(new Event('visibilitychange'));
+	await expect.poll(() => vi.mocked(aiListAction).mock.calls.length).toBe(1);
+
+	online.mockReturnValue(false);
+	document.dispatchEvent(new Event('visibilitychange'));
+	expect(aiListAction).toHaveBeenCalledTimes(1);
+	online.mockReturnValue(true);
+	window.dispatchEvent(new Event('online'));
+	await expect.poll(() => vi.mocked(aiListAction).mock.calls.length).toBe(2);
+
+	await unmount();
+	window.dispatchEvent(new Event('online'));
+	document.dispatchEvent(new Event('visibilitychange'));
+	expect(aiListAction).toHaveBeenCalledTimes(2);
+});
