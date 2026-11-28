@@ -469,18 +469,23 @@ class SyncManager {
 				return;
 			}
 			const data: { list: ApiList; items?: ApiItem[] } = await res.json();
-			for (const si of data.items ?? []) {
-				await this.applyServerItem({
-					id: si.id,
-					listId: si.listId,
-					name: si.name,
-					groupName: si.groupName || "",
-					rank: si.rank,
-					done: si.done,
-					deletedAt: si.deletedAt ? new Date(si.deletedAt) : null,
-					updatedAt: new Date(si.updatedAt)
-				});
-			}
+			const items = data.items ?? [];
+			if (items.length === 0) return;
+			await this.db.transaction('rw', this.db.syncQueue, this.db.items, async () => {
+				const pending = new Set(await this.db.syncQueue.orderBy('data.id').uniqueKeys() as string[]);
+				for (const si of items) {
+					await this.applyServerItem({
+						id: si.id,
+						listId: si.listId,
+						name: si.name,
+						groupName: si.groupName || "",
+						rank: si.rank,
+						done: si.done,
+						deletedAt: si.deletedAt ? new Date(si.deletedAt) : null,
+						updatedAt: new Date(si.updatedAt)
+					}, pending);
+				}
+			});
 		} catch (e) {
 			syncLogger.error(`Pull failed for list ${listId}`, {}, e);
 		} finally {
