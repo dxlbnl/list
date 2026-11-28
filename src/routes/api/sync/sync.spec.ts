@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { lists, users } from '$lib/server/db/schema';
 import { createTestDb } from '$lib/test/pglite';
 import { world } from '$lib/test/fixtures';
-import { listSchema } from '$lib/validations';
+import { listSchema, type ListOperationInput } from '$lib/validations';
 import { POST } from './+server';
 
 const database = vi.hoisted(() => ({ current: undefined as Awaited<ReturnType<typeof createTestDb>>['db'] | undefined }));
@@ -15,9 +15,9 @@ it('reports a permanent database input failure without committing the rest of th
 	try {
 		const list = world.generate(listSchema);
 		const [user] = await h.db.insert(users).values({ id: list.createdBy }).returning();
-		const valid = { id: 'valid', entity: 'list', type: 'INSERT', data: list };
+		const valid: ListOperationInput = { id: 'valid', entity: 'list', type: 'INSERT', data: list };
 		const invalid = { ...valid, id: 'invalid', data: { ...list, id: 'incomplete-list', name: undefined } };
-		const send = (...operations: typeof invalid[]) => POST({
+		const send = (...operations: ListOperationInput[]) => POST({
 			request: new Request('http://localhost/api/sync', {
 				method: 'POST',
 				body: JSON.stringify({ operations })
