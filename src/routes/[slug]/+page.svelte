@@ -67,6 +67,8 @@
 	});
 
 	let newItemName = $state("");
+	let added = $state<{ group: string; sequence: number }>();
+	let selection = $state<{ listId: string; group: string }>();
 
 	async function handleAddItem() {
 		if (!newItemName.trim() || !data.listId) return;
@@ -82,13 +84,12 @@
 
 		if (!itemName) return;
 
-		// If no group specified, use the first existing group
-		if (!groupName && sortedGroupNames.length > 0) {
-			const firstGroup = sortedGroupNames[0];
-			groupName = firstGroup === "GENERAL" ? "" : firstGroup;
+		if (!match && selectedGroup && selectedGroup !== "GENERAL") {
+			groupName = selectedGroup;
 		}
 
 		await addItemAction(data.listId, itemName, groupName);
+		added = { group: groupName || "GENERAL", sequence: (added?.sequence ?? 0) + 1 };
 		newItemName = "";
 	}
 
@@ -124,6 +125,11 @@
 		}
 		return names;
 	});
+	const selectedGroup = $derived(
+		selection?.listId === data.listId && sortedGroupNames.includes(selection.group)
+			? selection.group
+			: sortedGroupNames[0]
+	);
 
 	function handleDndConsider(groupName: string, e: CustomEvent<DndEvent<LocalItem>>) {
 		const { items: newItems } = e.detail;
@@ -341,7 +347,9 @@
 	>
 		<div class="list-controls">
 			<InputGroup
-				placeholder="Add item or [Group] item"
+				placeholder={selectedGroup && sortedGroupNames.length > 1
+					? `Add to ${selectedGroup} or [Group] item`
+					: "Add item or [Group] item"}
 				bind:value={newItemName}
 				onAction={handleAddItem}
 				actionLabel="Add"
@@ -359,6 +367,8 @@
 							{groupName}
 							groupItems={localGroups[groupName]}
 							showHeader={sortedGroupNames.length > 1}
+							openAfterAdd={added?.group === groupName ? added.sequence : undefined}
+							onSelect={() => (selection = { listId: data.listId, group: groupName })}
 							onRename={(newName: string) =>
 								renameGroup(data.listId, groupName, newName)}
 							onDelete={() => handleDeleteGroup(groupName)}

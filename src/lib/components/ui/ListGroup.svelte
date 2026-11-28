@@ -18,9 +18,16 @@
 		onDndConsider,
 		onDndFinalize,
 		showHeader = true,
+		onSelect,
+		openAfterAdd,
 	} = $props();
 
 	let isOpen = $state(true);
+	let lastOpenAfterAdd: number | undefined;
+	$effect(() => {
+		if (openAfterAdd !== undefined && openAfterAdd !== lastOpenAfterAdd) isOpen = true;
+		lastOpenAfterAdd = openAfterAdd;
+	});
 	let isRenameDialogOpen = $state(false);
 	let isDeleteDialogOpen = $state(false);
 	let editName = $state("");
@@ -33,7 +40,7 @@
 <Collapsible.Root class="list-group-container" bind:open={isOpen}>
 	{#if showHeader}
 		<div class="group-header-container">
-			<Collapsible.Trigger class="group-header">
+			<Collapsible.Trigger class="group-header" onclick={onSelect}>
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					width="14"

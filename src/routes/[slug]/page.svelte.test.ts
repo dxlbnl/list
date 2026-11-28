@@ -105,4 +105,31 @@ describe('list page — characterisation: group lifecycle when its last item is 
 		// And the surviving group is still there.
 		await expect.element(page.getByText('Milk')).toBeInTheDocument();
 	});
+
+	it('adds to the selected group and gives an explicit group precedence', async () => {
+		const list = world.generate(listSchema);
+		await dexieDb.lists.add(list);
+		await addItem(list.id, 'Milk', '');
+		await addItem(list.id, 'Chips', 'Snacks');
+
+		render(Page, {
+			data: {
+				listId: list.id, initialList: list, title: list.name,
+				user: { id: list.createdBy, email: null, email_verified: false, createdAt: new Date() },
+				supabaseToken: undefined, sessionInvalid: undefined
+			}
+		});
+
+		await page.getByRole('button', { name: /Snacks/ }).click();
+		const input = page.getByPlaceholder('Add to Snacks or [Group] item');
+		await input.fill('Pretzels');
+		await page.getByRole('button', { name: 'Add', exact: true }).click();
+		await expect.poll(async () => (await dexieDb.items.where('name').equals('Pretzels').first())?.groupName)
+			.toBe('Snacks');
+		await expect.element(page.getByText('Pretzels', { exact: true })).toBeVisible();
+		await input.fill('[Produce] Apples');
+		await page.getByRole('button', { name: 'Add', exact: true }).click();
+		await expect.poll(async () => (await dexieDb.items.where('name').equals('Apples').first())?.groupName)
+			.toBe('Produce');
+	});
 });
