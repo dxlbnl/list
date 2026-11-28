@@ -98,7 +98,7 @@ Built with ❤️ by the List Team.
 
 Add List as a remote MCP connector in your AI app. Use the deployment’s HTTPS `/mcp` URL, select OAuth, and approve the connection in List. In chat, ask the AI to find a list and suggest additions. Open the list to review the grouped proposal, or go to **Settings → AI connections** to disconnect an app.
 
-The same endpoint serves ChatGPT, Claude and Gemini. Each needs a registered OAuth client and a chat account with custom connector support. See the [MCP setup and deployment guide](wiki/knowledge/architecture/ai-proposals.md).
+The same endpoint serves ChatGPT, Claude and Gemini. Each needs a registered OAuth client and a chat account with custom connector support. See the [registration guide for ChatGPT, Claude and Gemini](docs/mcp-registration.md) and the [MCP setup and deployment guide](wiki/knowledge/architecture/ai-proposals.md).
 
 ## Account activity report
 

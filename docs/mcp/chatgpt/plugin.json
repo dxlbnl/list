@@ -1,0 +1,30 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "list",
+  "version": "1.0.0",
+  "description": "Read your List lists and suggest items for you to review.",
+  "homepage": "https://list.dexterlabs.nl",
+  "repository": "https://github.com/dxlbnl/list",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "List",
+        "shortDescription": "Suggest items for your lists",
+        "longDescription": "Find and read lists available to your connected List account. Suggest new items, then review and approve them in List before they appear on the list.",
+        "developerName": "DexterLabs",
+        "category": "Productivity",
+        "capabilities": ["Find and read lists", "Suggest items for review"],
+        "websiteURL": "https://list.dexterlabs.nl",
+        "supportURL": "https://replace-me.invalid/support",
+        "privacyPolicyURL": "https://replace-me.invalid/privacy",
+        "termsOfServiceURL": "https://replace-me.invalid/terms",
+        "defaultPrompt": ["Find my shared lists.", "Suggest items for my grocery list."],
+        "composerIcon": "./assets/list.png",
+        "logo": "./assets/list.png"
+      },
+      "publication": {
+        "release_notes": "Initial release with list discovery, list context, and item proposals."
+      }
+    }
+  }
+}

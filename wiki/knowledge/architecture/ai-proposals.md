@@ -39,8 +39,8 @@ Custom connectors can be tested before any directory publication. Public distrib
 
 ## Automatic migrations and release
 
-Vercel runs `pnpm db:migrate && pnpm build` for Preview and Production. Each environment uses its configured `DATABASE_URL`. The repository also sets the install command to `pnpm install --frozen-lockfile`. GitHub Actions runs the test suite with a local database.
+Vercel runs `pnpm db:migrate && pnpm build` for Production. Preview runs `pnpm build` and uses its configured `DATABASE_URL`. Prepare a compatible schema separately before testing a preview that depends on a new migration. The repository also sets the install command to `pnpm install --frozen-lockfile`. GitHub Actions runs the test suite with a local database.
 
-The migration runner uses Drizzle’s checked-in SQL and journal. It takes a transaction-scoped PostgreSQL advisory lock before reading the migration history, then applies pending SQL and records its history in the same transaction. This allows simultaneous builds to share the preview database. A failed migration stops the build.
+The migration runner uses Drizzle’s checked-in SQL and journal. It takes a transaction-scoped PostgreSQL advisory lock before reading the migration history, then applies pending SQL and records its history in the same transaction. This serializes concurrent production migration runs. A failed migration stops the production build.
 
 For the MCP release, `0003` adds the OAuth tables and `0004` removes the legacy AI links table and proposal credential columns. Both run during the build. The previously deployed AI link API can stop working between migration completion and activation of the new build. Existing proposal rows remain reviewable on the new deployment. Verify the deployment once it is active, including OAuth discovery, consent, proposal review and disconnect.
