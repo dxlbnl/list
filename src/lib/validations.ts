@@ -108,8 +108,10 @@ export const syncOperationSchema = z.discriminatedUnion('entity', [
 	})
 ]);
 
+export const MAX_SYNC_OPERATIONS = 500;
+
 export const syncRequestSchema = z.object({
-	operations: z.array(syncOperationSchema).max(500),
+	operations: z.array(syncOperationSchema).max(MAX_SYNC_OPERATIONS),
 	clientId: z.string().optional(),
 	cursor: z.number().optional()
 });

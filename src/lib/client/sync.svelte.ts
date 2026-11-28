@@ -1,9 +1,9 @@
-import { db, type ListDatabase, type LocalItem, type LocalList } from '$lib/client/db';
+import { db, type QueuedSyncOperation, type ListDatabase, type LocalItem, type LocalList } from '$lib/client/db';
 import { logger } from '$lib/logger';
 import { supabase } from '$lib/client/supabase';
 import { observe as hlcObserve } from './hlc';
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
-import type { DatabaseItem, DatabaseList, ApiItem, ApiList } from '$lib/validations';
+import { MAX_SYNC_OPERATIONS, type DatabaseItem, type DatabaseList, type ApiItem, type ApiList } from '$lib/validations';
 
 const syncLogger = logger.child({ module: 'client-sync' });
 
@@ -28,6 +28,7 @@ class SyncManager {
 	private fetchFn: typeof fetch;
 	private cursor = 0;
 	private consecutiveFailures = 0;
+	private retryPushAfter = 0;
 	activePulls = $state<string[]>([]);
 
 	constructor(database: ListDatabase = db, fetchFn: typeof fetch = (...args) => fetch(...args)) {
@@ -335,77 +336,71 @@ class SyncManager {
 		}
 	}
 
+	private async pushBatch(ops: QueuedSyncOperation[]): Promise<boolean> {
+		const response = await this.fetchFn('/api/sync', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ operations: ops, clientId: this.clientId, cursor: this.cursor })
+		});
+
+		if (response.status === 400 || response.status === 422) {
+			// Split only known input failures. Keep rejected records for inspection, but do not
+			// send them again automatically or back off subsequent healthy writes.
+			if (ops.length === 1) {
+				const localId = ops[0].localId;
+				if (localId === undefined) return false;
+				await this.db.syncQueue.update(localId, {
+					rejection: { status: response.status, rejectedAt: Date.now() }
+				});
+				return true;
+			}
+			const middle = Math.floor(ops.length / 2);
+			const first = await this.pushBatch(ops.slice(0, middle));
+			const second = await this.pushBatch(ops.slice(middle));
+			return first && second;
+		}
+		if (!response.ok) throw new Error(`Sync failed: HTTP ${response.status}`);
+
+		const data: { results: SyncResult[]; changes?: { items?: DatabaseItem[]; lists?: DatabaseList[] }; cursor?: number } = await response.json();
+		const ackedIds = new Set(data.results.filter(r => r.status === 'success' || r.status === 'ignored').map(r => r.id));
+		await this.db.syncQueue.bulkDelete(ops.flatMap(op =>
+			op.localId !== undefined && ackedIds.has(op.id) ? [op.localId] : []
+		));
+		await this.applyChanges(data.changes, data.cursor);
+		return ops.every(op => ackedIds.has(op.id));
+	}
+
 	async processQueue() {
-		if (!this.isOnline) return;
+		if (!this.isOnline || Date.now() < this.retryPushAfter) return;
 		if (this.pushPromise) return this.pushPromise;
 
-		const count = await this.db.syncQueue.count();
-		if (count === 0) return;
-
 		this.pushPromise = (async () => {
-			this.isSyncing = true;
-			this.lastSyncError = null;
-
 			try {
-				const ops = await this.db.syncQueue.toArray();
-				const response = await this.fetchFn('/api/sync', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ operations: ops, clientId: this.clientId, cursor: this.cursor })
-				});
-
-				if (response.status === 400) {
-					const errorData = await response.json();
-					syncLogger.error('Validation failed. Batch rejected by server.', { error: errorData });
-					// Drop the batch — a 400 means the client sent malformed data that will never succeed.
-					// Individual ops are preserved if the cause was a transient schema mismatch.
-					await this.db.syncQueue.bulkDelete(ops.map(o => o.localId).filter((id): id is number => id !== undefined));
-					return;
+				const pending = (op: QueuedSyncOperation) => !op.rejection;
+				let batch = await this.db.syncQueue.filter(pending).limit(MAX_SYNC_OPERATIONS).toArray();
+				if (batch.length > 0) this.isSyncing = true;
+				let allAcknowledged = true;
+				while (this.isOnline && batch.length > 0) {
+					allAcknowledged = (await this.pushBatch(batch)) && allAcknowledged;
+					const lastKey = batch.at(-1)?.localId;
+					if (lastKey === undefined) break;
+					batch = await this.db.syncQueue.where(':id').above(lastKey).and(pending).limit(MAX_SYNC_OPERATIONS).toArray();
 				}
-
-				if (response.status === 401 || response.status === 403) {
-					syncLogger.error('Session expired or invalid. Logging out.');
-					const { logout } = await import('$lib/client/auth');
-					await logout();
-					return;
-				}
-
-				if (!response.ok) throw new Error(`Sync failed: ${response.statusText}`);
-
-				const data: { results: SyncResult[]; changes?: { items?: DatabaseItem[]; lists?: DatabaseList[] }; cursor?: number } = await response.json();
-				// 'success' = written to DB; 'ignored' = rejected (auth/stale) — both are removed from queue.
-				const ackedIds = new Set(data.results.filter(r => r.status === 'success' || r.status === 'ignored').map(r => r.id));
-
-				if (ackedIds.size > 0) {
-					const localIdsToDelete = ops.filter(op => ackedIds.has(op.id)).map(op => op.localId).filter((id): id is number => id !== undefined);
-					await this.db.syncQueue.bulkDelete(localIdsToDelete);
-				}
-
-				// Fold the pull into the push response: apply changed rows + advance the cursor.
-				await this.applyChanges(data.changes, data.cursor);
+				if (!allAcknowledged) throw new Error('Some sync operations were not acknowledged.');
+				const rejected = await this.db.syncQueue.filter((op) => Boolean(op.rejection)).first();
+				this.lastSyncError = rejected ? 'Some sync operations were rejected and saved locally.' : null;
 				this.consecutiveFailures = 0;
-			} catch (e) {
+				this.retryPushAfter = 0;
+			} catch (error) {
 				this.consecutiveFailures++;
-				syncLogger.error(`Sync failed`, { count, consecutiveFailures: this.consecutiveFailures }, e);
-				this.lastSyncError = (e as Error).message;
-				// Poison-op quarantine: after repeated failures drop the wedged batch so other work can
-				// flow instead of re-failing the same ops forever behind the backoff.
-				if (this.consecutiveFailures >= 5) {
-					const stuck = await this.db.syncQueue.toArray();
-					syncLogger.warn('Quarantining batch after repeated sync failures', { count: stuck.length });
-					await this.db.syncQueue.bulkDelete(stuck.map(o => o.localId).filter((id): id is number => id !== undefined));
-					this.consecutiveFailures = 0;
-					return;
-				}
-				throw e;
+				this.retryPushAfter = Date.now() + Math.min(2000 * 2 ** this.consecutiveFailures, 30_000);
+				this.lastSyncError = error instanceof Error ? error.message : String(error);
+				syncLogger.error('Sync failed; unacknowledged operations remain queued', {}, error);
 			} finally {
 				this.pushPromise = null;
 				if (this.activePulls.length === 0 && !this.reconcilePromise) this.isSyncing = false;
-				const remaining = await this.db.syncQueue.count();
-				if (remaining > 0 && this.isOnline) setTimeout(() => this.processQueue(), 100);
 			}
 		})();
-
 		return this.pushPromise;
 	}
 
