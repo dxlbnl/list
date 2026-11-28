@@ -70,11 +70,6 @@
 
 	let newItemName = $state("");
 	let selection = $state<{ listId: string; group: string }>();
-	const selectedGroup = $derived(
-		selection?.listId === data.listId && sortedGroupNames.includes(selection.group)
-			? selection.group
-			: sortedGroupNames[0]
-	);
 
 	async function handleAddItem() {
 		if (!newItemName.trim() || !data.listId) return;
@@ -130,6 +125,11 @@
 		}
 		return names;
 	});
+	const selectedGroup = $derived(
+		selection?.listId === data.listId && sortedGroupNames.includes(selection.group)
+			? selection.group
+			: sortedGroupNames[0]
+	);
 
 	function handleDndConsider(groupName: string, e: CustomEvent<DndEvent<LocalItem>>) {
 		const { items: newItems } = e.detail;
