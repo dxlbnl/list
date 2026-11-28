@@ -18,6 +18,7 @@
 		onDndConsider,
 		onDndFinalize,
 		showHeader = true,
+		onSelect,
 	} = $props();
 
 	let isOpen = $state(true);
@@ -33,7 +34,7 @@
 <Collapsible.Root class="list-group-container" bind:open={isOpen}>
 	{#if showHeader}
 		<div class="group-header-container">
-			<Collapsible.Trigger class="group-header">
+			<Collapsible.Trigger class="group-header" onclick={onSelect}>
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					width="14"
