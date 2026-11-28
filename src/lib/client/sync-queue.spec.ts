@@ -39,3 +39,25 @@ it('retains the queue through repeated transient failures and drains bounded bat
 		await db.delete();
 	}
 });
+
+it('retains a rejected operation and acknowledges the valid operations around it', async () => {
+	const db = new ListDatabase('rejected-queue-test');
+	const list = world.generate(listSchema);
+	const delivered: (string | number)[] = [];
+	const manager = createSyncManager(db, async (_url, init) => {
+		const { operations } = syncRequestSchema.parse(JSON.parse(String(init?.body)));
+		if (operations.some(({ id }) => id === 'rejected')) return new Response(null, { status: 400 });
+		delivered.push(...operations.map(({ id }) => id));
+		return Response.json({ results: operations.map(({ id }) => ({ id, status: 'success' })) });
+	});
+	try {
+		await db.syncQueue.bulkAdd(['first', 'rejected', 'last'].map((id) => ({
+			id, type: 'DELETE', entity: 'list', data: { id: list.id }
+		})));
+		await manager.processQueue();
+		expect(delivered).toEqual(['first', 'last']);
+		expect((await db.syncQueue.toArray()).map(({ id }) => id)).toEqual(['rejected']);
+	} finally {
+		await db.delete();
+	}
+});
