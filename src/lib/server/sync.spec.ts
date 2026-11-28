@@ -15,6 +15,29 @@ async function seedListMember(h: TestDb) {
 	await h.db.insert(listUsers).values({ listId: LIST, userId: USER });
 }
 
+it('requires membership in both the current and destination list', async () => {
+	const h = await createTestDb();
+	try {
+		await seedListMember(h);
+		const other = 'other-list';
+		await h.db.insert(lists).values({ id: other, slug: 'other', name: 'Other', createdBy: USER });
+		await h.db.insert(items).values([
+			{ id: 'here', listId: LIST, name: 'Here', rank: 1 },
+			{ id: 'there', listId: other, name: 'There', rank: 1 }
+		]);
+		const move = (id: string, list_id: string) => processSyncBatch(h.db, USER, [{
+			id, entity: 'item', type: 'UPDATE', data: { id, list_id, updated_at: '2090-01-01T00:00:00Z' }
+		}]);
+		expect((await move('here', other)).results[0].status).toBe('ignored');
+		expect((await move('there', LIST)).results[0].status).toBe('ignored');
+		await h.db.insert(listUsers).values({ listId: other, userId: USER });
+		expect((await move('here', other)).results[0].status).toBe('success');
+		expect((await h.db.select().from(items).where(eq(items.id, 'here')))[0].listId).toBe(other);
+	} finally {
+		await h.close();
+	}
+}, 30_000);
+
 describe('processSyncBatch — same-id INSERT + UPDATE coalescing', () => {
 	let h: TestDb;
 	afterEach(async () => {
