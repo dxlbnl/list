@@ -1,6 +1,5 @@
 <script lang="ts">
 	import AccessCard from '$lib/components/ui/AccessCard.svelte';
-	import { enhance } from '$app/forms';
 
 	let { data } = $props();
 	let isLoading = $state(false);
@@ -13,17 +12,13 @@
 <div class="confirm-page">
 	<AccessCard 
 		title="Confirm session" 
-		subtitle="Please confirm you want to sign in on this device to secure your lists."
+		subtitle={data.switchingAccount
+			? "Switch to the account from the QR code. Your current account and its lists will be kept."
+			: "Please confirm you want to sign in on this device to secure your lists."}
 	>
 		<form 
 			method="POST" 
-			use:enhance={() => {
-				isLoading = true;
-				return async ({ update }) => {
-					await update();
-					isLoading = false;
-				};
-			}}
+			onsubmit={() => { isLoading = true; }}
 		>
 			<div class="confirm-content">
 				<div class="token-display mono tiny muted">
@@ -35,7 +30,7 @@
 					class="btn-primary w-full mono tracking-widest"
 					disabled={isLoading}
 				>
-					{isLoading ? "Authorizing..." : "Confirm & sync"}
+					{isLoading ? "Authorizing..." : data.switchingAccount ? "Switch account" : "Confirm & sync"}
 				</button>
 				
 			</div>

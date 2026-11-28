@@ -1,4 +1,5 @@
-import { db, type QueuedSyncOperation, type ListDatabase, type LocalItem, type LocalList } from '$lib/client/db';
+import { db, getLocalAccount, type QueuedSyncOperation, type ListDatabase, type LocalItem, type LocalList } from '$lib/client/db';
+import { accountFetch } from './account-fetch';
 import { logger } from '$lib/logger';
 import { supabase } from '$lib/client/supabase';
 import { observe as hlcObserve } from './hlc';
@@ -14,7 +15,8 @@ interface SyncResult {
 }
 
 class SyncManager {
-	private db: ListDatabase;
+	private get db() { return this.database ?? db; }
+	private get ready() { return this.database !== undefined || getLocalAccount() !== undefined; }
 	isSyncing = $state(false);
 	isOnline = $state(true);
 	syncStatus = $state<'connected' | 'connecting' | 'disconnected'>('disconnected');
@@ -27,19 +29,15 @@ class SyncManager {
 	private isRefreshingToken = false;
 	private fetchFn: typeof fetch;
 	private cursor = 0;
+	private loadedCursor = false;
 	private consecutiveFailures = 0;
 	private retryPushAfter = 0;
 	activePulls = $state<string[]>([]);
 
-	constructor(database: ListDatabase = db, fetchFn: typeof fetch = (...args) => fetch(...args)) {
-		this.db = database;
+	constructor(private database?: ListDatabase, fetchFn: typeof fetch = accountFetch) {
 		this.fetchFn = fetchFn;
 		if (typeof window !== 'undefined') {
 			this.isOnline = navigator.onLine;
-			try {
-				const c = localStorage.getItem('syncCursor');
-				if (c) this.cursor = Number(c) || 0;
-			} catch { /* no localStorage */ }
 
 			window.addEventListener('online', async () => {
 				this.isOnline = true;
@@ -67,6 +65,16 @@ class SyncManager {
 
 			this.startLoop();
 		}
+	}
+
+	private loadCursor() {
+		if (this.loadedCursor) return;
+		this.loadedCursor = true;
+		const account = getLocalAccount();
+		if (!account || this.database) return;
+		try {
+			this.cursor = Number(localStorage.getItem(`syncCursor:${account}`)) || 0;
+		} catch { /* Storage can be disabled. */ }
 	}
 
 	init(token?: string) {
@@ -284,13 +292,16 @@ class SyncManager {
 		if (typeof newCursor === 'number' && newCursor > this.cursor) {
 			this.cursor = newCursor;
 			try {
-				if (typeof localStorage !== 'undefined') localStorage.setItem('syncCursor', String(this.cursor));
+				const account = getLocalAccount();
+				if (account && !this.database) localStorage.setItem(`syncCursor:${account}`, String(this.cursor));
 			} catch { /* no localStorage */ }
 		}
 	}
 
 	/** Idle / backfill pull: POST an empty batch with the cursor and apply what changed since. */
 	async pullDelta(): Promise<void> {
+		if (!this.ready) return;
+		this.loadCursor();
 		if (!this.isOnline) return;
 		try {
 			const res = await this.fetchFn('/api/sync', {
@@ -367,7 +378,8 @@ class SyncManager {
 	}
 
 	async processQueue() {
-		if (!this.isOnline || Date.now() < this.retryPushAfter) return;
+		if (!this.ready || !this.isOnline || Date.now() < this.retryPushAfter) return;
+		this.loadCursor();
 		if (this.pushPromise) return this.pushPromise;
 
 		this.pushPromise = (async () => {
@@ -401,6 +413,7 @@ class SyncManager {
 	}
 
 	async reconcileAllLists() {
+		if (!this.ready) return;
 		// No currentToken (Supabase JWT) requirement: GET /api/lists authenticates via the session
 		// cookie, so the [slug] load's miss-fallback can pull a just-opened/just-joined list even before
 		// Realtime auth is ready. Requiring the token here caused a spurious 404 on direct/cold link opens.
@@ -436,6 +449,7 @@ class SyncManager {
 	}
 
 	async pull(listId: string) {
+		if (!this.ready) return;
 		if (this.activePulls.includes(listId)) return;
 		this.activePulls.push(listId);
 		this.isSyncing = true;

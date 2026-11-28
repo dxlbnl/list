@@ -1,3 +1,4 @@
+import { accountFetch } from './account-fetch';
 import { db } from './db';
 
 let logoutPromise: Promise<void> | undefined;
@@ -44,7 +45,7 @@ async function revokeAndClear() {
  * Fetches a one-time URL for cloning this session to another device
  */
 export async function getCloneUrl() {
-	const res = await fetch("/api/auth/clone", { method: "POST" });
+	const res = await accountFetch("/api/auth/clone", { method: "POST" });
 	if (!res.ok) {
 		throw new Error(`Failed to fetch clone URL: ${res.statusText}`);
 	}
