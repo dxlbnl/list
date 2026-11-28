@@ -59,3 +59,45 @@ it('refreshes a stale proposal and asks the member to review updated items', asy
 	await expect.element(page.getByText('Havermelk', { exact: true })).toBeVisible();
 	await expect.element(page.getByRole('alert')).toHaveTextContent('Review the updated items before deciding.');
 });
+
+it('defers polling while hidden or busy and preserves proposal feedback on resume', async () => {
+	const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+	const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+	const setPolling = vi.spyOn(window, 'setInterval');
+	const clearPolling = vi.spyOn(window, 'clearInterval');
+	let rejectAction!: (error: Error) => void;
+	vi.mocked(decideAiProposal).mockReturnValue(new Promise((_, reject) => { rejectAction = reject; }));
+	const { unmount } = render(AiPanel, { listId: list.id });
+	try {
+		const timerIndex = setPolling.mock.calls.findIndex(([, delay]) => delay === 15000);
+		expect(timerIndex).toBeGreaterThanOrEqual(0);
+		const poll = setPolling.mock.calls[timerIndex][0] as () => void;
+		poll();
+		expect(getAiProposals).not.toHaveBeenCalled();
+		visibility.mockReturnValue('visible');
+		document.dispatchEvent(new Event('visibilitychange'));
+		await page.getByRole('button', { name: 'Accept' }).click();
+
+		poll();
+		online.mockReturnValue(false);
+		document.dispatchEvent(new Event('visibilitychange'));
+		online.mockReturnValue(true);
+		window.dispatchEvent(new Event('online'));
+		expect(getAiProposals).toHaveBeenCalledTimes(1);
+
+		rejectAction(new Error('Could not accept this proposal.'));
+		await expect.element(page.getByRole('alert')).toHaveTextContent('Could not accept this proposal.');
+		await expect.poll(() => vi.mocked(getAiProposals).mock.calls.length).toBe(2);
+
+		await unmount();
+		expect(clearPolling).toHaveBeenCalledWith(setPolling.mock.results[timerIndex].value);
+		window.dispatchEvent(new Event('online'));
+		document.dispatchEvent(new Event('visibilitychange'));
+		expect(getAiProposals).toHaveBeenCalledTimes(2);
+	} finally {
+		visibility.mockRestore();
+		online.mockRestore();
+		setPolling.mockRestore();
+		clearPolling.mockRestore();
+	}
+});

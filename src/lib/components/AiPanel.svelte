@@ -9,6 +9,7 @@
 	let message = $state('');
 	let loadFailed = $state(false);
 	let busy = $state(false);
+	let resumeWhenIdle: (() => void) | undefined;
 	let reassignment = $state<{ id: string; options: string[]; groups: { from: string; to?: string }[] }>();
 
 	function grouped(items: AiProposal['items']) {
@@ -32,6 +33,7 @@
 			if (!background || proposals.length) loadFailed = true;
 		} finally {
 			busy = false;
+			resumeWhenIdle?.();
 		}
 	}
 
@@ -70,14 +72,34 @@
 			}
 		} finally {
 			busy = false;
+			resumeWhenIdle?.();
 		}
 	}
 
 	onMount(() => {
-		const poll = () => { if (navigator.onLine) void refresh(true); };
+		let queued = false;
+		const canPoll = () => navigator.onLine && document.visibilityState === 'visible';
+		const poll = () => {
+			if (!canPoll() || busy) return;
+			queued = false;
+			void refresh(true);
+		};
+		const resume = () => {
+			if (!canPoll()) return;
+			queued = true;
+			poll();
+		};
+		resumeWhenIdle = () => { if (queued) poll(); };
+		document.addEventListener('visibilitychange', resume);
+		window.addEventListener('online', resume);
 		poll();
 		const timer = setInterval(poll, 15000);
-		return () => clearInterval(timer);
+		return () => {
+			resumeWhenIdle = undefined;
+			clearInterval(timer);
+			document.removeEventListener('visibilitychange', resume);
+			window.removeEventListener('online', resume);
+		};
 	});
 </script>
 
