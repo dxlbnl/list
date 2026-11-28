@@ -1,3 +1,5 @@
+import { recordAccountActivity } from '$lib/server/account-activity';
+import { logger } from '$lib/logger';
 import { db } from '$lib/server/db';
 import { lists, items, listUsers } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -31,6 +33,8 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		where: eq(items.listId, listId)
 	});
 
+	await recordAccountActivity(db, user.id);
+	await logger.flush();
 	return json({
 		list: listData,
 		items: itemData

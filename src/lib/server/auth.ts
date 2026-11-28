@@ -16,7 +16,7 @@ export async function getSession(event: RequestEvent) {
 	const result = await db
 		.select({
 			session: sessions,
-			user: users
+			user: { id: users.id, email: users.email, email_verified: users.email_verified, createdAt: users.createdAt }
 		})
 		.from(sessions)
 		.innerJoin(users, eq(sessions.userId, users.id))
@@ -47,7 +47,7 @@ export async function createAnonymousSession(event: RequestEvent) {
 		createdAt: new Date()
 	};
 
-	await db.insert(users).values(userValues);
+	await db.insert(users).values({ ...userValues, lastActivityAt: userValues.createdAt });
 
 	await db.insert(sessions).values({
 		id: sessionId,
