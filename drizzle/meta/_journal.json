@@ -43,6 +43,13 @@
       "when": 1795853022513,
       "tag": "0005_sync_cursor_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795878951164,
+      "tag": "0006_account_activity",
+      "breakpoints": true
     }
   ]
 }

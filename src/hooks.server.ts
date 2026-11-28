@@ -42,6 +42,7 @@ function privateResponse(response: Response, browserPage = false) {
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const path = event.url.pathname;
+	if (under(path, '/reports/account-activity')) return resolve(event);
 	const isOAuth = oauthEndpoint(path);
 	const start = Date.now();
 

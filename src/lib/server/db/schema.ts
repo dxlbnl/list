@@ -8,7 +8,8 @@ export const users = pgTable('users', {
 	id: text('id').primaryKey(),
 	email: text('email').unique(),
 	email_verified: boolean('email_verified').notNull().default(false),
-	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+	lastActivityAt: timestamp('last_activity_at', { withTimezone: true })
 });
 
 export const sessions = pgTable('sessions', {
