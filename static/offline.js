@@ -17,7 +17,7 @@ function accountSelector() {
 
 function openAccount(account) {
 	return new Promise((resolve, reject) => {
-		const request = indexedDB.open(`ListAppDB:${account}`);
+		const request = indexedDB.open(`ListAppDB:account:${account}`);
 		request.onupgradeneeded = () => request.transaction.abort();
 		request.onsuccess = () => resolve(request.result);
 		request.onerror = () => reject(request.error);
@@ -79,15 +79,15 @@ async function showAccount() {
 	let db;
 	try {
 		db = await openAccount(account);
-		const store = db.transaction(['lists', 'items'], 'readonly');
-		const [lists, items] = await Promise.all([
-			getRows(store.objectStore('lists').getAll()),
-			getRows(store.objectStore('items').getAll())
-		]);
-		if (version !== renderVersion || account !== accountSelector() || !lists.length) return;
-		message.textContent = 'You can read your saved lists. Reconnect to make changes here.';
+		const lists = await getRows(db.transaction('lists').objectStore('lists').getAll());
+		if (!lists.length || version !== renderVersion || account !== accountSelector()) return;
 		const list = listForPath(lists, account);
-		if (list) renderItems(list, items.filter((item) => item.listId === list.id));
+		const items = list
+			? await getRows(db.transaction('items').objectStore('items').index('listId').getAll(list.id))
+			: [];
+		if (version !== renderVersion || account !== accountSelector()) return;
+		message.textContent = 'You can read your saved lists. Reconnect to make changes here.';
+		if (list) renderItems(list, items);
 		else renderLists(lists);
 	} catch {
 		// This browser may not have an account database yet.
