@@ -1,22 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import { aiCreateSchema } from '$lib/validations';
-import { bearer, editToken, readBody, sameOrigin } from './ai-http';
+import { aiDecisionSchema } from '$lib/validations';
+import { readBody, sameOrigin } from './ai-http';
 
-describe('AI HTTP boundary', () => {
- it('requires header credentials and rejects secrets in query strings', () => {
-  const request = new Request('https://list.test/api/ai/proposals?token=secret');
-  expect(() => bearer(request)).toThrow();
-  expect(() => editToken(request)).toThrow();
-  const token = 'a'.repeat(43);
-  expect(bearer(new Request(request.url, { headers: { Authorization: `Bearer ${token}` } }))).toBe(token);
- });
- it('requires same-origin human decisions', () => {
-  expect(() => sameOrigin(new Request('https://list.test', { headers: { Origin: 'https://evil.test' } }), new URL('https://list.test'))).toThrow();
-  expect(() => sameOrigin(new Request('https://list.test'), new URL('https://list.test'))).toThrow();
- });
- it('bounds actual streamed bytes and validates malformed JSON/content type', async () => {
-  await expect(readBody(new Request('https://list.test', { method: 'POST', body: 'x'.repeat(32769), headers: { 'Content-Type': 'application/json' } }), aiCreateSchema)).rejects.toMatchObject({ status: 413 });
-  await expect(readBody(new Request('https://list.test', { method: 'POST', body: '{', headers: { 'Content-Type': 'application/json' } }), aiCreateSchema)).rejects.toMatchObject({ status: 400 });
-  await expect(readBody(new Request('https://list.test', { method: 'POST', body: '{}' }), aiCreateSchema)).rejects.toMatchObject({ status: 415 });
- });
+describe('AI review HTTP boundary', () => {
+	it('requires a same-origin browser decision', () => {
+		const url = new URL('https://list.test');
+		expect(() => sameOrigin(new Request(url, { headers: { Origin: 'https://foreign.test' } }), url)).toThrow();
+		expect(() => sameOrigin(new Request(url), url)).toThrow();
+		expect(() => sameOrigin(new Request(url, { headers: { Origin: url.origin } }), url)).not.toThrow();
+	});
+
+	it('bounds actual streamed bytes and validates JSON and content type', async () => {
+		const create = (body: string, type = 'application/json') => new Request('https://list.test', {
+			method: 'POST', body, headers: { 'Content-Type': type }
+		});
+		await expect(readBody(create('x'.repeat(32769)), aiDecisionSchema)).rejects.toMatchObject({ status: 413 });
+		await expect(readBody(create('{'), aiDecisionSchema)).rejects.toMatchObject({ status: 400 });
+		await expect(readBody(create('{}', 'text/plain'), aiDecisionSchema)).rejects.toMatchObject({ status: 415 });
+	});
 });
