@@ -40,3 +40,26 @@ it.each([
 		error.mockRestore();
 	}
 });
+
+it.each(['/.well-known/oauth-authorization-server', '/oauth/authorize', '/oauth/token', '/mcp'])(
+	'logs a safe request summary for %s',
+	async (path) => {
+		const info = vi.spyOn(logger, 'info').mockImplementation(() => {});
+		try {
+			const url = new URL(path + '?code=private-query', 'https://list.example.test');
+			const event = {
+				url, route: { id: path }, locals: {},
+				cookies: { get: () => undefined },
+				request: new Request(url, { headers: { authorization: 'Bearer private-header' } })
+			} as unknown as RequestEvent;
+			const response = await handle({ event, resolve: async () => new Response(null, { status: 401 }) });
+			expect(response.status).toBe(401);
+			expect(info).toHaveBeenCalledWith('OAuth/MCP request', {
+				method: 'GET', path, status: 401, duration: expect.any(Number)
+			});
+			expect(JSON.stringify(info.mock.calls)).not.toContain('private-');
+		} finally {
+			info.mockRestore();
+		}
+	}
+);

@@ -2,6 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { and, eq, gt, isNotNull, isNull } from 'drizzle-orm';
 import { error, json } from '@sveltejs/kit';
 import { dev } from '$app/environment';
+import { logger } from '$lib/logger';
 import { env } from '$env/dynamic/private';
 import OAuth2Server, { Request as OAuthRequest, Response as OAuthResponse, OAuthError } from '@node-oauth/oauth2-server';
 import { z } from 'zod';
@@ -292,21 +293,30 @@ function clientCredentials(request: Request, body: Record<string, string>) {
 }
 
 export async function exchangeOAuthToken(db: ListDb, config: OAuthConfig, request: Request) {
+	function reject(code: string, status = 400, reason = code, clientId?: string) {
+		logger.warn('OAuth token exchange rejected', { status, error: code, reason, clientId });
+		return tokenError(code, status);
+	}
+
 	const body = await readOAuthForm(request);
-	if (!body) return tokenError('invalid_request');
-	if (Object.hasOwn(body, 'resource') && body.resource !== config.resource) return tokenError('invalid_target');
+	if (!body) return reject('invalid_request', 400, 'invalid_form');
+	if (Object.hasOwn(body, 'resource') && body.resource !== config.resource) return reject('invalid_target');
 	if (body.grant_type !== 'authorization_code' && body.grant_type !== 'refresh_token') {
-		return tokenError('unsupported_grant_type');
+		return reject('unsupported_grant_type');
 	}
 	const credentials = clientCredentials(request, body);
-	const authenticated = selectClient(config, credentials?.id ?? '');
-	if (!authenticated || !credentials?.secret || credentials.method !== authenticated.authenticationMethod ||
-		!matchingSecret(authenticated.secret, credentials.secret)) {
-		return tokenError('invalid_client', 401);
+	if (!credentials?.id || !credentials.secret) return reject('invalid_client', 401, 'missing_or_invalid_credentials');
+	const authenticated = selectClient(config, credentials.id);
+	if (!authenticated) return reject('invalid_client', 401, 'unknown_client');
+	if (credentials.method !== authenticated.authenticationMethod) {
+		return reject('invalid_client', 401, 'client_authentication_method_mismatch', authenticated.id);
+	}
+	if (!matchingSecret(authenticated.secret, credentials.secret)) {
+		return reject('invalid_client', 401, 'client_secret_mismatch', authenticated.id);
 	}
 	const clientId = authenticated.id;
 	try {
-		return await db.transaction(async (tx) => {
+		const response = await db.transaction(async (tx) => {
 			let replay = false;
 			let codeSpent = false;
 			let originalRefreshScopes: string[] | undefined;
@@ -427,15 +437,17 @@ export async function exchangeOAuthToken(db: ListDb, config: OAuthConfig, reques
 			} catch (cause) {
 				// Preserve credential consumption on client errors, including incorrect PKCE and refresh replay.
 				if ((replay || codeSpent) && cause instanceof OAuthError && cause.code >= 400 && cause.code < 500) {
-					return tokenError(cause.name, cause.code);
+					return reject(cause.name, cause.code, cause.name, clientId);
 				}
 				throw cause;
 			}
 			return json(res.body, { status: 200, headers: privateHeaders });
 		});
+		if (response.ok) logger.info('OAuth token exchanged', { clientId, grantType: body.grant_type });
+		return response;
 	} catch (cause) {
 		if (cause instanceof OAuthError && cause.code >= 400 && cause.code < 500) {
-			return tokenError(cause.name, cause.code);
+			return reject(cause.name, cause.code, cause.name, clientId);
 		}
 		throw cause;
 	}
