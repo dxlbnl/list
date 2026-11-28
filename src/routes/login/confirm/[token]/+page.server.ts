@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 import { error, redirect } from '@sveltejs/kit';
 import { MESSAGES } from '$lib/constants/messages';
 import { dev } from '$app/environment';
+import { oauthCookie, resumeOAuthLogin } from '$lib/server/oauth';
 import type { PageServerLoad, Actions } from './$types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -122,6 +123,10 @@ export const actions: Actions = {
 			secure: !dev
 		});
 
+		const ticket = cookies.get(oauthCookie);
+		if (link.email && ticket && await resumeOAuthLogin(db, ticket, token, sessionId)) {
+			throw redirect(303, '/oauth/authorize');
+		}
 		throw redirect(303, '/login/confirmed');
 	}
 };

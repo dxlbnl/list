@@ -21,7 +21,7 @@ export async function getSession(event: RequestEvent) {
 		.where(eq(sessions.id, sessionId));
 
 	if (result.length === 0) {
-		logger.warn('Session cookie present but session not found in DB', { sessionId });
+		logger.warn('Session cookie present but session not found in DB');
 		return null;
 	}
 
@@ -60,7 +60,7 @@ export async function createAnonymousSession(event: RequestEvent) {
 		secure: !dev
 	});
 
-	logger.info('Created anonymous session', { userId, sessionId });
+	logger.info('Created anonymous session', { userId });
 
 	return {
 		session: { id: sessionId, userId },
