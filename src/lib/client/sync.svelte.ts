@@ -1,4 +1,5 @@
-import { db, type QueuedSyncOperation, type ListDatabase, type LocalItem, type LocalList } from '$lib/client/db';
+import { db, getLocalAccount, type QueuedSyncOperation, type ListDatabase, type LocalItem, type LocalList } from '$lib/client/db';
+import { accountFetch } from './account-fetch';
 import { logger } from '$lib/logger';
 import { supabase } from '$lib/client/supabase';
 import { observe as hlcObserve } from './hlc';
@@ -14,7 +15,8 @@ interface SyncResult {
 }
 
 class SyncManager {
-	private db: ListDatabase;
+	private get db() { return this.database ?? db; }
+	private get ready() { return this.database !== undefined || getLocalAccount() !== undefined; }
 	isSyncing = $state(false);
 	isOnline = $state(true);
 	syncStatus = $state<'connected' | 'connecting' | 'disconnected'>('disconnected');
@@ -27,19 +29,15 @@ class SyncManager {
 	private isRefreshingToken = false;
 	private fetchFn: typeof fetch;
 	private cursor = 0;
+	private loadedCursor = false;
 	private consecutiveFailures = 0;
 	private retryPushAfter = 0;
 	activePulls = $state<string[]>([]);
 
-	constructor(database: ListDatabase = db, fetchFn: typeof fetch = (...args) => fetch(...args)) {
-		this.db = database;
+	constructor(private database?: ListDatabase, fetchFn: typeof fetch = accountFetch) {
 		this.fetchFn = fetchFn;
 		if (typeof window !== 'undefined') {
 			this.isOnline = navigator.onLine;
-			try {
-				const c = localStorage.getItem('syncCursor');
-				if (c) this.cursor = Number(c) || 0;
-			} catch { /* no localStorage */ }
 
 			window.addEventListener('online', async () => {
 				this.isOnline = true;
@@ -67,6 +65,16 @@ class SyncManager {
 
 			this.startLoop();
 		}
+	}
+
+	private loadCursor() {
+		if (this.loadedCursor) return;
+		this.loadedCursor = true;
+		const account = getLocalAccount();
+		if (!account || this.database) return;
+		try {
+			this.cursor = Number(localStorage.getItem(`syncCursor:${account}`)) || 0;
+		} catch { /* Storage can be disabled. */ }
 	}
 
 	init(token?: string) {
@@ -148,18 +156,13 @@ class SyncManager {
 					this.reconcileAllLists();
 				} else if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
 					const serverList = payload.new as DatabaseList;
-					const isPending = await this.isOperationPending(listId);
-					if (!isPending) {
-						await this.db.lists.put({
-							id: serverList.id,
-							slug: serverList.slug,
-							name: serverList.name,
-							createdBy: serverList.created_by,
-							createdAt: new Date(serverList.created_at)
-						});
-					} else {
-						this.reconcileAllLists();
-					}
+					await this.applyServerList({
+						id: serverList.id,
+						slug: serverList.slug,
+						name: serverList.name,
+						createdBy: serverList.created_by,
+						createdAt: new Date(serverList.created_at)
+					});
 				}
 			})
 			.on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, async (payload: RealtimePostgresChangesPayload<DatabaseItem>) => {
@@ -233,29 +236,26 @@ class SyncManager {
 	private pushPromise: Promise<void> | null = null;
 
 	private async isOperationPending(entityId: string) {
-		const ops = await this.db.syncQueue.toArray();
-		return ops.some(op => op.data.id === entityId);
+		return (await this.db.syncQueue.where('data.id').equals(entityId).first()) !== undefined;
 	}
 
-	/**
-	 * The single client apply path for a server item row — used by both the Realtime
-	 * handler and pull. Last-write-wins guard: skip if a local op is still pending for this
-	 * id, or if the local row is newer-or-equal than the incoming one. This is what stops a
-	 * stale/reordered echo (e.g. an item's own delayed creation echo) from resurrecting a
-	 * deleted item or reverting a newer field edit — the client apply path had no such guard.
-	 */
-	async applyServerItem(candidate: LocalItem): Promise<void> {
-		hlcObserve(candidate.updatedAt); // keep our clock ahead of observed stamps
-		if (await this.isOperationPending(candidate.id)) return; // local in-flight wins
-		const local = await this.db.items.get(candidate.id);
-		if (local && local.updatedAt >= candidate.updatedAt) return; // stale echo — drop it
-		await this.db.items.put(candidate);
+	/** Skip pending edits and stale server echoes, atomically with the local write. */
+	async applyServerItem(candidate: LocalItem, pending?: Set<string>): Promise<void> {
+		hlcObserve(candidate.updatedAt);
+		await this.db.transaction('rw', this.db.syncQueue, this.db.items, async () => {
+			if (pending ? pending.has(candidate.id) : await this.isOperationPending(candidate.id)) return;
+			const local = await this.db.items.get(candidate.id);
+			if (local && local.updatedAt >= candidate.updatedAt) return;
+			await this.db.items.put(candidate);
+		});
 	}
 
-	/** Apply a server list row (rename / new list from the cursor delta). Pending local op wins. */
-	async applyServerList(candidate: LocalList): Promise<void> {
-		if (await this.isOperationPending(candidate.id)) return;
-		await this.db.lists.put(candidate);
+	/** Apply a server list row while preserving pending local edits. */
+	async applyServerList(candidate: LocalList, pending?: Set<string>): Promise<void> {
+		await this.db.transaction('rw', this.db.syncQueue, this.db.lists, async () => {
+			if (pending ? pending.has(candidate.id) : await this.isOperationPending(candidate.id)) return;
+			await this.db.lists.put(candidate);
+		});
 	}
 
 	/** Apply the cursor-delta `changes` (member-visible rows since our cursor) and advance the cursor. */
@@ -263,37 +263,45 @@ class SyncManager {
 		changes: { items?: DatabaseItem[]; lists?: DatabaseList[] } | undefined,
 		newCursor: number | undefined
 	): Promise<void> {
-		for (const si of changes?.items ?? []) {
-			await this.applyServerItem({
-				id: si.id,
-				listId: si.list_id,
-				name: si.name,
-				groupName: si.group_name || "",
-				rank: si.rank,
-				done: si.done,
-				deletedAt: si.deleted_at ? new Date(si.deleted_at) : null,
-				updatedAt: new Date(si.updated_at)
-			});
-		}
-		for (const sl of changes?.lists ?? []) {
-			await this.applyServerList({
-				id: sl.id,
-				slug: sl.slug,
-				name: sl.name,
-				createdBy: sl.created_by,
-				createdAt: new Date(sl.created_at)
+		if (changes?.items?.length || changes?.lists?.length) {
+			await this.db.transaction('rw', this.db.syncQueue, this.db.items, this.db.lists, async () => {
+				const pending = new Set<string>(await this.db.syncQueue.orderBy('data.id').uniqueKeys() as string[]);
+				for (const si of changes?.items ?? []) {
+					await this.applyServerItem({
+						id: si.id,
+						listId: si.list_id,
+						name: si.name,
+						groupName: si.group_name || "",
+						rank: si.rank,
+						done: si.done,
+						deletedAt: si.deleted_at ? new Date(si.deleted_at) : null,
+						updatedAt: new Date(si.updated_at)
+					}, pending);
+				}
+				for (const sl of changes?.lists ?? []) {
+					await this.applyServerList({
+						id: sl.id,
+						slug: sl.slug,
+						name: sl.name,
+						createdBy: sl.created_by,
+						createdAt: new Date(sl.created_at)
+					}, pending);
+				}
 			});
 		}
 		if (typeof newCursor === 'number' && newCursor > this.cursor) {
 			this.cursor = newCursor;
 			try {
-				if (typeof localStorage !== 'undefined') localStorage.setItem('syncCursor', String(this.cursor));
+				const account = getLocalAccount();
+				if (account && !this.database) localStorage.setItem(`syncCursor:${account}`, String(this.cursor));
 			} catch { /* no localStorage */ }
 		}
 	}
 
 	/** Idle / backfill pull: POST an empty batch with the cursor and apply what changed since. */
 	async pullDelta(): Promise<void> {
+		if (!this.ready) return;
+		this.loadCursor();
 		if (!this.isOnline) return;
 		try {
 			const res = await this.fetchFn('/api/sync', {
@@ -325,8 +333,7 @@ class SyncManager {
 			}
 		}
 		for (const sl of serverLists) {
-			if (await this.isOperationPending(sl.id)) continue;
-			await this.db.lists.put({
+			await this.applyServerList({
 				id: sl.id,
 				slug: sl.slug,
 				name: sl.name,
@@ -371,7 +378,8 @@ class SyncManager {
 	}
 
 	async processQueue() {
-		if (!this.isOnline || Date.now() < this.retryPushAfter) return;
+		if (!this.ready || !this.isOnline || Date.now() < this.retryPushAfter) return;
+		this.loadCursor();
 		if (this.pushPromise) return this.pushPromise;
 
 		this.pushPromise = (async () => {
@@ -405,6 +413,7 @@ class SyncManager {
 	}
 
 	async reconcileAllLists() {
+		if (!this.ready) return;
 		// No currentToken (Supabase JWT) requirement: GET /api/lists authenticates via the session
 		// cookie, so the [slug] load's miss-fallback can pull a just-opened/just-joined list even before
 		// Realtime auth is ready. Requiring the token here caused a spurious 404 on direct/cold link opens.
@@ -440,6 +449,7 @@ class SyncManager {
 	}
 
 	async pull(listId: string) {
+		if (!this.ready) return;
 		if (this.activePulls.includes(listId)) return;
 		this.activePulls.push(listId);
 		this.isSyncing = true;

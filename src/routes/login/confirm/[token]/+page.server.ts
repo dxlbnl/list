@@ -1,6 +1,6 @@
 import { db } from '$lib/server/db';
 import { users, sessions, magicLinks } from '$lib/server/db/schema';
-import { mergeUsers } from '$lib/server/auth';
+import { mergeUsers, setLocalAccountCookie, setLocalMergeCookie } from '$lib/server/auth';
 import { nanoid } from '$lib/utils';
 import { eq } from 'drizzle-orm';
 import { error, redirect } from '@sveltejs/kit';
@@ -9,7 +9,7 @@ import { dev } from '$app/environment';
 import { oauthCookie, resumeOAuthLogin } from '$lib/server/oauth';
 import type { PageServerLoad, Actions } from './$types';
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
 	const { token } = params;
 
 	const result = await db
@@ -27,7 +27,10 @@ export const load: PageServerLoad = async ({ params }) => {
 		throw error(400, MESSAGES.AUTH.EXPIRED_TOKEN);
 	}
 
-	return { token };
+	return {
+		token,
+		switchingAccount: !link.email && Boolean(locals.user?.email) && locals.user?.id !== link.userIdToMerge
+	};
 };
 
 export const actions: Actions = {
@@ -50,6 +53,7 @@ export const actions: Actions = {
 		}
 
 		let targetUserId: string;
+		let localMergeSource: string | undefined;
 		const currentUserId = locals.user?.id;
 		
 		if (link.email) {
@@ -92,8 +96,8 @@ export const actions: Actions = {
 			targetUserId = link.userIdToMerge;
 			
 			// If the scanning device has an anonymous session, merge its data into the cloned account
-			if (currentUserId && currentUserId !== targetUserId) {
-				await mergeUsers(currentUserId, targetUserId);
+			if (currentUserId && locals.user?.email === null && currentUserId !== targetUserId) {
+				if (await mergeUsers(currentUserId, targetUserId, true)) localMergeSource = currentUserId;
 			}
 		} else {
 			throw error(400, MESSAGES.AUTH.CONTEXT_MISSING);
@@ -119,6 +123,9 @@ export const actions: Actions = {
 			sameSite: 'lax',
 			secure: !dev
 		});
+
+		setLocalAccountCookie(cookies, targetUserId);
+		if (localMergeSource) setLocalMergeCookie(cookies, localMergeSource, sessionId);
 
 		const ticket = cookies.get(oauthCookie);
 		if (link.email && ticket && await resumeOAuthLogin(db, ticket, token, sessionId)) {

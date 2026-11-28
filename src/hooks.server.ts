@@ -1,4 +1,5 @@
-import { getSession, createAnonymousSession } from '$lib/server/auth';
+import { ACCOUNT_CHANGED_HEADER, ACCOUNT_HEADER, LOCAL_ACCOUNT_COOKIE } from '$lib/account';
+import { getSession, createAnonymousSession, setLocalAccountCookie } from '$lib/server/auth';
 import { retiredAiResponse } from '$lib/server/ai-http';
 import { createSupabaseToken } from '$lib/server/supabase-auth';
 import type { Handle, HandleServerError } from '@sveltejs/kit';
@@ -27,10 +28,6 @@ function oauthEndpoint(path: string) {
 
 function authPath(path: string) {
 	return ['/login', '/logout', '/settings', '/api/lists'].some((prefix) => under(path, prefix));
-}
-
-function safePath(path: string) {
-	return path.startsWith('/login/confirm/') ? '/login/confirm/[token]' : path;
 }
 
 function privateResponse(response: Response, browserPage = false) {
@@ -67,6 +64,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const sessionId = event.cookies.get('auth_session');
 	const tAuthStart = Date.now();
 	let auth = await getSession(event);
+	const expectedAccount = event.request.headers.get(ACCOUNT_HEADER);
+	if (under(path, '/api') && expectedAccount && expectedAccount !== auth?.user.id) {
+		return privateResponse(new Response(null, { status: 409, headers: { [ACCOUNT_CHANGED_HEADER]: '1' } }));
+	}
 	let sessionInvalid = false;
 
 	if (!auth && sessionId) {
@@ -75,6 +76,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	if (!auth) {
 		auth = await createAnonymousSession(event);
+	} else if (event.cookies.get(LOCAL_ACCOUNT_COOKIE) !== auth.user.id) {
+		setLocalAccountCookie(event.cookies, auth.user.id);
 	}
 	const tAuth = Date.now() - tAuthStart;
 
@@ -92,7 +95,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const tResolve = Date.now() - tResolveStart;
 	
 	const duration = Date.now() - start;
-	const loggedPath = safePath(path);
+	const loggedPath = event.route.id ?? '<unmatched>';
 	
 	// Log request summary with detailed tracing
 	logger.info(`${event.request.method} ${loggedPath} - ${response.status} (${duration}ms)`, {
@@ -110,17 +113,25 @@ export const handle: Handle = async ({ event, resolve }) => {
 		await logger.flush();
 	}
 
-	return authPath(path) ? privateResponse(response, true) : response;
+	// Account data in a page or an internal data response can be replayed
+	// under a later account if the browser or worker puts it in a shared cache.
+	const browserData = !under(path, '/api');
+	return authPath(path) || browserData ? privateResponse(response, true) : response;
 };
 
-export const handleError: HandleServerError = async ({ error, event }) => {
-	const path = safePath(event.url.pathname);
-	const sensitive = oauthEndpoint(path) || authPath(path);
+export const handleError: HandleServerError = async ({ error, event, status }) => {
+	const path = event.route.id ?? '<unmatched>';
+	const errorKind = error instanceof TypeError ? 'type_error'
+		: error instanceof RangeError ? 'range_error'
+		: error instanceof SyntaxError ? 'syntax_error'
+		: error instanceof Error ? 'application_error'
+		: 'unknown_error';
 	logger.error(`Unhandled server error: ${path}`, {
 		path,
-		userId: event.locals.user?.id,
-		...(sensitive && error instanceof Error ? { errorType: error.name } : {})
-	}, sensitive ? undefined : error);
+		status,
+		errorKind,
+		userId: event.locals.user?.id
+	});
 
 	if (!dev) {
 		await logger.flush();
