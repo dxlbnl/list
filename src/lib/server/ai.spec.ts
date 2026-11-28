@@ -2,105 +2,127 @@ import { beforeAll, afterAll, describe, it, expect } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { createTestDb, type TestDb } from '$lib/test/pglite';
 import { world } from '$lib/test/fixtures';
-import { listSchema, aiCreateSchema, aiPatchSchema } from '$lib/validations';
-import { users, lists, listUsers, aiLinks, aiProposals, items } from './db/schema';
-import { createProposal, agentProposal, patchProposal, decideProposal, hashToken, secretToken, pendingProposals } from './ai';
+import { itemSchema, listSchema, mcpProposalInputSchema, aiDecisionSchema } from '$lib/validations';
+import { users, lists, listUsers, aiConnections, aiProposals, items } from './db/schema';
+import { createConnectedProposal, decideProposal, pendingProposals } from './ai';
 
 const list = world.generate(listSchema);
-const otherList = world.generate(listSchema);
-const input = world.generate(aiCreateSchema, { overrides: { items: [{ name: 'Melk', groupName: '' }, { name: 'Brood', groupName: 'Bakker' }] } });
+const unrelated = world.generate(listSchema);
+const seeded = world.generate(itemSchema, {
+	overrides: { listId: list.id, name: 'Meel', groupName: 'Bakker', done: false, deletedAt: null }
+});
+const input = mcpProposalInputSchema.parse({
+	listId: list.id, items: [{ name: 'Melk' }, { name: 'Brood', groupName: 'Bakker' }]
+});
 let h: TestDb;
-let token: string;
-let otherToken: string;
-let linkId: string;
+const connection = 'connection';
+const otherConnection = 'another-connection';
+
 beforeAll(async () => {
- h = await createTestDb();
- await h.db.insert(users).values([{ id: list.createdBy }, { id: otherList.createdBy }]);
- await h.db.insert(lists).values([list, otherList]);
- await h.db.insert(listUsers).values([{ listId: list.id, userId: list.createdBy }, { listId: otherList.id, userId: otherList.createdBy }]);
- token = secretToken(); otherToken = secretToken(); linkId = secretToken();
- await h.db.insert(aiLinks).values([{ id: linkId, listId: list.id, tokenHash: hashToken(token) }, { id: secretToken(), listId: otherList.id, tokenHash: hashToken(otherToken) }]);
+	h = await createTestDb();
+	await h.db.insert(users).values([{ id: list.createdBy }, { id: unrelated.createdBy }]);
+	await h.db.insert(lists).values([list, unrelated]);
+	await h.db.insert(listUsers).values([
+		{ listId: list.id, userId: list.createdBy }, { listId: unrelated.id, userId: unrelated.createdBy }
+	]);
+	await h.db.insert(aiConnections).values([
+		{ id: connection, userId: list.createdBy, clientId: 'client-a', scopes: ['proposals:create'], activatedAt: new Date() },
+		{ id: otherConnection, userId: list.createdBy, clientId: 'client-b', scopes: ['proposals:create'], activatedAt: new Date() }
+	]);
+	await h.db.insert(items).values(seeded);
 }, 30000);
+
 afterAll(async () => { await h?.close(); });
 
-describe('AI proposal capabilities and lifecycle', () => {
- it('stores hashes, scopes tokens, rejects invalid edit credentials and never directly adds items', async () => {
-  const proposal = await h.db.transaction((tx) => createProposal(tx, token, input.items));
-  const [stored] = await h.db.select().from(aiProposals).where(eq(aiProposals.id, proposal.id));
-  expect(stored.editTokenHash).toBe(hashToken(proposal.editToken));
-  expect(JSON.stringify(stored)).not.toContain(proposal.editToken);
-  expect(proposal).not.toHaveProperty('editTokenHash');
-  expect(proposal.status).toBe('pending');
-  expect(await h.db.select().from(items)).toHaveLength(0);
-  await expect(h.db.transaction((tx) => agentProposal(tx, otherToken, proposal.id, proposal.editToken))).rejects.toMatchObject({ status: 404 });
-  await expect(h.db.transaction((tx) => agentProposal(tx, token, proposal.id, secretToken()))).rejects.toMatchObject({ status: 404 });
- });
- it('uses optimistic versions and accepts through sync exactly once, including concurrent retries', async () => {
-  const proposal = await h.db.transaction((tx) => createProposal(tx, token, input.items));
-  expect(await h.db.transaction((tx) => patchProposal(tx, token, proposal.id, proposal.editToken, 99, input.items))).toBeNull();
-  const updated = await h.db.transaction((tx) => patchProposal(tx, token, proposal.id, proposal.editToken, 1, input.items));
-  expect(updated?.version).toBe(2);
-  expect(await h.db.transaction((tx) => decideProposal(tx, list.id, list.createdBy, proposal.id, 1, 'accepted'))).toBeNull();
-  await expect(h.db.transaction((tx) => decideProposal(tx, list.id, otherList.createdBy, proposal.id, 2, 'accepted'))).rejects.toMatchObject({ status: 403 });
-  const results = await Promise.all([1, 2].map(() => h.db.transaction((tx) => decideProposal(tx, list.id, list.createdBy, proposal.id, 2, 'accepted'))));
-  expect(results.every((r) => r?.status === 'accepted')).toBe(true);
-  expect(await h.db.transaction((tx) => decideProposal(tx, list.id, list.createdBy, proposal.id, 1, 'accepted'))).toBeNull();
-  const rows = await h.db.select().from(items).where(eq(items.listId, list.id));
-  expect(rows).toHaveLength(input.items.length);
-  expect(rows.every((r) => r.updatedSeq > 0)).toBe(true);
-  expect(await h.db.transaction((tx) => patchProposal(tx, token, proposal.id, proposal.editToken, 3, input.items))).toBeNull();
-  expect(await h.db.transaction((tx) => decideProposal(tx, list.id, list.createdBy, proposal.id, 3, 'rejected'))).toBeNull();
- });
- it('rejects permanently and expires proposals without extending their lifetime', async () => {
-  const proposal = await h.db.transaction((tx) => createProposal(tx, token, input.items));
-  expect((await h.db.transaction((tx) => decideProposal(tx, list.id, list.createdBy, proposal.id, 1, 'rejected')))?.status).toBe('rejected');
-  expect(await h.db.transaction((tx) => patchProposal(tx, token, proposal.id, proposal.editToken, 2, input.items))).toBeNull();
-  const expired = await h.db.transaction((tx) => createProposal(tx, token, input.items));
-  await h.db.update(aiProposals).set({ expiresAt: new Date(0) }).where(eq(aiProposals.id, expired.id));
-  expect(await h.db.transaction((tx) => decideProposal(tx, list.id, list.createdBy, expired.id, 1, 'accepted'))).toBeNull();
-  expect((await h.db.transaction((tx) => agentProposal(tx, token, expired.id, expired.editToken))).status).toBe('expired');
- });
- it('rolls back both synchronized items and decision on transaction failure', async () => {
-  const proposal = await h.db.transaction((tx) => createProposal(tx, token, input.items));
-  const before = await h.db.select().from(items);
-  await expect(h.db.transaction(async (tx) => {
-   await decideProposal(tx, list.id, list.createdBy, proposal.id, 1, 'accepted');
-   throw new Error('Simulated transaction failure');
-  })).rejects.toThrow('Simulated transaction failure');
-  expect(await h.db.select().from(items)).toHaveLength(before.length);
-  expect((await h.db.transaction((tx) => agentProposal(tx, token, proposal.id, proposal.editToken))).status).toBe('pending');
- });
- it('revocation blocks creating, reading and editing proposals', async () => {
-  const proposal = await h.db.transaction((tx) => createProposal(tx, token, input.items));
-  await h.db.update(aiLinks).set({ revokedAt: new Date() }).where(eq(aiLinks.id, linkId));
-  await expect(h.db.transaction((tx) => createProposal(tx, token, input.items))).rejects.toMatchObject({ status: 401 });
-  await expect(h.db.transaction((tx) => agentProposal(tx, token, proposal.id, proposal.editToken))).rejects.toMatchObject({ status: 401 });
-  await expect(h.db.transaction((tx) => patchProposal(tx, token, proposal.id, proposal.editToken, 1, input.items))).rejects.toMatchObject({ status: 401 });
- });
- it('caps proposals per list across links and frees a slot on expiration', async () => {
-  const additionalToken = secretToken();
-  const first = await h.db.transaction((tx) => createProposal(tx, otherToken, input.items));
-  const [seed] = await h.db.select().from(aiProposals).where(eq(aiProposals.id, first.id));
-  await h.db.insert(aiLinks).values({
-   id: secretToken(), listId: seed.listId, tokenHash: hashToken(additionalToken)
-  });
-  await h.db.insert(aiProposals).values(Array.from({ length: 98 }, () => ({ ...seed, id: secretToken() })));
+const propose = (request = input, connectionId = connection) =>
+	h.db.transaction((tx) => createConnectedProposal(tx, connectionId, list.createdBy, request));
+const decide = (id: string, version = 1, decision: 'accepted' | 'rejected' = 'accepted') =>
+	h.db.transaction((tx) => decideProposal(tx, list.id, list.createdBy, id, { version, decision }));
 
-  const submissions = await Promise.allSettled([otherToken, additionalToken].map((token) =>
-   h.db.transaction((tx) => createProposal(tx, token, input.items))
-  ));
-  expect(submissions.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
-  expect(submissions).toContainEqual(expect.objectContaining({ status: 'rejected', reason: expect.objectContaining({ status: 409 }) }));
-  expect(await h.db.transaction((tx) => pendingProposals(tx, otherList.id, otherList.createdBy))).toHaveLength(100);
+describe('AI proposal lifecycle', () => {
+	it('keeps proposals separate, validates current groups and enforces membership and ownership', async () => {
+		const proposal = await propose();
+		expect(proposal.status).toBe('pending');
+		expect(await h.db.select().from(items)).toHaveLength(1);
+		await expect(propose({ ...input, listId: unrelated.id })).rejects.toMatchObject({ status: 404 });
+		await expect(h.db.transaction((tx) =>
+			createConnectedProposal(tx, connection, unrelated.createdBy, input)
+		)).rejects.toMatchObject({ status: 403 });
+		await expect(propose({ ...input, items: [{ name: 'Cadeau', groupName: 'New' }] }))
+			.rejects.toMatchObject({ missingGroups: ['New'], groups: ['Bakker'] });
+	});
 
-  await h.db.update(aiProposals).set({ expiresAt: new Date(0) }).where(eq(aiProposals.id, first.id));
-  expect((await h.db.transaction((tx) => createProposal(tx, additionalToken, input.items))).status).toBe('pending');
- });
- it('validates bounded item payloads and excludes scope/status injection', () => {
-  expect(aiCreateSchema.safeParse({ ...input, listId: otherList.id }).success).toBe(false);
-  expect(aiCreateSchema.safeParse({ items: [] }).success).toBe(false);
-  expect(aiCreateSchema.safeParse({ items: [{ name: '  ' }] }).success).toBe(false);
-  expect(aiCreateSchema.safeParse({ items: Array(51).fill(input.items[0]) }).success).toBe(false);
-  expect(aiPatchSchema.safeParse({ ...input, version: 0 }).success).toBe(false);
- });
+	it('handles version conflicts, produces synchronized items once and replays a stable request', async () => {
+		const request = { ...input, requestId: 'retry' };
+		const [proposal, retry] = await Promise.all([propose(request), propose(request)]);
+		expect(retry).toEqual(proposal);
+		await expect(propose({ ...request, items: [{ name: 'Andere', groupName: '' }] }))
+			.rejects.toMatchObject({ status: 409 });
+		await expect(decide(proposal.id, 99)).resolves.toBeNull();
+		const accepted = await Promise.all([decide(proposal.id), decide(proposal.id)]);
+		expect(accepted.every((p) => p?.status === 'accepted' && p.version === 2)).toBe(true);
+		const added = (await h.db.select().from(items)).filter(({ id }) => id !== seeded.id);
+		expect(added).toHaveLength(2);
+		expect(added.every(({ updatedSeq }) => updatedSeq > 0)).toBe(true);
+		await expect(propose(request)).resolves.toMatchObject({ id: proposal.id, status: 'accepted' });
+	});
+
+	it('rejects and expires proposals without mutating items', async () => {
+		const rejected = await propose();
+		const expired = await propose();
+		await h.db.update(aiProposals).set({ expiresAt: new Date(0) }).where(eq(aiProposals.id, expired.id));
+		const before = await h.db.select().from(items);
+		await expect(decide(rejected.id, 1, 'rejected')).resolves.toMatchObject({ status: 'rejected' });
+		await expect(decide(expired.id)).resolves.toBeNull();
+		expect(await h.db.select().from(items)).toEqual(before);
+		expect((await h.db.select().from(aiProposals).where(eq(aiProposals.id, expired.id)))[0].status).toBe('expired');
+	});
+
+	it('keeps a proposal open across group changes and accepts an explicit replacement', async () => {
+		await h.db.insert(items).values({ ...seeded, id: 'vegetables', groupName: 'Markt' });
+		const proposal = await propose({ ...input, items: [{ name: 'Boon', groupName: 'Markt' }] });
+		await h.db.update(items).set({ groupName: 'Super' }).where(eq(items.id, 'vegetables'));
+		await expect(decide(proposal.id)).rejects.toMatchObject({ missingGroups: ['Markt'] });
+		const reassign = (to: string) => h.db.transaction((tx) =>
+			decideProposal(tx, list.id, list.createdBy, proposal.id, {
+				version: 1, decision: 'accepted', groupOverrides: [{ from: 'Markt', to }]
+			}));
+		await expect(reassign('Vanished')).rejects.toMatchObject({ missingGroups: ['Markt'] });
+		await expect(reassign('Super')).resolves.toMatchObject({
+			status: 'accepted', items: [{ name: 'Boon', groupName: 'Super' }]
+		});
+	});
+
+	it('rolls back synchronized items and the decision together on failure', async () => {
+		const proposal = await propose();
+		const before = await h.db.select().from(items);
+		await expect(h.db.transaction(async (tx) => {
+			await decideProposal(tx, list.id, list.createdBy, proposal.id, { version: 1, decision: 'accepted' });
+			throw new Error('Simulated failure');
+		})).rejects.toThrow('Simulated failure');
+		expect(await h.db.select().from(items)).toEqual(before);
+		expect((await h.db.select().from(aiProposals).where(eq(aiProposals.id, proposal.id)))[0].status).toBe('pending');
+	});
+
+	it('caps pending proposals across connections and frees capacity on expiry', async () => {
+		const pending = await h.db.transaction((tx) => pendingProposals(tx, list.id, list.createdBy));
+		const [seed] = await h.db.select().from(aiProposals).where(eq(aiProposals.id, pending[0].id));
+		await h.db.insert(aiProposals).values(Array.from({ length: 99 - pending.length }, (_, index) =>
+			({ ...seed, id: 'cap-' + index, requestId: null })
+		));
+		const submissions = await Promise.allSettled([propose(), propose(input, otherConnection)]);
+		expect(submissions.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
+		expect(submissions).toContainEqual(expect.objectContaining({
+			status: 'rejected', reason: expect.objectContaining({ status: 409 })
+		}));
+		await h.db.update(aiProposals).set({ expiresAt: new Date(0) }).where(eq(aiProposals.id, seed.id));
+		await expect(propose()).resolves.toMatchObject({ status: 'pending' });
+	});
+
+	it('keeps the item limit and excludes injection of decision fields', () => {
+		expect(mcpProposalInputSchema.safeParse({ ...input, status: 'accepted' }).success).toBe(false);
+		expect(mcpProposalInputSchema.safeParse({ ...input, items: [] }).success).toBe(false);
+		expect(mcpProposalInputSchema.safeParse({ ...input, items: Array(51).fill(input.items[0]) }).success).toBe(false);
+		expect(aiDecisionSchema.safeParse({ version: 0, decision: 'accepted' }).success).toBe(false);
+	});
 });
