@@ -19,9 +19,15 @@
 		onDndFinalize,
 		showHeader = true,
 		onSelect,
+		openAfterAdd,
 	} = $props();
 
 	let isOpen = $state(true);
+	let lastOpenAfterAdd: number | undefined;
+	$effect(() => {
+		if (openAfterAdd !== undefined && openAfterAdd !== lastOpenAfterAdd) isOpen = true;
+		lastOpenAfterAdd = openAfterAdd;
+	});
 	let isRenameDialogOpen = $state(false);
 	let isDeleteDialogOpen = $state(false);
 	let editName = $state("");

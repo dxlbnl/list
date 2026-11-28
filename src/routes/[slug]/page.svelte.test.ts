@@ -126,6 +126,7 @@ describe('list page — characterisation: group lifecycle when its last item is 
 		await page.getByRole('button', { name: 'Add', exact: true }).click();
 		await expect.poll(async () => (await dexieDb.items.where('name').equals('Pretzels').first())?.groupName)
 			.toBe('Snacks');
+		await expect.element(page.getByText('Pretzels', { exact: true })).toBeVisible();
 		await input.fill('[Produce] Apples');
 		await page.getByRole('button', { name: 'Add', exact: true }).click();
 		await expect.poll(async () => (await dexieDb.items.where('name').equals('Apples').first())?.groupName)

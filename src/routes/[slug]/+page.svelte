@@ -67,6 +67,7 @@
 	});
 
 	let newItemName = $state("");
+	let added = $state<{ group: string; sequence: number }>();
 	let selection = $state<{ listId: string; group: string }>();
 
 	async function handleAddItem() {
@@ -88,6 +89,7 @@
 		}
 
 		await addItemAction(data.listId, itemName, groupName);
+		added = { group: groupName || "GENERAL", sequence: (added?.sequence ?? 0) + 1 };
 		newItemName = "";
 	}
 
@@ -276,7 +278,8 @@
 {#snippet contextualMenuItems()}
 	<DropdownMenu.Item
 		class="menu-item"
-		onSelect={() => (isShareDialogOpen = true)}
+		openAfterAdd={added?.group === groupName ? added.sequence : undefined}
+							onSelect={() => (isShareDialogOpen = true)}
 	>
 		<div class="icon-container">
 			<svg
