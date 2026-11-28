@@ -39,7 +39,8 @@ export const POST: RequestHandler = async ({ cookies, request, url }) => {
 		sameSite: 'lax',
 		secure: !dev
 	});
-	
+	cookies.delete('list_local_account', { path: '/' });
+
 	await logger.flush();
 	if (request.headers.get('accept') === 'application/json') {
 		return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });

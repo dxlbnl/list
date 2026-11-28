@@ -43,6 +43,7 @@ it('revokes the logged-out session and preserves other sessions', async () => {
 		await expect(Promise.resolve().then(() => POST(current as Parameters<typeof POST>[0])))
 			.rejects.toMatchObject({ status: 303, location: '/' });
 		expect(current.cookies.delete).toHaveBeenCalledWith('auth_session', expect.objectContaining({ path: '/' }));
+		expect(current.cookies.delete).toHaveBeenCalledWith('list_local_account', { path: '/' });
 		expect(await getSession(current)).toBeNull();
 		expect(await getSession(event('other-session'))).toBeTruthy();
 
