@@ -22,9 +22,10 @@ it.each([
 	const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
 	try {
 		const url = new URL(pathname, 'https://list.example.test');
+		const cookies = new Map([['auth_session', 'session-secret'], ['list_local_account', 'user-id']]);
 		const event = {
 			url, route: { id }, request: new Request(url), locals: {},
-			cookies: { get: (name: string) => ({ auth_session: 'session-secret', list_local_account: 'user-id' })[name as 'auth_session'] }
+			cookies: { get: (name: string) => cookies.get(name) }
 		} as unknown as RequestEvent;
 		await handle({ event, resolve: async () => new Response() });
 		await handleError({ error: new TypeError(pathname), event, status: 500, message: 'Internal Error' });
