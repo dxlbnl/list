@@ -151,3 +151,44 @@ describe('processSyncBatch — cursor delta (fold pull into push response)', () 
 		expect(third.cursor).toBeGreaterThan(first.cursor);
 	}, 30_000);
 });
+
+it('only grants membership for newly created lists', async () => {
+	const h = await createTestDb();
+	try {
+		await seedListMember(h);
+		const stranger = 'stranger';
+		await h.db.insert(users).values({ id: stranger });
+		const original = (await h.db.select().from(lists).where(eq(lists.id, LIST)))[0];
+		const data = { id: original.id, name: original.name, slug: original.slug, created_at: original.createdAt.toISOString() };
+		for (const type of ['INSERT', 'UPDATE'] as const) {
+			const result = await processSyncBatch(h.db, stranger, [{ id: type, entity: 'list', type, data }]);
+			expect(result.results[0].status).toBe('ignored');
+			expect(result.changes.lists).toEqual([]);
+		}
+		const created = { ...data, id: 'new-list' };
+		await processSyncBatch(h.db, stranger, [{ id: 'new', entity: 'list', type: 'INSERT', data: created }]);
+		expect(await h.db.select().from(listUsers).where(eq(listUsers.userId, stranger)))
+			.toEqual([{ listId: created.id, userId: stranger }]);
+	} finally {
+		await h.close();
+	}
+}, 30_000);
+
+it('keeps one owner membership when concurrent creates are retried', async () => {
+	const h = await createTestDb();
+	try {
+		await h.db.insert(users).values({ id: USER });
+		const create: SyncOperation = {
+			id: 'create-list', entity: 'list', type: 'INSERT',
+			data: { id: LIST, name: 'Groceries', slug: 'groceries', created_at: new Date().toISOString() }
+		};
+		const results = await Promise.all([
+			processSyncBatch(h.db, USER, [create]),
+			processSyncBatch(h.db, USER, [create])
+		]);
+		expect(results.map(({ results }) => results[0].status)).toEqual(['success', 'success']);
+		expect(await h.db.select().from(listUsers)).toEqual([{ listId: LIST, userId: USER }]);
+	} finally {
+		await h.close();
+	}
+}, 30_000);
