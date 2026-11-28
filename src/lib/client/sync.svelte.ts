@@ -147,18 +147,13 @@ class SyncManager {
 					this.reconcileAllLists();
 				} else if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
 					const serverList = payload.new as DatabaseList;
-					const isPending = await this.isOperationPending(listId);
-					if (!isPending) {
-						await this.db.lists.put({
-							id: serverList.id,
-							slug: serverList.slug,
-							name: serverList.name,
-							createdBy: serverList.created_by,
-							createdAt: new Date(serverList.created_at)
-						});
-					} else {
-						this.reconcileAllLists();
-					}
+					await this.applyServerList({
+						id: serverList.id,
+						slug: serverList.slug,
+						name: serverList.name,
+						createdBy: serverList.created_by,
+						createdAt: new Date(serverList.created_at)
+					});
 				}
 			})
 			.on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, async (payload: RealtimePostgresChangesPayload<DatabaseItem>) => {
