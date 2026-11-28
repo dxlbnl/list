@@ -70,10 +70,33 @@
 	}
 
 	onMount(() => {
-		const poll = () => { if (!busy && navigator.onLine) void run(refresh); };
-		poll();
+		let mounted = true;
+		let refreshQueued = false;
+		const canPoll = () => mounted && navigator.onLine && document.visibilityState === 'visible';
+
+		async function poll() {
+			if (!canPoll() || busy) return;
+			refreshQueued = false;
+			await run(refresh);
+			if (refreshQueued) void poll();
+		}
+
+		const resume = () => {
+			if (!canPoll()) return;
+			refreshQueued = true;
+			void poll();
+		};
+
+		document.addEventListener('visibilitychange', resume);
+		window.addEventListener('online', resume);
+		void poll();
 		const timer = setInterval(poll, 15000);
-		return () => clearInterval(timer);
+		return () => {
+			mounted = false;
+			clearInterval(timer);
+			document.removeEventListener('visibilitychange', resume);
+			window.removeEventListener('online', resume);
+		};
 	});
 </script>
 
