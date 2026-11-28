@@ -278,8 +278,7 @@
 {#snippet contextualMenuItems()}
 	<DropdownMenu.Item
 		class="menu-item"
-		openAfterAdd={added?.group === groupName ? added.sequence : undefined}
-							onSelect={() => (isShareDialogOpen = true)}
+		onSelect={() => (isShareDialogOpen = true)}
 	>
 		<div class="icon-container">
 			<svg
@@ -368,6 +367,7 @@
 							{groupName}
 							groupItems={localGroups[groupName]}
 							showHeader={sortedGroupNames.length > 1}
+							openAfterAdd={added?.group === groupName ? added.sequence : undefined}
 							onSelect={() => (selection = { listId: data.listId, group: groupName })}
 							onRename={(newName: string) =>
 								renameGroup(data.listId, groupName, newName)}
