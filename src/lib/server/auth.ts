@@ -101,7 +101,7 @@ export async function mergeUsers(sourceUserId: string, targetUserId: string, ano
 				.from(lists)
 				.where(
 					and(
-						eq(lists.createdBy, targetUserId), 
+						eq(lists.createdBy, targetUserId),
 						eq(lists.slug, newSlug)
 					)
 				);

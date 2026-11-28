@@ -7,3 +7,14 @@ export const LOCAL_ACCOUNT_COOKIE = 'list_local_account';
 export function accountDatabaseName(account: string) {
 	return `ListAppDB:account:${account}`;
 }
+
+export function readLocalAccountSelector(cookieHeader: string) {
+	const prefix = `${LOCAL_ACCOUNT_COOKIE}=`;
+	const entry = cookieHeader.split(';').map(cookie => cookie.trim()).find(cookie => cookie.startsWith(prefix));
+	if (!entry) return;
+	try {
+		return decodeURIComponent(entry.slice(prefix.length));
+	} catch {
+		return;
+	}
+}

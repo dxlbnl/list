@@ -117,7 +117,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 		await logger.flush();
 	}
 
-	return authPath(path) ? privateResponse(response, true) : response;
+	// Account data in a page or an internal data response can be replayed
+	// under a later account if the browser or worker puts it in a shared cache.
+	const browserData = !under(path, '/api');
+	return authPath(path) || browserData ? privateResponse(response, true) : response;
 };
 
 export const handleError: HandleServerError = async ({ error, event }) => {

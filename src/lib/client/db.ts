@@ -1,4 +1,4 @@
-import { accountDatabaseName } from '$lib/account';
+import { accountDatabaseName, readLocalAccountSelector } from '$lib/account';
 import Dexie, { type Table } from 'dexie';
 import type { SyncOperationInput, LocalList, LocalItem } from '$lib/validations';
 
@@ -134,9 +134,7 @@ export function bindLocalAccount(account: string, previousAnonymousAccount?: str
 	});
 	window.addEventListener('pageshow', (event) => {
 		if (!event.persisted) return;
-		try {
-			if (localStorage.getItem(ACTIVE_ACCOUNT) !== account) window.location.reload();
-		} catch { /* Storage can be disabled. */ }
+		if (readLocalAccountSelector(document.cookie) !== account) window.location.reload();
 	});
 	return accountReady;
 }
