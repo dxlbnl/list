@@ -36,14 +36,12 @@ self.addEventListener('fetch', (event) => {
 	// ignore POST requests etc
 	if (event.request.method !== 'GET') return;
 
+	const url = new URL(event.request.url);
+	const privatePaths = ['/api', '/login', '/logout', '/settings', '/mcp', '/oauth'];
+	if (url.origin !== self.location.origin || url.pathname.startsWith('/.well-known/oauth-') ||
+		privatePaths.some((path) => url.pathname === path || url.pathname.startsWith(path + '/'))) return;
+
 	async function respond() {
-		const url = new URL(event.request.url);
-		
-		// Don't intercept API calls - they should always go to the network
-		// and cannot be cached as they may be long-running streams (SSE)
-		if (url.pathname.startsWith('/api/')) {
-			return fetch(event.request);
-		}
 
 		const cache = await caches.open(CACHE);
 
@@ -61,7 +59,7 @@ self.addEventListener('fetch', (event) => {
 			const response = await fetch(event.request);
 
 			// if we're online, update the cache
-			if (response.status === 200) {
+			if (response.status === 200 && !response.headers.get('Cache-Control')?.includes('no-store')) {
 				cache.put(event.request, response.clone());
 			}
 
