@@ -94,12 +94,8 @@ The app follows a **Local-First** architecture:
 
 Built with ❤️ by the List Team.
 
-## AI proposals
+## AI connections
 
-Each list has **Connect AI** in its menu. Create a permanent proposal-only link and use the copy action to paste a complete request into your AI chat. The copied request includes the secret connection link and the OpenAPI URL; the dialog itself only shows user-facing instructions. Secrets are shown once; only SHA-256 hashes are stored. Any current list member can revoke all AI links for that list. Revocation also blocks agent access to existing proposals; members can still review them.
+Add List as a remote MCP connector in your AI app. Use the deployment’s HTTPS `/mcp` URL, select OAuth, and approve the connection in List. In chat, ask the AI to find a list and suggest additions. Open the list to review the grouped proposal, or go to **Settings → AI connections** to disconnect an app.
 
-The public machine contract is **GET /api/ai/openapi.json** (source: `static/ai-openapi.json`). The link's `#token=...` fragment supplies `Authorization: Bearer ...`; it is not sent to the landing page server. POST `/api/ai/proposals` with `{"items":[{"name":"Milk","groupName":""}]}`. Save the returned `id`, `editToken`, and `version`. GET/PATCH `/api/ai/proposals/{id}` require both the list bearer token and `X-Proposal-Token: <editToken>`. PATCH replaces all items and requires the current `version`. Never put tokens in query strings or logs.
-
-Proposals expire seven days after creation. Each list supports up to 100 unexpired pending proposals, across all its links. Creating a proposal at capacity returns 409. JSON request bodies are capped at 32 KiB. A stale version or terminal proposal returns 409; GET the current state before retrying. Acceptance/rejection requires a current list membership and same-origin session request. Acceptance and the existing server sync batch commit atomically. Retries of the same decision against the version originally reviewed are idempotent. Accepted items propagate through the existing realtime/cursor sync. Pending proposals refresh every 15 seconds while a list is open; review requires connectivity.
-
-Deployment preparation (not executed by this change): apply the generated additive Drizzle migration through the normal release process. Existing **Vercel WAF/function rate limiting must cover `/api/ai/proposals` and `/api/ai/proposals/*`**, including unauthenticated failures; also cover link management `/api/lists/*/ai`. No in-app limiter is added. Vercel settings are external to this repository and must be checked in the project's existing configuration. Do not deploy these public routes without that coverage. No production data or settings are needed to run the PGlite tests.
+The same endpoint serves ChatGPT, Claude and Gemini. Each needs a registered OAuth client and a chat account with custom connector support. See the [MCP setup and deployment guide](wiki/knowledge/architecture/ai-proposals.md).
