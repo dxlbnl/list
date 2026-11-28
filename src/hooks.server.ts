@@ -42,6 +42,20 @@ function privateResponse(response: Response, browserPage = false) {
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const path = event.url.pathname;
+	const isOAuth = oauthEndpoint(path);
+	const start = Date.now();
+
+	async function logOAuthResponse(response: Response) {
+		const route = event.route.id ?? '<unmatched>';
+		logger.info('OAuth/MCP request', {
+			method: event.request.method,
+			path: route,
+			status: response.status,
+			duration: Date.now() - start
+		});
+		if (!dev) await logger.flush();
+		return response;
+	}
 	if (path === '/ai-openapi.json') return retiredAiResponse();
 	if (under(path, '/api/ai')) return resolve(event);
 	if (path !== '/oauth/token' && path !== '/oauth/revoke' &&
@@ -49,18 +63,17 @@ export const handle: Handle = async ({ event, resolve }) => {
 		/^(application\/x-www-form-urlencoded|multipart\/form-data|text\/plain)$/i.test(
 			event.request.headers.get('content-type')?.split(';')[0].trim() ?? ''
 		) && event.request.headers.get('origin') !== event.url.origin) {
-		return privateResponse(new Response('Cross-site form submission is forbidden.', { status: 403 }));
+		const response = privateResponse(new Response('Cross-site form submission is forbidden.', { status: 403 }));
+		return isOAuth ? logOAuthResponse(response) : response;
 	}
-	if (oauthEndpoint(path)) {
+	if (isOAuth) {
 		const auth = under(path, '/oauth/authorize') ? await getSession(event) : null;
 		event.locals.user = auth?.user ?? null;
 		event.locals.session = auth?.session ?? null;
 		const response = await resolve(event);
-		if (!dev) await logger.flush();
-		return privateResponse(response, under(path, '/oauth/authorize'));
+		return logOAuthResponse(privateResponse(response, under(path, '/oauth/authorize')));
 	}
 
-	const start = Date.now();
 	const sessionId = event.cookies.get('auth_session');
 	const tAuthStart = Date.now();
 	let auth = await getSession(event);

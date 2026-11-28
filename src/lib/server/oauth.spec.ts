@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { beforeAll, afterAll, describe, it, expect } from 'vitest';
+import { beforeAll, afterAll, describe, it, expect, vi } from 'vitest';
+import { logger } from '$lib/logger';
 import { eq } from 'drizzle-orm';
 import { createTestDb, type TestDb } from '$lib/test/pglite';
 import { world } from '$lib/test/fixtures';
@@ -95,6 +96,27 @@ function refresh(token: string, authClient: OAuthConfig['clients'][number] = cli
 
 const bearer = (token: string) => 'Bearer ' + token;
 const digest = (token: string) => createHash('sha256').update(token).digest('hex');
+
+it('logs token rejection reasons without logging submitted credentials or grant data', async () => {
+	const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+	const fields = { grant_type: 'authorization_code', code: 'private-code', code_verifier: 'private-verifier' };
+	try {
+		const wrongSecret = await exchange(fields, { ...client, secret: 'private-secret' });
+		const wrongMethod = await exchange(fields, { ...basic });
+		expect(wrongSecret.status).toBe(401);
+		expect(wrongMethod.status).toBe(401);
+		expect(await wrongMethod.json()).toEqual({ error: 'invalid_client' });
+		expect(warn).toHaveBeenNthCalledWith(1, 'OAuth token exchange rejected', {
+			status: 401, error: 'invalid_client', reason: 'client_secret_mismatch', clientId: client.id
+		});
+		expect(warn).toHaveBeenNthCalledWith(2, 'OAuth token exchange rejected', {
+			status: 401, error: 'invalid_client', reason: 'client_authentication_method_mismatch', clientId: basic.id
+		});
+		expect(JSON.stringify(warn.mock.calls)).not.toContain('private-');
+	} finally {
+		warn.mockRestore();
+	}
+});
 
 describe('OAuth authorization and grants', () => {
 	it('validates exact callbacks, client, PKCE, resource and scope', async () => {

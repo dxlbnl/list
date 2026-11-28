@@ -1,3 +1,4 @@
+import { logger } from '$lib/logger';
 import { error, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { sameOrigin } from '$lib/server/ai-http';
@@ -43,6 +44,7 @@ export const actions: Actions = {
 		const location = await finishOAuthConsent(
 			db, oauthConfig(url.origin), ticket, intent, locals.session.id, locals.user.id, decision === 'allow'
 		);
+		logger.info('OAuth consent completed', { decision });
 		cookies.delete(oauthCookie, { path: '/' });
 		redirect(303, location);
 	}
