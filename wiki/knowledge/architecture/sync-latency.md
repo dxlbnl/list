@@ -48,3 +48,39 @@ return per-op errors instead of failing the batch.
 **Why:** naming the exact hops shows the fix is not "make Realtime faster" but "remove the second hop, the
 timer gap, and the backoff cliff" — fold the pull into the push response and refresh items on a cursor
 ([sync-redesign](sync-redesign.md)), and enforce the merge at every apply point ([sync-merge-model](sync-merge-model.md)).
+
+## Cursor index benchmark and rollout
+
+Reproduce locally from the repository root. The benchmark runs the production cursor query
+against a fresh PGlite database for each candidate. The fixture has 1,000 lists with 25, 125, or
+450 items each and users with access to 10 or 1,000 lists. The command records the warm median
+of three executions, the full `EXPLAIN (ANALYZE, BUFFERS)` plans, and the measured build time.
+
+```sh
+BENCH_SYNC_CURSOR=1 BENCH_PLAN_FILE=/tmp/list-sync-cursor-plans.json \
+  pnpm exec vitest run src/lib/server/sync-cursors.benchmark.spec.ts
+```
+
+| Indexes | Recent delta, 10 / 1,000 lists (ms) | Recent delta, shared buffer hits | Initial delta, 10 / 1,000 lists (ms) | Update 1,000 items (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 95.82 / 124.43 | 2,347 / 4,576 | 97.19 / 1,242.25 | 18.94 |
+| Items cursor | 1.13 / 1.62 | 35 / 43 | 8.62 / 1,847.28 | 102.95 |
+| Lists cursor | 170.81 / 232.61 | 2,331 / 4,560 | 196.87 / 1,468.27 | 14.76 |
+| Items and lists cursors | 0.30 / 1.06 | 19 / 27 | 7.64 / 837.51 | 16.49 |
+| Both cursors and composite | 0.38 / 1.28 | 19 / 27 | 7.49 / 843.35 | 19.34 |
+
+The items index removes the dominant cursor scan. Adding the lists index to the items index
+removes 16 shared buffer hits on each recent delta. The plan uses the lists index both to read
+the recent range and to resolve the maximum, touching 3 shared buffers for the maximum
+compared with 11 without it. The planner did not select the composite index in these
+runs. Timings fluctuate on the local runner, especially for initial pulls and writes.
+The buffer counts and selected indexes establish the read-side change more directly.
+
+Migration `0005_sync_cursor_indexes` builds both indexes in the deployment runner's
+transaction, taking locks that conflict with writes until commit. The combined build took
+0.10 s with the local fixture. Production time depends on table size, load, and storage.
+The migration gives each index statement a 1 s lock acquisition timeout and a 5 s
+statement timeout, then restores the runner's settings. A timeout rolls the migration
+back and fails the deployment build. Retry during a quiet period if blocked by active
+writers. If a table is too large to build within the timeout, use a separately planned
+concurrent index rollout with schema and migration-history verification before deploying.

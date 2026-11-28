@@ -55,7 +55,9 @@ it('preserves old proposals and migration history through the expand and cleanup
 			version: 1, decision: 'accepted'
 		}))).toMatchObject({ status: 'accepted' });
 
-		await expect(migrateListDb(db)).resolves.toBe(1);
+		await withMigrationsThrough('0004_remove_legacy_ai_links', async (folder: string) => {
+			await expect(migrateListDb(db, folder)).resolves.toBe(1);
+		});
 		const { rows: legacyTables } = await db.execute(sql`select to_regclass('public.ai_links') as name`);
 		expect(legacyTables).toEqual([{ name: null }]);
 		const { rows: legacyColumns } = await db.execute(sql`
@@ -70,6 +72,16 @@ it('preserves old proposals and migration history through the expand and cleanup
 			version: 3, decision: 'accepted'
 		}))).resolves.toMatchObject({ status: 'accepted', version: 4 });
 		expect((await db.select().from(schema.items)).map(({ name }) => name).sort()).toEqual(['New item', 'Old item']);
+		await expect(migrateListDb(db)).resolves.toBe(1);
+		const { rows: cursorIndexes } = await db.execute(sql`
+			select indexname from pg_indexes
+			where schemaname = 'public' and indexname in ('items_updated_seq_idx', 'lists_updated_seq_idx')
+			order by indexname
+		`);
+		expect(cursorIndexes).toEqual([
+			{ indexname: 'items_updated_seq_idx' },
+			{ indexname: 'lists_updated_seq_idx' }
+		]);
 		const { rows: history } = await db.execute(sql`select hash from drizzle.__drizzle_migrations order by created_at`);
 		expect(history).toEqual(readMigrationFiles({ migrationsFolder }).map(({ hash }) => ({ hash })));
 	} finally {
