@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { chromium } from 'playwright';
 import { transpile, ModuleKind, ScriptTarget } from 'typescript';
 import { expect, it } from 'vitest';
+import { accountDatabaseName, LOCAL_ACCOUNT_COOKIE } from '$lib/account';
 
 it('serves a public offline shell after an account switch in Chromium', async () => {
 	const shell = readFileSync(new URL('../static/offline.html', import.meta.url), 'utf8');
@@ -38,11 +39,11 @@ it('serves a public offline shell after an account switch in Chromium', async ()
 			return;
 		}
 		if (url.pathname === '/logout') {
-			response.writeHead(200, { 'set-cookie': ['account=; Max-Age=0; Path=/', 'list_local_account=; Max-Age=0; Path=/'] }).end('Signed out');
+			response.writeHead(200, { 'set-cookie': ['account=; Max-Age=0; Path=/', `${LOCAL_ACCOUNT_COOKIE}=; Max-Age=0; Path=/`] }).end('Signed out');
 			return;
 		}
 		if (url.pathname === '/login/b') {
-			response.writeHead(200, { 'set-cookie': ['account=B; Path=/; HttpOnly', 'list_local_account=B; Path=/'] }).end('Signed in');
+			response.writeHead(200, { 'set-cookie': ['account=B; Path=/; HttpOnly', `${LOCAL_ACCOUNT_COOKIE}=B; Path=/`] }).end('Signed in');
 			return;
 		}
 		const account = request.headers.cookie?.match(/account=(A|B)/)?.[1] ?? 'guest';
@@ -62,14 +63,14 @@ it('serves a public offline shell after an account switch in Chromium', async ()
 			context.setDefaultTimeout(5000);
 			await context.addCookies([
 				{ name: 'account', value: 'A', url: origin, httpOnly: true },
-				{ name: 'list_local_account', value: 'A', url: origin }
+				{ name: LOCAL_ACCOUNT_COOKIE, value: 'A', url: origin }
 			]);
 			const page = await context.newPage();
 			await page.goto(origin);
-			await page.evaluate(async () => {
-				for (const account of ['A', 'B', 'legacy']) {
+			await page.evaluate(async (databases) => {
+				for (const [account, name] of databases) {
 					await new Promise<void>((resolve, reject) => {
-						const request = indexedDB.open(account === 'legacy' ? 'ListAppDB' : `ListAppDB:account:${account}`, 1);
+						const request = indexedDB.open(name, 1);
 						request.onupgradeneeded = () => {
 							const list = { id: 'groceries', slug: 'groceries', name: `Saved ${account}`, createdBy: account };
 							const item = { id: 'item', listId: list.id, name: `Item ${account}`, rank: 1 };
@@ -85,7 +86,7 @@ it('serves a public offline shell after an account switch in Chromium', async ()
 				const oldCache = await caches.open('cache-legacy');
 				await oldCache.put('/groceries', new Response('Private account A'));
 				await navigator.serviceWorker.register('/service-worker.js');
-			});
+			}, [['A', accountDatabaseName('A')], ['B', accountDatabaseName('B')], ['legacy', 'ListAppDB']]);
 			await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
 
 			await page.goto(`${origin}/groceries`);
