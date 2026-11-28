@@ -1,3 +1,4 @@
+import { recordAccountActivity } from '$lib/server/account-activity';
 import { db } from '$lib/server/db';
 import { error, json } from '@sveltejs/kit';
 import { MESSAGES } from '$lib/constants/messages';
@@ -44,6 +45,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const ignoredCount = results.filter((r) => r.status === 'ignored').length;
 		syncLogger.info(`Atomic Sync complete`, { tTotal: tTotal.toFixed(2), opCount: operations.length, ignoredCount });
 
+		if (results.some(({ status }) => status === 'success')) await recordAccountActivity(db, user.id);
 		return json({ results, changes, cursor: nextCursor });
 	} catch (e) {
 		if (isPermanentInputFailure(e)) {

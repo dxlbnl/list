@@ -42,6 +42,7 @@ function privateResponse(response: Response, browserPage = false) {
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const path = event.url.pathname;
+	if (under(path, '/reports/account-activity')) return resolve(event);
 	if (path === '/ai-openapi.json') return retiredAiResponse();
 	if (under(path, '/api/ai')) return resolve(event);
 	if (path !== '/oauth/token' && path !== '/oauth/revoke' &&
