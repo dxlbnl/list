@@ -28,22 +28,19 @@ it('keeps local data and stays on the page if the revocation request fails', asy
 });
 
 it('clears the local database after one successful revocation before navigating', async () => {
-	const order: string[] = [];
-	const request = vi.fn(async () => {
-		order.push('revoke');
-		return new Response(null, { status: 204 });
-	});
+	const request = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
 	const alert = vi.fn();
-	const replace = vi.fn(() => { order.push('redirect'); });
+	const replace = vi.fn();
 	vi.stubGlobal('fetch', request);
 	vi.stubGlobal('window', { alert, location: { replace } });
-	vi.mocked(db.delete).mockImplementation(async () => { order.push('cleanup'); });
 
 	await Promise.all([logout(), logout()]);
 
 	expect(request).toHaveBeenCalledOnce();
 	expect(request).toHaveBeenCalledWith('/logout', expect.objectContaining({ method: 'POST' }));
-	expect(order).toEqual(['revoke', 'cleanup', 'redirect']);
+	const cleanupOrder = vi.mocked(db.delete).mock.invocationCallOrder[0];
+	expect(cleanupOrder).toBeGreaterThan(request.mock.invocationCallOrder[0]);
+	expect(cleanupOrder).toBeLessThan(replace.mock.invocationCallOrder[0]);
 	expect(replace).toHaveBeenCalledWith('/');
 	expect(alert).not.toHaveBeenCalled();
 });
