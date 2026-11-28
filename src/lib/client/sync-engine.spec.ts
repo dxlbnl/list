@@ -1,7 +1,10 @@
 import 'fake-indexeddb/auto';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { ListDatabase } from '$lib/client/db';
 import { createSyncManager } from './sync.svelte';
+import { supabase } from './supabase';
+import { itemDatabaseSchema, itemSchema, listDatabaseSchema, listSchema } from '$lib/validations';
+import { world } from '$lib/test/fixtures';
 
 // A fresh, isolated Dexie per test (unique DB name) backed by fake-indexeddb.
 function freshDb() {
@@ -102,4 +105,56 @@ describe('SyncManager invariants (characterisation / lock-down)', () => {
 		expect(await db.lists.get('gone')).toBeUndefined(); // absent server-side → deleted
 		await db.delete();
 	});
+});
+
+it('preserves a local edit queued while an incoming delta is in flight', async () => {
+	const db = freshDb();
+	const local = world.generate(itemSchema, { overrides: { name: 'Local', updatedAt: new Date('2030-01-01') } });
+	const remote = itemDatabaseSchema.parse({ ...local, name: 'Remote', updatedAt: new Date('2031-01-01') });
+	let sendResponse: (response: Response) => void = () => {};
+	const response = new Promise<Response>((resolve) => { sendResponse = resolve; });
+	const manager = createSyncManager(db, () => response);
+	try {
+		const pull = manager.pullDelta();
+		await db.transaction('rw', db.items, db.syncQueue, async () => {
+			await db.items.put(local);
+			await db.syncQueue.add({ id: 'local-edit', entity: 'item', type: 'UPDATE', data: local });
+		});
+		sendResponse(Response.json({ changes: { items: [remote] }, cursor: 1 }));
+		await pull;
+		expect((await db.items.get(local.id))?.name).toBe('Local');
+	} finally {
+		await db.delete();
+	}
+});
+
+it('routes a realtime list update through the atomic pending-delete check', async () => {
+	const db = freshDb();
+	const list = world.generate(listSchema);
+	type Listener = (payload: { eventType: 'UPDATE'; new: ReturnType<typeof listDatabaseSchema.parse>; old: object }) => Promise<void>;
+	let receiveListUpdate: Listener | undefined;
+	const channel = {
+		on(_event: string, filter: { table: string }, listener: Listener) {
+			if (filter.table === 'lists') receiveListUpdate = listener;
+			return channel;
+		},
+		subscribe: () => channel,
+		unsubscribe: vi.fn()
+	};
+	const connect = vi.spyOn(supabase, 'channel').mockReturnValue(channel as unknown as ReturnType<typeof supabase.channel>);
+	const setAuth = vi.spyOn(supabase.realtime, 'setAuth').mockResolvedValue();
+	const manager = createSyncManager(db, async () => new Response(null, { status: 503 }));
+	const applyList = vi.spyOn(manager, 'applyServerList');
+	try {
+		manager.init('test-token');
+		await db.syncQueue.add({ id: 'remove-list', entity: 'list', type: 'DELETE', data: { id: list.id } });
+		await receiveListUpdate!({ eventType: 'UPDATE', new: listDatabaseSchema.parse(list), old: {} });
+		expect(applyList).toHaveBeenCalledWith(expect.objectContaining({ id: list.id }));
+		expect(await db.lists.get(list.id)).toBeUndefined();
+	} finally {
+		manager.init();
+		connect.mockRestore();
+		setAuth.mockRestore();
+		await db.delete();
+	}
 });
