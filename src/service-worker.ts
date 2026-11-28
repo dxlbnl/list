@@ -1,78 +1,65 @@
+/// <reference lib="webworker" />
 /// <reference types="@sveltejs/kit" />
 import { build, files, version } from '$service-worker';
 
-// Create a unique cache name for this deployment
-const CACHE = `cache-${version}`;
+const worker = self as unknown as ServiceWorkerGlobalScope;
 
-const ASSETS = [
-	...build, // the app itself
-	...files  // everything in `static`
-	// '/' is intentionally excluded: it returns auth-dependent HTML and must
-	// always be fetched fresh from the network so the correct user is embedded.
-];
+const CACHE = `list-public-${version}`;
+const OFFLINE_PAGE = '/offline.html';
+const ASSETS = new Set([...build, ...files, OFFLINE_PAGE, '/offline.js']);
+const NON_LIST_ROUTES = new Set(['api', 'join', 'login', 'logout', 'mcp', 'oauth', 'settings']);
 
-self.addEventListener('install', (event) => {
+worker.addEventListener('install', (event) => {
 	// Create a new cache and add all files to it
 	async function addFilesToCache() {
 		const cache = await caches.open(CACHE);
-		await cache.addAll(ASSETS);
+		await cache.addAll([...ASSETS]);
 	}
 
-	event.waitUntil(addFilesToCache());
+	event.waitUntil(addFilesToCache().then(() => worker.skipWaiting()));
 });
 
-self.addEventListener('activate', (event) => {
+worker.addEventListener('activate', (event) => {
 	// Remove previous cached data from other screens
 	async function deleteOldCaches() {
 		for (const key of await caches.keys()) {
-			if (key !== CACHE) await caches.delete(key);
+			if (key !== CACHE && (key.startsWith('list-public-') || key.startsWith('cache-'))) {
+				await caches.delete(key);
+			}
 		}
 	}
 
-	event.waitUntil(deleteOldCaches());
+	event.waitUntil(deleteOldCaches().then(() => worker.clients.claim()));
 });
 
-self.addEventListener('fetch', (event) => {
-	// ignore POST requests etc
-	if (event.request.method !== 'GET') return;
+worker.addEventListener('fetch', (event) => {
+	const { request } = event;
+	if (request.method !== 'GET') return;
+	const url = new URL(request.url);
+	if (url.origin !== worker.location.origin) return;
 
-	const url = new URL(event.request.url);
-	const privatePaths = ['/api', '/login', '/logout', '/settings', '/mcp', '/oauth'];
-	if (url.origin !== self.location.origin || url.pathname.startsWith('/.well-known/oauth-') ||
-		privatePaths.some((path) => url.pathname === path || url.pathname.startsWith(path + '/'))) return;
-
-	async function respond() {
-
-		const cache = await caches.open(CACHE);
-
-		// `build`/`files` can always be served from the cache
-		if (ASSETS.includes(url.pathname)) {
-			const response = await cache.match(url.pathname);
-
-			if (response) {
-				return response;
-			}
-		}
-
-		// for everything else, try the network first, but fall back to the cache if we're offline
-		try {
-			const response = await fetch(event.request);
-
-			// if we're online, update the cache
-			if (response.status === 200 && !response.headers.get('Cache-Control')?.includes('no-store')) {
-				cache.put(event.request, response.clone());
-			}
-
-			return response;
-		} catch {
-			const response = await cache.match(event.request);
-			if (response) return response;
-
-			// If we're offline and don't have the resource in cache, 
-			// we can return a custom offline page or just fail
-			throw new Error('Offline and not in cache');
-		}
+	if (ASSETS.has(url.pathname)) {
+		event.respondWith((async () => {
+			const cache = await caches.open(CACHE);
+			return (await cache.match(url.pathname)) ?? fetch(request);
+		})());
+		return;
 	}
 
-	event.respondWith(respond());
+	// Only list-page navigations use the public shell. API, auth, and paginadata
+	// keep their normal network behavior and are never written to Cache Storage.
+	const slug = url.pathname.replace(/^\/|\/$/g, '');
+	if (request.mode !== 'navigate' || slug.includes('/') || slug.includes('.') || NON_LIST_ROUTES.has(slug)) return;
+
+	event.respondWith((async () => {
+		try {
+			return await fetch(request, { cache: 'no-store' });
+		} catch {
+			const cache = await caches.open(CACHE);
+			const shell = await cache.match(OFFLINE_PAGE);
+			return shell
+				? new Response(shell.body, { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } })
+				: Response.error();
+		}
+	})());
 });
