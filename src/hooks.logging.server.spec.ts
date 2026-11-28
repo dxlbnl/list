@@ -24,7 +24,7 @@ it.each([
 		const url = new URL(pathname, 'https://list.example.test');
 		const event = {
 			url, route: { id }, request: new Request(url), locals: {},
-			cookies: { get: () => 'session-secret' }
+			cookies: { get: (name: string) => ({ auth_session: 'session-secret', list_local_account: 'user-id' })[name as 'auth_session'] }
 		} as unknown as RequestEvent;
 		await handle({ event, resolve: async () => new Response() });
 		await handleError({ error: new TypeError(pathname), event, status: 500, message: 'Internal Error' });
