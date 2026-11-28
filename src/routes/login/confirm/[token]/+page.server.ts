@@ -95,7 +95,7 @@ export const actions: Actions = {
 			
 			// If the scanning device has an anonymous session, merge its data into the cloned account
 			if (currentUserId && locals.user?.email === null && currentUserId !== targetUserId) {
-				await mergeUsers(currentUserId, targetUserId);
+				await mergeUsers(currentUserId, targetUserId, true);
 			}
 		} else {
 			throw error(400, MESSAGES.AUTH.CONTEXT_MISSING);
