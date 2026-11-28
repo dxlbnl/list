@@ -44,7 +44,8 @@ export const lists = pgTable(
 	},
 	(t) => ({
 		unq: unique().on(t.createdBy, t.slug),
-		createdByIdx: index('lists_created_by_idx').on(t.createdBy)
+		createdByIdx: index('lists_created_by_idx').on(t.createdBy),
+		updatedSeqIdx: index('lists_updated_seq_idx').on(t.updatedSeq)
 	})
 );
 
@@ -87,7 +88,8 @@ export const items = pgTable('items', {
 	updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 	updatedSeq: bigint('updated_seq', { mode: 'number' }).notNull().default(sql`nextval('sync_seq')`)
 }, (t) => ({
-	listIdIdx: index('items_list_id_idx').on(t.listId)
+	listIdIdx: index('items_list_id_idx').on(t.listId),
+	updatedSeqIdx: index('items_updated_seq_idx').on(t.updatedSeq)
 }));
 
 export const rateLimits = pgTable('rate_limits', {

@@ -22,6 +22,13 @@
       "when": 1793262341759,
       "tag": "0002_overconfident_cerebro",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795851458975,
+      "tag": "0003_sync_cursor_indexes",
+      "breakpoints": true
     }
   ]
 }
