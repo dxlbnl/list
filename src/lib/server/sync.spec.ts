@@ -151,3 +151,25 @@ describe('processSyncBatch — cursor delta (fold pull into push response)', () 
 		expect(third.cursor).toBeGreaterThan(first.cursor);
 	}, 30_000);
 });
+
+it('only grants membership for newly created lists', async () => {
+	const h = await createTestDb();
+	try {
+		await seedListMember(h);
+		const stranger = 'stranger';
+		await h.db.insert(users).values({ id: stranger });
+		const original = (await h.db.select().from(lists).where(eq(lists.id, LIST)))[0];
+		const data = { id: original.id, name: original.name, slug: original.slug, created_at: original.createdAt.toISOString() };
+		for (const type of ['INSERT', 'UPDATE'] as const) {
+			const result = await processSyncBatch(h.db, stranger, [{ id: type, entity: 'list', type, data }]);
+			expect(result.results[0].status).toBe('ignored');
+			expect(result.changes.lists).toEqual([]);
+		}
+		const created = { ...data, id: 'new-list' };
+		await processSyncBatch(h.db, stranger, [{ id: 'new', entity: 'list', type: 'INSERT', data: created }]);
+		expect(await h.db.select().from(listUsers).where(eq(listUsers.userId, stranger)))
+			.toEqual([{ listId: created.id, userId: stranger }]);
+	} finally {
+		await h.close();
+	}
+}, 30_000);
